@@ -34,6 +34,10 @@ type App struct {
 	// in the database anyway.
 	uiMu sync.RWMutex
 	ui   Emitter
+	// notifier is the second road to an open question, for a person who is not
+	// looking at the application. Optional: without it a question is still
+	// shown on its card and in the attention panel.
+	notifier *Notifier
 }
 
 // Emitter is how events reach the UI. The Wails application implements it;
@@ -109,6 +113,13 @@ func (a *App) SetUI(ui Emitter) {
 	a.ui = ui
 }
 
+// SetNotifier supplies system notifications once the application is up.
+func (a *App) SetNotifier(n *Notifier) {
+	a.uiMu.Lock()
+	defer a.uiMu.Unlock()
+	a.notifier = n
+}
+
 // Emit forwards an event to the UI if there is one. Every subsystem emits
 // through the App rather than holding the window itself, so "there is no UI
 // yet" is answered in one place.
@@ -118,6 +129,11 @@ func (a *App) Emit(event string, payload any) {
 	a.uiMu.RUnlock()
 	if ui != nil {
 		ui.Emit(event, payload)
+	}
+	// A question is the one event that has to reach somebody who is not
+	// looking at the window.
+	if event == acp.EventAttention {
+		a.notifyAttention(payload)
 	}
 }
 

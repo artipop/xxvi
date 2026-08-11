@@ -13,6 +13,7 @@ import (
 	"os"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 
 	"github.com/artipop/xxvi/internal/app"
 )
@@ -29,10 +30,26 @@ func main() {
 	}
 	defer core.Close()
 
+	// A question an agent asked has to reach somebody who is not looking at the
+	// window, so notifications are a service of the application rather than
+	// something the UI arranges for itself.
+	//
+	// Asked before it is registered: the service refuses to start without an
+	// application bundle, and that refusal would stop everything else — over a
+	// road to an answer that the card and the panel already provide.
+	services := []application.Service{application.NewService(app.NewAPI(core))}
+	var notifier *notifications.NotificationService
+	if ok, why := app.NotificationsPossible(); ok {
+		notifier = notifications.New()
+		services = append(services, application.NewService(notifier))
+	} else {
+		logger.Info("системные уведомления выключены", "почему", why)
+	}
+
 	wails := application.New(application.Options{
 		Name:        "XXVI",
 		Description: "Входящие и флоу с агентами",
-		Services:    []application.Service{application.NewService(app.NewAPI(core))},
+		Services:    services,
 		Assets:      application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
@@ -43,6 +60,9 @@ func main() {
 	// this line everything emitted is dropped — correct, because there is
 	// nobody to show it to and the state it describes is in the database.
 	core.SetUI(emitter{wails})
+	if notifier != nil {
+		core.SetNotifier(app.NewNotifier(core, notifier))
+	}
 	core.Start()
 
 	wails.Window.NewWithOptions(application.WebviewWindowOptions{
