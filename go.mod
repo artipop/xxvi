@@ -1,4 +1,4 @@
-module changeme
+module github.com/artipop/xxvi
 
 go 1.25.0
 
