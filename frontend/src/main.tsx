@@ -1,9 +1,7 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
+import { render } from "solid-js/web";
+import App from "./app";
+import "./styles.css";
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+const root = document.getElementById("root");
+if (!root) throw new Error("нет корневого элемента");
+render(() => <App />, root);
