@@ -104,6 +104,9 @@ func (s *Store) SaveFlow(f model.Flow) (model.Flow, error) {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
+		if err := checkStageIDsAreFree(tx, f); err != nil {
+			return err
+		}
 
 		if _, err := tx.Exec(`
 			INSERT INTO flow (id, name, name_key, description, entry_stage, updated_at)
@@ -172,6 +175,31 @@ func (s *Store) DeleteFlow(id string) error {
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return fmt.Errorf("флоу %q: %w", id, ErrNotFound)
+	}
+	return nil
+}
+
+// checkStageIDsAreFree refuses a flow whose stage id belongs to another one.
+//
+// Stage ids are unique across every flow, not merely within one: a card records
+// where it stands by stage id, and "which flow is this stage in" has to have a
+// single answer. The editor generates uuids, so this never fires for it — it
+// fires for a flow written by hand, and it fires with a sentence rather than
+// with a constraint violation.
+func checkStageIDsAreFree(tx *sqlx.Tx, f model.Flow) error {
+	for _, st := range f.Stages {
+		var owner string
+		err := tx.Get(&owner, `
+			SELECT fl.name FROM stage s JOIN flow fl ON fl.id = s.flow_id
+			WHERE s.id = ? AND s.flow_id <> ?`, st.ID, f.ID)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("идентификатор стадии «%s» уже занят флоу «%s» — он должен быть уникальным среди всех флоу",
+			st.ID, owner)
 	}
 	return nil
 }

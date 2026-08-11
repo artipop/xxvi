@@ -1,0 +1,395 @@
+package app
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/artipop/xxvi/internal/acp"
+	"github.com/artipop/xxvi/internal/engine"
+	"github.com/artipop/xxvi/internal/inbox"
+	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/store"
+)
+
+// API is what the UI calls. One service rather than several: the screens do not
+// divide along the same lines the packages do — the card screen needs the flow,
+// the sessions and the open question at once — and a facade that hands back
+// whole screens is less to keep in step than four that hand back fragments.
+type API struct{ app *App }
+
+// NewAPI wraps an application for the UI.
+func NewAPI(a *App) *API { return &API{app: a} }
+
+// ---- inbox ----
+
+// Inbox is everything waiting to be taken into work, grouped by what brought it.
+func (s *API) Inbox() ([]model.InboxGroup, error) {
+	cards, err := s.app.Store.CardsInState(model.StateInbox)
+	if err != nil {
+		return nil, err
+	}
+	return model.GroupBySource(cards), nil
+}
+
+// InWork is every card currently travelling a flow.
+func (s *API) InWork() ([]CardSummary, error) {
+	cards, err := s.app.Store.CardsInState(model.StateFlow)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]CardSummary, 0, len(cards))
+	for _, c := range cards {
+		summary := CardSummary{Card: c}
+		if view, err := s.app.Engine.CardFlowFor(c.ID); err == nil && view != nil {
+			summary.Flow = view
+		}
+		summary.Asking = s.app.Agents.QuestionForCard(c.ID) != nil
+		out = append(out, summary)
+	}
+	return out, nil
+}
+
+// Done is the closed cards, newest first.
+func (s *API) Done() ([]model.Card, error) {
+	return s.app.Store.CardsInState(model.StateDone)
+}
+
+// CardSummary is a card in a list: itself, where it is, and whether it wants
+// something from a person.
+type CardSummary struct {
+	Card   model.Card       `json:"card"`
+	Flow   *engine.CardFlow `json:"flow,omitempty"`
+	Asking bool             `json:"asking,omitempty"`
+}
+
+// ---- one card ----
+
+// CardView is the whole card screen in one answer.
+type CardView struct {
+	Card     model.Card        `json:"card"`
+	Flow     *engine.CardFlow  `json:"flow,omitempty"`
+	Comments []model.Comment   `json:"comments"`
+	Sessions []store.Session   `json:"sessions"`
+	Events   []model.FlowEvent `json:"events"`
+	// Question is what the agent is waiting to hear, if it is waiting.
+	Question *acp.Question `json:"question,omitempty"`
+}
+
+// Card is everything about one card.
+func (s *API) Card(cardID string) (CardView, error) {
+	card, err := s.app.Store.Card(cardID)
+	if err != nil {
+		return CardView{}, err
+	}
+	view := CardView{Card: card}
+	if flow, err := s.app.Engine.CardFlowFor(cardID); err == nil {
+		view.Flow = flow
+	}
+	if view.Comments, err = s.app.Store.Comments(cardID); err != nil {
+		return CardView{}, err
+	}
+	if view.Sessions, err = s.app.Store.SessionsForCard(cardID); err != nil {
+		return CardView{}, err
+	}
+	if view.Events, err = s.app.Store.FlowEvents(cardID); err != nil {
+		return CardView{}, err
+	}
+	view.Question = s.app.Agents.QuestionForCard(cardID)
+	return view, nil
+}
+
+// SetProp sets a property on a card and tells the engine, because a property is
+// how a person answers a waiting stage. Which stage cares, and whether this was
+// the value it wanted, is the engine's to decide — setting anything else is
+// simply not addressed to it.
+func (s *API) SetProp(cardID, name, value string) (CardView, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return CardView{}, fmt.Errorf("у свойства нет названия")
+	}
+	if _, err := s.app.Store.UpdateCard(cardID, store.CardEdit{Props: map[string]string{name: value}}); err != nil {
+		return CardView{}, err
+	}
+	if strings.TrimSpace(value) != "" {
+		s.app.Engine.CardChanged(cardID, name, value)
+	}
+	s.app.Emit(engine.EventCard, map[string]any{"cardId": cardID})
+	return s.Card(cardID)
+}
+
+// SetAssignee says who the card is for. An agent's name means "let this agent
+// work it"; anything else means a person took it, and then no agent starts.
+func (s *API) SetAssignee(cardID, who string) (CardView, error) {
+	who = strings.TrimSpace(who)
+	if _, err := s.app.Store.UpdateCard(cardID, store.CardEdit{Assignee: &who}); err != nil {
+		return CardView{}, err
+	}
+	s.app.Emit(engine.EventCard, map[string]any{"cardId": cardID})
+	return s.Card(cardID)
+}
+
+// EditCard changes a card's own text.
+func (s *API) EditCard(cardID, title, body string) (CardView, error) {
+	if _, err := s.app.Store.UpdateCard(cardID, store.CardEdit{Title: &title, Body: &body}); err != nil {
+		return CardView{}, err
+	}
+	s.app.Emit(engine.EventCard, map[string]any{"cardId": cardID})
+	return s.Card(cardID)
+}
+
+// TakeIntoWork puts an inbox card onto a flow. This is the one way a card
+// starts moving, and it is a person's decision.
+func (s *API) TakeIntoWork(cardID, flowID string) (CardView, error) {
+	if err := s.app.Engine.TakeIntoWork(cardID, flowID); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(cardID)
+}
+
+// MoveTo puts a card on a stage by hand. A person is always above the graph.
+func (s *API) MoveTo(cardID, stageID string) (CardView, error) {
+	if err := s.app.Engine.MoveTo(cardID, stageID); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(cardID)
+}
+
+// RemoveFromFlow takes a card off its flow and back into the inbox.
+func (s *API) RemoveFromFlow(cardID string) (CardView, error) {
+	if err := s.app.Engine.RemoveFromFlow(cardID); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(cardID)
+}
+
+// DropCard files a card away without doing it. The card is kept — what was
+// dropped and why is the sort of thing somebody asks about later.
+func (s *API) DropCard(cardID string) error {
+	dropped := model.StateDropped
+	s.app.Agents.Cancel(cardID, "карточка отброшена")
+	if err := s.app.Store.LeaveFlow(cardID, dropped); err != nil {
+		return err
+	}
+	s.app.Emit(engine.EventCard, map[string]any{"cardId": cardID})
+	return nil
+}
+
+// AddComment writes a person's note into a card's history.
+func (s *API) AddComment(cardID, text string) (CardView, error) {
+	if _, err := s.app.Store.AddComment(cardID, "", text); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(cardID)
+}
+
+// ---- flows ----
+
+// Flows is every flow, whole.
+func (s *API) Flows() ([]model.Flow, error) { return s.app.Store.Flows() }
+
+// SaveFlow validates a flow and stores it. The whole graph is checked before it
+// is taken, and a refusal says which part is wrong.
+func (s *API) SaveFlow(flow model.Flow) (model.Flow, error) {
+	saved, err := s.app.Store.SaveFlow(flow)
+	if err != nil {
+		return model.Flow{}, err
+	}
+	s.app.Emit(EventFlows, map[string]any{"flowId": saved.ID})
+	return saved, nil
+}
+
+// DeleteFlow removes a flow. Cards standing on it stop advancing by themselves
+// and say so; nothing else happens to them.
+func (s *API) DeleteFlow(flowID string) error {
+	if err := s.app.Store.DeleteFlow(flowID); err != nil {
+		return err
+	}
+	s.app.Emit(EventFlows, map[string]any{"flowId": flowID})
+	return nil
+}
+
+// FlowOverview is one flow and where its cards are along it.
+func (s *API) FlowOverview(flowID string) (engine.FlowOverview, error) {
+	return s.app.Engine.Overview(flowID)
+}
+
+// FlowCards lists the cards travelling a flow, with the stage each stands on.
+func (s *API) FlowCards(flowID string) ([]StageCard, error) {
+	cards, stageOf, err := s.app.Store.CardsOnFlow(flowID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]StageCard, 0, len(cards))
+	for _, c := range cards {
+		out = append(out, StageCard{
+			Card: c, StageID: stageOf[c.ID],
+			Asking: s.app.Agents.QuestionForCard(c.ID) != nil,
+		})
+	}
+	return out, nil
+}
+
+// StageCard is a card as the flow view draws it.
+type StageCard struct {
+	Card    model.Card `json:"card"`
+	StageID string     `json:"stageId"`
+	Asking  bool       `json:"asking,omitempty"`
+}
+
+// Vocabulary is the closed sets the editor offers. Sent from here so the UI can
+// never offer a trigger or an action the engine does not implement.
+type Vocabulary struct {
+	Triggers []model.Trigger `json:"triggers"`
+	Actions  []string        `json:"actions"`
+	Kinds    []string        `json:"kinds"`
+	Rules    []string        `json:"ruleActions"`
+}
+
+// Vocabulary returns those sets.
+func (s *API) Vocabulary() Vocabulary {
+	return Vocabulary{
+		Triggers: model.Triggers,
+		Actions:  model.Actions,
+		Kinds:    model.Kinds,
+		Rules:    model.RuleActions,
+	}
+}
+
+// ---- sources ----
+
+// Sources is the registry with every source's rules.
+func (s *API) Sources() ([]model.Source, error) { return s.app.Store.Sources() }
+
+// SaveSource adds or replaces a source.
+func (s *API) SaveSource(src model.Source) (model.Source, error) {
+	saved, err := s.app.Store.SaveSource(src)
+	if err != nil {
+		return model.Source{}, err
+	}
+	s.app.Emit(EventSources, map[string]any{"source": saved.Name})
+	return saved, nil
+}
+
+// DeleteSource removes a source. The cards it brought stay: they are work, and
+// the source is only where they came from.
+func (s *API) DeleteSource(name string) error {
+	if err := s.app.Store.DeleteSource(name); err != nil {
+		return err
+	}
+	s.app.Emit(EventSources, map[string]any{"source": name})
+	return nil
+}
+
+// PollSource reads a source now, so nobody has to wait out an interval to see a
+// change.
+func (s *API) PollSource(name string) ([]model.InboxGroup, error) {
+	if err := s.app.Poller.PollByName(name); err != nil {
+		return nil, err
+	}
+	return s.Inbox()
+}
+
+// AddItem files an item into a source by hand. It goes through the source's own
+// file rather than straight into a card, so a hand-added item is an item like
+// any other: it meets the same rules and survives the file being read again.
+func (s *API) AddItem(sourceName, title, body string) ([]model.InboxGroup, error) {
+	src, err := s.app.Store.Source(sourceName)
+	if err != nil {
+		return nil, err
+	}
+	if src.Plugin != inbox.PluginDemo {
+		return nil, fmt.Errorf("источник «%s» не принимает элементы вручную", src.Name)
+	}
+	if strings.TrimSpace(title) == "" {
+		return nil, fmt.Errorf("у элемента нет заголовка")
+	}
+	if err := inbox.AppendItem(inbox.DemoPath(src), model.Item{Title: title, Body: body}); err != nil {
+		return nil, err
+	}
+	if err := s.app.Poller.Poll(src); err != nil {
+		return nil, err
+	}
+	return s.Inbox()
+}
+
+// AddCard files a card somebody typed straight into the inbox.
+func (s *API) AddCard(sourceName, title, body string) (model.Card, error) {
+	card, err := s.app.Pipeline.AddManual(sourceName, title, body, nil)
+	if err != nil {
+		return model.Card{}, err
+	}
+	return card, nil
+}
+
+// ---- agents ----
+
+// AgentsView is the registry and what this machine can actually run.
+type AgentsView struct {
+	Agents   []model.Agent       `json:"agents"`
+	Adapters []acp.AdapterStatus `json:"adapters"`
+}
+
+// Agents is the registry with the adapter check beside it, because "is this
+// agent usable here" is the question a person opens that screen with.
+func (s *API) Agents() (AgentsView, error) {
+	list, err := s.app.Store.Agents()
+	if err != nil {
+		return AgentsView{}, err
+	}
+	return AgentsView{Agents: list, Adapters: acp.AdapterStatuses()}, nil
+}
+
+// SaveAgent adds or replaces a registry entry.
+func (s *API) SaveAgent(a model.Agent) (model.Agent, error) {
+	saved, err := s.app.Store.SaveAgent(a)
+	if err != nil {
+		return model.Agent{}, err
+	}
+	s.app.Emit(EventAgents, map[string]any{"agent": saved.Name})
+	return saved, nil
+}
+
+// DeleteAgent removes an entry, refusing while a flow still names it: a stage
+// whose crew is nobody is a card that silently never starts, and finding that
+// out here is better than finding it out mid-run.
+func (s *API) DeleteAgent(name string) error {
+	used, err := s.app.Store.StagesUsingAgent(name)
+	if err != nil {
+		return err
+	}
+	if len(used) > 0 {
+		return fmt.Errorf("агент «%s» указан в составе стадий: %s — сначала уберите его оттуда",
+			name, strings.Join(used, ", "))
+	}
+	if err := s.app.Store.DeleteAgent(name); err != nil {
+		return err
+	}
+	s.app.Emit(EventAgents, map[string]any{"agent": name})
+	return nil
+}
+
+// ---- what is waiting for a person ----
+
+// Attention is every question an agent is waiting on, oldest first.
+func (s *API) Attention() []acp.Attention { return s.app.Agents.Attention() }
+
+// Answer delivers a person's answer to an agent's question.
+func (s *API) Answer(questionID string, answer acp.Answer) error {
+	return s.app.Agents.Answer(questionID, answer)
+}
+
+// CancelCard stops whatever is running for a card. A cancelled session produces
+// no outcome: the person who stopped it decides what happens next.
+func (s *API) CancelCard(cardID string) error {
+	s.app.Agents.Cancel(cardID, "остановлено вручную")
+	return nil
+}
+
+// UI event names the frontend subscribes to. The engine and the acp manager
+// emit their own (engine.EventCard, acp.EventSession, acp.EventAttention,
+// inbox.EventInbox); these are the ones this facade produces.
+const (
+	EventFlows   = "flows"
+	EventSources = "sources"
+	EventAgents  = "agents"
+)

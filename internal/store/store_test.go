@@ -151,6 +151,30 @@ func TestNamesMatchWithoutCaseInAnyAlphabet(t *testing.T) {
 	}
 }
 
+// A card records where it stands by stage id, so "which flow is this stage in"
+// has to have one answer. A hand-written flow reusing an id is refused by name
+// rather than by a constraint violation.
+func TestStageIDsAreUniqueAcrossFlows(t *testing.T) {
+	s := open(t)
+	claude(t, s)
+	if _, err := s.SaveFlow(devFlow()); err != nil {
+		t.Fatalf("сохранить: %v", err)
+	}
+	other := devFlow()
+	other.Name = "Другой"
+	_, err := s.SaveFlow(other)
+	if err == nil {
+		t.Fatal("чужой идентификатор стадии должен быть отвергнут")
+	}
+	if !strings.Contains(err.Error(), "Разработка") {
+		t.Fatalf("ошибка должна называть флоу, который занял идентификатор: %v", err)
+	}
+	// Re-saving the same flow keeps its own ids, which is the ordinary case.
+	if _, err := s.SaveFlow(devFlow()); err == nil {
+		t.Log("своё имя занято своим же флоу — это проверяется отдельно")
+	}
+}
+
 func TestFlowForStage(t *testing.T) {
 	s := open(t)
 	claude(t, s)

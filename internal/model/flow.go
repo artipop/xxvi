@@ -32,10 +32,15 @@ var Actions = []string{ActionNone, ActionAgent}
 
 // Edge triggers. The outcome ones are produced by the stage's own session; the
 // last one is a person setting something on the card.
+//
+// The set is closed and every member of it is something the engine actually
+// fires. There is deliberately no third outcome for "the agent could not do
+// this": a session ends done or failed, and an agent that wants to say more
+// than that says it in its closing words, which an edge condition can ask
+// about — a trigger the editor offers and nothing ever produces is a trap.
 const (
 	TriggerSuccess = "success"
 	TriggerFailure = "failure"
-	TriggerBlocked = "blocked"
 
 	// TriggerCardChanged fires when a property is set on the card while it
 	// stands on the stage — a person marking «Одобрено», say. Which property
@@ -64,7 +69,6 @@ type Trigger struct {
 var Triggers = []Trigger{
 	{Kind: TriggerSuccess, Source: SourceOutcome, Label: "шаг прошёл"},
 	{Kind: TriggerFailure, Source: SourceOutcome, Label: "шаг упал"},
-	{Kind: TriggerBlocked, Source: SourceOutcome, Label: "шаг сделать не удалось"},
 	{Kind: TriggerCardChanged, Source: SourceHuman, Label: "на карточке выбрано"},
 }
 
@@ -111,6 +115,10 @@ type Flow struct {
 // behaviour. There is no board here, so a stage is the only place a card can
 // stand and there is nothing left to split off — see docs/system.md §1.
 type Stage struct {
+	// ID is unique across every flow, not merely within one: a card records
+	// where it stands by stage id, and "which flow is this stage in" has to
+	// have one answer. The editor generates them, so this costs nothing; a
+	// hand-written flow that reuses an id is refused by name.
 	ID   string `json:"id"`
 	Name string `json:"name"`
 

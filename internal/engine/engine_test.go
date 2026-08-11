@@ -309,11 +309,13 @@ func TestUnmatchedAnswerIsExplained(t *testing.T) {
 
 // A missing edge is the other way a flow stops, and it is equally worth saying.
 func TestMissingEdgeIsExplained(t *testing.T) {
-	f := setup(t, devFlow())
+	flow := devFlow()
+	flow.Edges = flow.Edges[:1] // success only: nothing catches a failure
+	f := setup(t, flow)
 	card := f.card(t, "Т")
 	f.engine.TakeIntoWork(card.ID, f.flow.ID)
 
-	f.runner.finish(card.ID, model.TriggerBlocked, "")
+	f.runner.finish(card.ID, model.TriggerFailure, "")
 	if got := f.stageOf(t, card.ID); got != "work" {
 		t.Fatalf("без ребра карточка остаётся на месте, получено %q", got)
 	}
