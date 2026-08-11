@@ -3,6 +3,7 @@ module github.com/artipop/xxvi
 go 1.25.0
 
 require (
+	github.com/coder/acp-go-sdk v0.13.5
 	github.com/google/uuid v1.6.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.5
