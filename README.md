@@ -1,59 +1,77 @@
-# Welcome to Your New Wails3 Project!
+# XXVI
 
-Congratulations on generating your Wails3 application! This README will guide you through the next steps to get your project up and running.
+Входящие → флоу. Задачи приходят из источников, человек берёт одну в работу, и
+она едет по флоу, стадии которого работают агенты по ACP.
 
-## Getting Started
+Канбана здесь нет намеренно: между «пришло» и «делается» не остаётся доски, на
+которой карточка лежит и ждёт, пока кто-нибудь её передвинет.
 
-1. Navigate to your project directory in the terminal.
+## С чего начать чтение
 
-2. To run your application in development mode, use the following command:
+- [docs/system.md](docs/system.md) — формализация: что такое стадия и переход,
+  при каких условиях карточка едет дальше, какой агент подбирает её на каждой
+  стадии, что может источник и что проверяется при сохранении флоу;
+- [docs/poc.md](docs/poc.md) — границы первой версии и что сознательно отложено.
 
-   ```
-   wails3 dev
-   ```
+Документы написаны до кода и остаются местом, где записаны решения.
 
-   This will start your application and enable hot-reloading for both frontend and backend changes.
+## Как устроено
 
-3. To build your application for production, use:
+```
+internal/model    домен: карточка, флоу, агент, источник. Ни базы, ни процессов
+internal/store    одна SQLite: реестры, карточки, положение на флоу, сессии
+internal/engine   движок флоу: одна точка входа на стадию, три пути к ней
+internal/acp      агенты по протоколу: сессии, политика инструментов, вопросы
+internal/inbox    источники, правила, демо-плагин
+internal/app      сборка, примеры на первый запуск, API для фронта
+frontend          Solid + TypeScript, биндинги генерирует wails3
+```
 
-   ```
-   wails3 build
-   ```
+Движок ничего не знает про ACP: работа стадии приходит к нему через интерфейс
+`engine.Runner`. Настоящая реализация запускает агентов, тестовая записывает, о
+чём её попросили, — поэтому весь маршрут проверяется без единого процесса.
 
-   This will create a production-ready executable in the `build` directory.
+## Запуск
 
-## Exploring Wails3 Features
+Нужны Go 1.25+, Node.js и [wails3](https://v3.wails.io/).
 
-Now that you have your project set up, it's time to explore the features that Wails3 offers:
+```sh
+wails3 dev          # разработка, с горячей перезагрузкой фронта
+wails3 build        # сборка приложения
+```
 
-1. **Check out the examples**: The best way to learn is by example. Visit the `examples` directory in the `v3/examples` directory to see various sample applications.
+Данные лежат в `~/Library/Application Support/XXVI` (macOS): база `xxvi.db` и
+папки демо-источников. На пустой базе первый запуск создаёт агента, два флоу и
+два источника с примерами — досеивать то, что уже поправили, приложение не
+будет.
 
-2. **Run an example**: To run any of the examples, navigate to the example's directory and use:
+### Агенты
 
-   ```
-   go run .
-   ```
+Настоящие ACP-адаптеры: `claude`, `codex` и произвольная ACP-команда. Экран
+«Агенты» отвечает, запустится ли агент на этой машине, — раньше, чем это
+выяснится на карточке. Оба вендорских адаптера публикуются в npm:
 
-   Note: Some examples may be under development during the alpha phase.
+```sh
+npm install -g @agentclientprotocol/claude-agent-acp
+npm install -g @agentclientprotocol/codex-acp
+```
 
-3. **Explore the documentation**: Visit the [Wails3 documentation](https://v3.wails.io/) for in-depth guides and API references.
+Не установлены, но есть Node.js — запустятся через `npx`, только первый раз
+дольше.
 
-4. **Join the community**: Have questions or want to share your progress? Join the [Wails Discord](https://discord.gg/JDdSxwjhGf) or visit the [Wails discussions on GitHub](https://github.com/wailsapp/wails/discussions).
+## Тесты
 
-## Project Structure
+```sh
+go test ./internal/...
+```
 
-Take a moment to familiarize yourself with your project structure:
+Отдельно — проверка с живым агентом. Она запускает настоящий адаптер, поэтому
+требует установленного агента и залогиненной учётки и стоит столько же, сколько
+один ход:
 
-- `frontend/`: Contains your frontend code (HTML, CSS, JavaScript/TypeScript)
-- `main.go`: The entry point of your Go backend
-- `app.go`: Define your application structure and methods here
-- `wails.json`: Configuration file for your Wails project
+```sh
+go test -tags liveagent ./internal/app/ -run Live -v
+```
 
-## Next Steps
-
-1. Modify the frontend in the `frontend/` directory to create your desired UI.
-2. Add backend functionality in `main.go`.
-3. Use `wails3 dev` to see your changes in real-time.
-4. When ready, build your application with `wails3 build`.
-
-Happy coding with Wails3! If you encounter any issues or have questions, don't hesitate to consult the documentation or reach out to the Wails community.
+Остальное про запуск агента проверяется подставным исполнителем; эта — про то,
+что карточка действительно проезжает флоу.
