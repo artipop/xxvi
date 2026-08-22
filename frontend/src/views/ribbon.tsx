@@ -281,7 +281,7 @@ export default function Ribbon(): JSX.Element {
           <For each={ribbons}>
             {(view) => (
               <section class="workspace" data-ribbon={view.id}>
-                <div class="strip">
+                <div class="band">
                   <For each={list(view.segments)}>
                     {(segment) => (
                       <>

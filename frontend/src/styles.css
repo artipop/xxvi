@@ -238,7 +238,7 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
 /* ---- ribbon ----
 
    Two axes, and the scrolling says which is which. Sideways is one card's steps;
-   up and down is between cards. The strip fills the window because it is the
+   up and down is between cards. The band fills the window because it is the
    work rather than a document about it — the sidebar is not hidden to look
    clean, it is absent because there is nothing beside the job you are doing.
 
@@ -247,20 +247,29 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
    movement carries the meaning; everywhere else, nothing moves that was not
    asked to. It stops when the system asks for less motion.
 
-   Every height here is bounded and none of it grows: a ribbon is exactly one
-   window tall, always. It is a band, not a page — a band whose bottom edge you
-   have to go looking for is a page pretending to be one. */
+   Every height here is stated against the window rather than inherited down a
+   chain of percentages through flex boxes, because that chain is exactly where
+   a height quietly becomes "as tall as the content" and the band turns back
+   into a page. A ribbon is one window tall, always, and it says so in one
+   place: --bar is the only number, and everything else is the window minus it.
+   It is a band, not a page — a band whose bottom edge you have to go looking
+   for is a page pretending to be one. */
 
-.shell.full { display: block; position: relative; height: 100%; overflow: hidden; }
+.shell.full { display: block; position: relative; height: 100dvh; overflow: hidden; }
 
-.ribbon { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.ribbon {
+  --bar: 44px;      /* what the window reserves for its hidden title bar */
+  --band: calc(100dvh - var(--bar));
+  height: 100dvh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
 
-/* Room for the window's own buttons, and the name of the job in front of you.
-   The whole of the chrome. 44px because that is what the window reserves for
-   its hidden title bar — the same number the sidebar keeps on every other
-   screen. The rule under it is where the chrome stops and the ribbon starts. */
+/* Room for the window's own buttons, and the name of the job in front of you —
+   the whole of the chrome. The rule under it is where the chrome stops and the
+   ribbon starts. */
 .ribbon-bar {
-  flex: 0 0 44px;
+  flex: 0 0 var(--bar);
   display: flex; align-items: center; gap: 8px;
   padding: 0 14px 0 84px;
   border-bottom: 1px solid var(--line);
@@ -308,7 +317,7 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
 .ribbon-blank { color: var(--faint); padding: 60px 0 0 84px; line-height: 1.9; }
 
 .stack {
-  flex: 1 1 0; min-height: 0;
+  height: var(--band);
   overflow-y: auto; overflow-x: hidden;
   scroll-snap-type: y mandatory;
   scroll-behavior: smooth;
@@ -321,7 +330,7 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
    on it rather than through it: a flick that carried past a ribbon would leave
    two half-ribbons on the screen, and then neither is the one you are on. */
 .workspace {
-  height: 100%;
+  height: var(--band);
   overflow: hidden;
   scroll-snap-align: start;
   scroll-snap-stop: always;
@@ -329,19 +338,19 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
 }
 .workspace + .workspace { border-top: 1px solid var(--line); }
 
-.strip {
-  flex: 1 1 0; min-height: 0;
-  display: flex; align-items: stretch; gap: 8px;
+.band {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; align-items: stretch; flex-wrap: nowrap; gap: 8px;
   overflow-x: auto; overflow-y: hidden;
   padding: 8px;
   scroll-snap-type: x proximity;
   scroll-behavior: smooth;
   scrollbar-width: none;
 }
-.strip::-webkit-scrollbar { display: none; }
+.band::-webkit-scrollbar { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .stack, .strip { scroll-behavior: auto; }
+  .stack, .band { scroll-behavior: auto; }
 }
 
 .screen {
