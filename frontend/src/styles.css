@@ -409,9 +409,16 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
   position: absolute; left: 84px; right: 14px; top: 40px; z-index: 3;
 }
 
+/* Vertical is the stream's own and stops at its ends; horizontal it never
+   claims at all — the text wraps, there is nothing to scroll sideways to, and
+   the gesture belongs to the band underneath. `contain` on both axes is what
+   took it away: it blocks the chain in the direction this element cannot
+   scroll just as firmly as in the one it can. */
 .stream {
-  flex: 1; min-height: 0; overflow: auto; padding: 10px 12px;
-  overscroll-behavior: contain;
+  flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  padding: 10px 12px;
 }
 .stream p { margin: 0 0 8px; white-space: pre-wrap; }
 .stream-say { color: var(--text); }
@@ -422,7 +429,7 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
 .notes { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .notes-text {
   flex: 1; min-height: 0; resize: none;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   border: 0; border-radius: 0;
   background: var(--bg);
   font: 13px/1.6 var(--mono);
