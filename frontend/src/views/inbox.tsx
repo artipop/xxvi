@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Card, InboxGroup } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import { applyCard, flows, guard, inbox, list, loadInbox, openCardByID, setInbox, showRibbon } from "../state";
+import { applyCard, flows, guard, inbox, list, loadInbox, openCardByID, setInbox, showRibbon, sources } from "../state";
 
 // The inbox: what the sources brought, grouped by what brought it. A card here
 // does nothing until somebody takes it into work — that decision is the whole
@@ -12,13 +12,31 @@ import { applyCard, flows, guard, inbox, list, loadInbox, openCardByID, setInbox
 const SUGGESTED = "Флоу";
 
 export default function InboxView() {
+  const [own, setOwn] = createSignal(false);
+
   return (
     <>
-      <h1>Входящие</h1>
+      <div class="row">
+        <h1>Входящие</h1>
+        <div class="spacer" />
+        {/* A task a person thought of is not an item somebody sent: it belongs
+            to nobody's stream and has no rules to meet. Until this button it
+            had to pretend to be one — typed into a source's file and filtered
+            by rules written about other people's mail. */}
+        <button class="btn" onClick={() => setOwn(!own())}>
+          {own() ? "Отмена" : "Своя задача"}
+        </button>
+      </div>
       <p class="lede">
-        Задачи от источников. Ничего не происходит, пока карточку не взяли в работу.
+        Задачи от источников и свои. Ничего не происходит, пока карточку не взяли в работу.
       </p>
-      <Show when={inbox().length > 0} fallback={<div class="empty">Пусто. Источники ничего не принесли.</div>}>
+
+      <Show when={own()}>
+        <AddOwn onDone={() => setOwn(false)} />
+      </Show>
+      <Show when={inbox().length > 0} fallback={
+        <div class="empty">Пусто. Источники ничего не принесли, своих задач тоже нет.</div>
+      }>
         <For each={inbox()}>{(group) => <Group group={group} />}</For>
       </Show>
     </>
@@ -57,9 +75,43 @@ function Group(props: { group: InboxGroup }) {
   );
 }
 
+// A card straight into the inbox: no source, no rules, nothing to match. It is
+// grouped under «Без источника», which is what a card nobody sent is.
+function AddOwn(props: { onDone: () => void }) {
+  const [title, setTitle] = createSignal("");
+  const [body, setBody] = createSignal("");
+
+  const submit = async () => {
+    if (!title().trim()) return;
+    const card = await guard(() => API.AddCard("", title(), body()));
+    if (!card) return;
+    await loadInbox();
+    props.onDone();
+  };
+
+  return (
+    <div class="card">
+      <label class="field">
+        <span>Что нужно сделать</span>
+        <input type="text" value={title()} onInput={(e) => setTitle(e.currentTarget.value)} />
+      </label>
+      <label class="field">
+        <span>Подробности</span>
+        <textarea value={body()} onInput={(e) => setBody(e.currentTarget.value)} />
+      </label>
+      <div class="row">
+        <span class="meta">Карточка заводится сразу и ничьих правил не проходит.</span>
+        <div class="spacer" />
+        <button class="btn primary" onClick={submit}>Завести</button>
+      </div>
+    </div>
+  );
+}
+
 function AddItem(props: { source: string; onDone: () => void }) {
   const [title, setTitle] = createSignal("");
   const [body, setBody] = createSignal("");
+  const noisy = () => Boolean(sources().find((s) => s.name === props.source)?.noisy);
 
   const submit = async () => {
     if (!title().trim()) return;
@@ -79,6 +131,17 @@ function AddItem(props: { source: string; onDone: () => void }) {
         <span>Текст</span>
         <textarea value={body()} onInput={(e) => setBody(e.currentTarget.value)} />
       </label>
+      {/* A noisy source drops whatever no rule matched, and that is right for a
+          stream of notifications — but the button looks the same on every
+          source, and typing a task into this one would lose it without a word.
+          A rule here is a subscription; saying so is cheaper than the silence. */}
+      <Show when={noisy()}>
+        <div class="warn-note">
+          Источник «{props.source}» помечен шумным: всё, что не совпало ни с одним его
+          правилом, отбрасывается молча. Свою задачу лучше завести кнопкой «Своя задача».
+        </div>
+      </Show>
+
       <div class="row">
         <span class="meta">Элемент дописывается в файл источника и проходит его правила.</span>
         <div class="spacer" />

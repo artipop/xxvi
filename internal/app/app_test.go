@@ -239,3 +239,58 @@ func TestRibbonOpensOnTheScreensTheExampleDeclares(t *testing.T) {
 		t.Fatal("путь за пределы папки карточки должен быть отвергнут")
 	}
 }
+
+// A task somebody thought of is not an item somebody sent: it belongs to no
+// stream and has no rules to meet. Before there was a way to say that, the only
+// road into the inbox went through a source's file and its rules — and on a
+// noisy source, rules written about other people's mail would drop it without
+// a word.
+func TestAnOwnTaskGoesStraightIntoTheInbox(t *testing.T) {
+	a := open(t)
+	api := NewAPI(a)
+
+	card, err := api.AddCard("", "Позвонить в банк", "До четверга")
+	if err != nil {
+		t.Fatalf("завести свою задачу: %v", err)
+	}
+	if card.Source != "" {
+		t.Fatalf("своя задача не принадлежит источнику: %q", card.Source)
+	}
+	if card.State != model.StateInbox {
+		t.Fatalf("своя задача ложится во входящие: %q", card.State)
+	}
+
+	groups, err := api.Inbox()
+	if err != nil {
+		t.Fatalf("входящие: %v", err)
+	}
+	var own []model.Card
+	for _, g := range groups {
+		if g.Source == "" {
+			own = g.Cards
+		}
+	}
+	if len(own) != 1 || own[0].ID != card.ID {
+		t.Fatalf("своя задача должна быть в группе без источника: %+v", groups)
+	}
+
+	// And it travels like any other card: nothing about the road depends on
+	// having been brought by somebody.
+	flows, _ := a.Store.Flows()
+	if _, err := api.TakeIntoWork(card.ID, flows[0].ID); err != nil {
+		t.Fatalf("взять свою задачу в работу: %v", err)
+	}
+	view, err := api.Ribbon(card.ID)
+	if err != nil || len(view.Segments) == 0 {
+		t.Fatalf("у своей задачи такая же лента: %+v (%v)", view.Segments, err)
+	}
+}
+
+// A title is the whole of what a card must have, and a card without one is a
+// row nobody can find again.
+func TestAnOwnTaskNeedsATitle(t *testing.T) {
+	api := NewAPI(open(t))
+	if _, err := api.AddCard("", "   ", "текст"); err == nil {
+		t.Fatal("карточка без заголовка должна быть отвергнута")
+	}
+}
