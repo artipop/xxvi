@@ -9,7 +9,7 @@ import { guard, list, loadProjects, projects, vocabulary } from "../state";
 // project can be renamed without dragging anything behind it.
 
 function blank(): Project {
-  return { id: "", name: "", kind: "folder", path: "", createdAt: "" };
+  return { id: "", name: "", kind: "folder", path: "" };
 }
 
 export default function ProjectsView() {

@@ -3,7 +3,6 @@ package model
 import (
 	"fmt"
 	"strings"
-	"time"
 )
 
 // A project is where the work happens: the card says what, the flow says how it
@@ -45,9 +44,15 @@ type Project struct {
 	Kind string `json:"kind"`
 	// Path is the folder, absolute. For a kind that is not a folder this is
 	// where it lands on this machine once it is fetched.
-	Path      string    `json:"path"`
-	CreatedAt time.Time `json:"createdAt"`
+	Path string `json:"path"`
 }
+
+// There is deliberately no timestamp here, as there is none on an agent, a
+// source or a flow. A registry entry is edited and handed back whole, so every
+// field on it is a field the editor sends — and a time the editor has no
+// business owning arrives from a blank form as an empty string, which is not a
+// time. When the row was made is the database's business, and it is the
+// database that fills it in.
 
 // ValidateProject normalizes and checks one registry entry. The returned
 // project is the one to store.

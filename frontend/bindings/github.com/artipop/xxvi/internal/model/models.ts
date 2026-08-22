@@ -277,7 +277,6 @@ export interface Project {
      * where it lands on this machine once it is fetched.
      */
     "path": string;
-    "createdAt": string;
 }
 
 /**

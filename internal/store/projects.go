@@ -25,10 +25,7 @@ type projectRow struct {
 }
 
 func (r projectRow) project() model.Project {
-	return model.Project{
-		ID: r.ID, Name: r.Name, Kind: r.Kind, Path: r.Path,
-		CreatedAt: fromMillis(r.CreatedAt),
-	}
+	return model.Project{ID: r.ID, Name: r.Name, Kind: r.Kind, Path: r.Path}
 }
 
 // Projects is the registry, by name.
@@ -67,10 +64,6 @@ func (s *Store) SaveProject(p model.Project) (model.Project, error) {
 	if p.ID == "" {
 		p.ID = uuid.NewString()
 	}
-	if p.CreatedAt.IsZero() {
-		p.CreatedAt = time.Now()
-	}
-
 	err = s.tx(func(tx *sqlx.Tx) error {
 		var taken string
 		err := tx.Get(&taken, `SELECT id FROM project WHERE name_key = ?`, nameKey(p.Name))
@@ -86,7 +79,7 @@ func (s *Store) SaveProject(p model.Project) (model.Project, error) {
 			ON CONFLICT(id) DO UPDATE SET
 				name = excluded.name, name_key = excluded.name_key,
 				kind = excluded.kind, path = excluded.path`,
-			p.ID, p.Name, nameKey(p.Name), p.Kind, p.Path, millis(p.CreatedAt))
+			p.ID, p.Name, nameKey(p.Name), p.Kind, p.Path, millis(time.Now()))
 		return err
 	})
 	if err != nil {

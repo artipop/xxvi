@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -160,5 +161,30 @@ func TestATerminalWithoutACommandIsAllowed(t *testing.T) {
 	}
 	if len(saved.Stages[0].Screens) != 1 {
 		t.Fatalf("экран не должен был потеряться: %+v", saved.Stages[0].Screens)
+	}
+}
+
+// A registry entry is edited and handed back whole, so every field on it is a
+// field the editor sends — and a blank form sends an empty string for anything
+// it does not fill in. A time cannot be parsed from one, so there is none here:
+// this is the shape the project form actually posts.
+func TestAProjectIsWhatTheFormSends(t *testing.T) {
+	var p Project
+	posted := `{"id":"","name":"Сайт","kind":"folder","path":"/tmp/сайт"}`
+	if err := json.Unmarshal([]byte(posted), &p); err != nil {
+		t.Fatalf("то, что отправляет форма, должно разбираться: %v", err)
+	}
+	checked, err := ValidateProject(p)
+	if err != nil {
+		t.Fatalf("проверка: %v", err)
+	}
+	if checked.Name != "Сайт" || checked.Path != "/tmp/сайт" || checked.Kind != ProjectFolder {
+		t.Fatalf("поля разъехались: %+v", checked)
+	}
+
+	// And a form that carried a stray empty timestamp is not refused over it:
+	// there is no such field to parse.
+	if err := json.Unmarshal([]byte(`{"name":"Сайт","path":"/tmp","createdAt":""}`), &p); err != nil {
+		t.Fatalf("лишнее поле не должно ломать разбор: %v", err)
 	}
 }
