@@ -29,12 +29,29 @@ export default function App(): JSX.Element {
     </button>
   );
 
+  // The ribbon is not a document on a desk, so it does not sit on one: it takes
+  // the whole window, the way the thing it is modelled on does. Everything else
+  // keeps the sidebar. Esc is the way back, and the ribbon says so when empty.
   return (
+    <Show
+      when={tab() !== "ribbon"}
+      fallback={
+        <div class="shell full">
+          <Show when={error()}>
+            <div class="error floating">
+              <pre>{error()}</pre>
+              <button class="btn quiet" onClick={() => setError("")}>×</button>
+            </div>
+          </Show>
+          <RibbonView />
+        </div>
+      }
+    >
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">XXVI</div>
         {nav("inbox", "Входящие", inboxCount)}
-        {nav("ribbon", "Лента", () => ribbons().length)}
+        {nav("ribbon", "Лента", () => ribbons.length)}
         {nav("work", "В работе", () => inWork().length)}
         {nav("attention", "Требуют внимания", () => attention().length, true)}
         <div style={{ height: "14px" }} />
@@ -43,22 +60,6 @@ export default function App(): JSX.Element {
         {nav("agents", "Агенты")}
       </aside>
 
-      {/* The ribbon is the one screen that is not a document on a desk: it is
-          full-bleed and scrolls sideways on its own, so it steps outside the
-          padded, vertically scrolling main column rather than fighting it. */}
-      <Show when={tab() === "ribbon"}>
-        <main class="main ribbon-mode">
-          <Show when={error()}>
-            <div class="error">
-              <pre>{error()}</pre>
-              <button class="btn quiet" onClick={() => setError("")}>×</button>
-            </div>
-          </Show>
-          <RibbonView />
-        </main>
-      </Show>
-
-      <Show when={tab() !== "ribbon"}>
       <main class={`main ${openCard() ? "with-panel" : ""}`}>
         <div>
           <Show when={error()}>
@@ -83,7 +84,7 @@ export default function App(): JSX.Element {
           <CardPanel />
         </Show>
       </main>
-      </Show>
     </div>
+    </Show>
   );
 }

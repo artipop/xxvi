@@ -231,7 +231,7 @@ export function Ribbon(cardID: string): $CancellablePromise<engine$0.RibbonView>
  * Ribbons is every card in work: one card in work is one ribbon, and there is
  * no other kind (docs/system.md §11.1).
  */
-export function Ribbons(): $CancellablePromise<engine$0.RibbonSummary[] | null> {
+export function Ribbons(): $CancellablePromise<engine$0.RibbonView[] | null> {
     return $Call.ByID(62943144);
 }
 

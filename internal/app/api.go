@@ -205,7 +205,7 @@ func (s *API) AddComment(cardID, text string) (CardView, error) {
 
 // Ribbons is every card in work: one card in work is one ribbon, and there is
 // no other kind (docs/system.md §11.1).
-func (s *API) Ribbons() ([]engine.RibbonSummary, error) { return s.app.Engine.Ribbons() }
+func (s *API) Ribbons() ([]engine.RibbonView, error) { return s.app.Engine.Ribbons() }
 
 // Ribbon is one card's strip of screens.
 func (s *API) Ribbon(cardID string) (engine.RibbonView, error) {

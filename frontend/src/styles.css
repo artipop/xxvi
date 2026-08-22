@@ -236,74 +236,113 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
 .mono { font-family: var(--mono); font-size: 12px; }
 
 /* ---- ribbon ----
-   The one screen that moves. Everything else on this desk stays where it was
-   put; the strip flies to the step a card just reached, because a screen that
-   appears instantly at a new scroll position leaves no way to know you moved
-   (docs/system.md §11.5). One property, one place, and off when the system
-   asks for less motion. */
 
-.main.ribbon-mode {
-  padding: 44px 0 0;
-  overflow: hidden;
+   Two axes, and the scrolling says which is which. Sideways is one card's steps;
+   up and down is between cards. The strip fills the window because it is the
+   work rather than a document about it — the sidebar is not hidden to look
+   clean, it is absent because there is nothing beside the job you are doing.
+
+   This is the only place in the stylesheet that moves. A screen appearing
+   instantly at a new scroll position leaves no way to know you moved, so the
+   movement carries the meaning; everywhere else, nothing moves that was not
+   asked to. It stops when the system asks for less motion. */
+
+.shell.full { display: block; position: relative; height: 100%; overflow: hidden; }
+
+.ribbon { display: flex; flex-direction: column; height: 100%; }
+
+/* Room for the window's own buttons, and the name of the job in front of you.
+   The whole of the chrome. */
+.ribbon-bar {
+  flex: 0 0 38px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 14px 0 84px;
+  font-size: 12px; color: var(--faint);
+}
+.ribbon-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ribbon-stage { color: var(--faint); opacity: .7; }
+
+.ribbon-blank { color: var(--faint); padding: 60px 0 0 84px; line-height: 1.9; }
+
+.stack {
+  flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+.stack::-webkit-scrollbar { display: none; }
+
+.workspace {
+  height: 100%;
+  scroll-snap-align: start;
   display: flex; flex-direction: column;
-  min-height: 0;
 }
-
-.ribbon { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-
-.ribbon-head {
-  display: flex; align-items: center; gap: 10px;
-  padding: 0 24px 10px;
-}
-
-.ribbons { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-
-.ribbon-tab {
-  display: flex; align-items: center; gap: 7px;
-  padding: 4px 11px; border-radius: 999px;
-  background: var(--panel); border: 1px solid var(--line);
-  color: var(--dim); cursor: pointer; max-width: 240px;
-}
-.ribbon-tab:hover { border-color: #3f4560; color: var(--text); }
-.ribbon-tab.on { background: var(--panel-2); border-color: var(--accent); color: var(--text); }
-.ribbon-tab .ribbon-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ribbon-tab .dot { color: var(--faint); }
-.ribbon-tab .dot.run { color: var(--accent); }
 
 .strip {
   flex: 1; min-height: 0;
-  display: flex; align-items: stretch; gap: 12px;
+  display: flex; align-items: stretch; gap: 8px;
   overflow-x: auto; overflow-y: hidden;
-  padding: 0 24px 20px;
+  padding: 0 8px 8px;
   scroll-snap-type: x proximity;
   scroll-behavior: smooth;
-  outline: none;
+  scrollbar-width: none;
 }
-@media (prefers-reduced-motion: reduce) { .strip { scroll-behavior: auto; } }
+.strip::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stack, .strip { scroll-behavior: auto; }
+}
 
 .screen {
-  flex: 0 0 clamp(380px, 44vw, 680px);
+  flex-grow: 0; flex-shrink: 0;
   scroll-snap-align: center;
   display: flex; flex-direction: column; min-height: 0;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 10px;
   overflow: hidden;
 }
+/* The focused column is the only one at full strength: which one you are on
+   should not need reading, and Niri says it with a ring. */
 .screen.on { border-color: var(--accent); }
+.screen:not(.on) { opacity: .82; }
 
 .screen-head {
   display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px;
+  flex: 0 0 30px;
+  padding: 0 10px;
   border-bottom: 1px solid var(--line);
   background: var(--panel-2);
   font-size: 12px;
 }
-.screen-head .screen-title { color: var(--dim); }
-.screen-head .btn { padding: 0 6px; }
+.screen-head .screen-title { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.btn.tiny { padding: 1px 7px; font-size: 12px; line-height: 1.4; }
 
 .screen-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .screen-note { padding: 14px; color: var(--faint); }
+
+/* Where you are in the stack, and which other jobs moved while you were not
+   looking. On the right edge, out of the way of the work. */
+.rail {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 6px;
+  z-index: 2;
+}
+.rail-dot {
+  width: 5px; height: 16px; padding: 0;
+  border: 0; border-radius: 3px; cursor: pointer;
+  background: var(--line);
+}
+.rail-dot:hover { background: var(--faint); }
+.rail-dot.run { background: var(--faint); }
+.rail-dot.on { background: var(--accent); height: 30px; }
+.rail-dot.moved { background: var(--warn); }
+
+.error.floating {
+  position: absolute; left: 84px; right: 14px; top: 40px; z-index: 3;
+}
 
 .stream { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; }
 .stream p { margin: 0 0 8px; white-space: pre-wrap; }
@@ -324,6 +363,6 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
 .notes .meta { padding: 6px 12px; border-top: 1px solid var(--line); }
 
 .browser { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.browser-bar { padding: 6px 10px; border-bottom: 1px solid var(--line); color: var(--faint); }
+.browser-bar { padding: 5px 10px; border-bottom: 1px solid var(--line); color: var(--faint); }
 .browser-bar .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser-frame { flex: 1; min-height: 0; width: 100%; border: 0; background: #fff; }

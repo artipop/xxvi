@@ -61,44 +61,43 @@ type Segment struct {
 
 // RibbonView is one card in work, shown as a strip.
 type RibbonView struct {
-	CardID   string    `json:"cardId"`
-	Title    string    `json:"title"`
-	FlowID   string    `json:"flowId"`
-	FlowName string    `json:"flowName"`
-	Segments []Segment `json:"segments"`
+	// ID is the ribbon's identity for the UI, which reconciles the stack by it.
+	// It is the card's id: one card in work is one ribbon, and there is no
+	// other kind.
+	ID       string `json:"id"`
+	CardID   string `json:"cardId"`
+	Title    string `json:"title"`
+	FlowID   string `json:"flowId"`
+	FlowName string `json:"flowName"`
+	// StageName and Running are what a ribbon says about itself from outside —
+	// enough for the indicator without reading the strip.
+	StageName string    `json:"stageName,omitempty"`
+	Running   bool      `json:"running,omitempty"`
+	Segments  []Segment `json:"segments"`
 	// FocusID is where the ribbon flies when a step ends: the first screen of
 	// the segment the card stands in.
 	FocusID string `json:"focusId,omitempty"`
 }
 
-// RibbonSummary is one ribbon in the switcher.
-type RibbonSummary struct {
-	CardID    string `json:"cardId"`
-	Title     string `json:"title"`
-	FlowName  string `json:"flowName"`
-	StageName string `json:"stageName"`
-	Running   bool   `json:"running,omitempty"`
-}
-
-// Ribbons is every card in work, in the order the work screen shows them. One
-// card in work is one ribbon; there is no other kind.
-func (e *Engine) Ribbons() ([]RibbonSummary, error) {
+// Ribbons is every card in work, whole, in the order the work screen shows
+// them.
+//
+// Whole rather than summarised because ribbons are stacked and scrolled
+// through rather than picked from a list: the one below has to already be
+// there when somebody scrolls onto it, or the move lands on a blank and then
+// fills in.
+func (e *Engine) Ribbons() ([]RibbonView, error) {
 	cards, err := e.store.CardsInState(model.StateFlow)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]RibbonSummary, 0, len(cards))
+	out := make([]RibbonView, 0, len(cards))
 	for _, c := range cards {
-		row := RibbonSummary{CardID: c.ID, Title: c.Title}
-		if flow, err := e.CardFlowFor(c.ID); err == nil && flow != nil {
-			row.FlowName, row.Running = flow.FlowName, flow.Running
-			for _, s := range flow.Stages {
-				if s.Current {
-					row.StageName = s.Name
-				}
-			}
+		view, err := e.Ribbon(c.ID)
+		if err != nil {
+			return nil, err
 		}
-		out = append(out, row)
+		out = append(out, view)
 	}
 	return out, nil
 }
@@ -117,7 +116,15 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 	if err != nil {
 		return RibbonView{}, err
 	}
-	view := RibbonView{CardID: card.ID, Title: card.Title}
+	view := RibbonView{ID: card.ID, CardID: card.ID, Title: card.Title}
+	if flow, err := e.CardFlowFor(cardID); err == nil && flow != nil {
+		view.Running = flow.Running
+		for _, s := range flow.Stages {
+			if s.Current {
+				view.StageName = s.Name
+			}
+		}
+	}
 	if len(events) == 0 {
 		return view, nil
 	}

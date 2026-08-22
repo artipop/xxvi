@@ -66,24 +66,26 @@ export interface FlowOverview {
 }
 
 /**
- * RibbonSummary is one ribbon in the switcher.
- */
-export interface RibbonSummary {
-    "cardId": string;
-    "title": string;
-    "flowName": string;
-    "stageName": string;
-    "running"?: boolean;
-}
-
-/**
  * RibbonView is one card in work, shown as a strip.
  */
 export interface RibbonView {
+    /**
+     * ID is the ribbon's identity for the UI, which reconciles the stack by it.
+     * It is the card's id: one card in work is one ribbon, and there is no
+     * other kind.
+     */
+    "id": string;
     "cardId": string;
     "title": string;
     "flowId": string;
     "flowName": string;
+
+    /**
+     * StageName and Running are what a ribbon says about itself from outside —
+     * enough for the indicator without reading the strip.
+     */
+    "stageName"?: string;
+    "running"?: boolean;
     "segments": Segment[] | null;
 
     /**

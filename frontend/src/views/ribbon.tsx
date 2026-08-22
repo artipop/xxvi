@@ -3,21 +3,33 @@ import {
 } from "solid-js";
 import { Events } from "@wailsio/runtime";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
+import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
 import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
-import { guard, list, openRibbon, report, ribbon, ribbons, showRibbon } from "../state";
+import { guard, list, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
 
 // The ribbon is the card's journal of transitions made visible: one segment per
 // entry onto a stage, and the screens of that stage inside it. Nothing here
 // assembles the strip — it is read whole from the backend — so it cannot
 // disagree with where the card actually stands.
 //
+// Two axes, and they mean different things. Sideways is one card's steps, left
+// to right in the order they happened. Up and down is between cards: every card
+// in work is its own strip, stacked, and moving between them is moving between
+// jobs rather than between steps of one.
+//
 // Everything is rendered straight off the store's own objects rather than off a
-// flattened copy of them. That is not a matter of style: the strip re-reads on
+// flattened copy of them. That is not a matter of style: the stack re-reads on
 // every event, `reconcile` keeps the objects that did not change, and `For`
-// tells panes apart by reference — build a new array of wrappers and every pane
-// is new, the iframe of a running preview reloads and the cursor jumps out of
-// the notes on every step the agent takes.
+// tells panes apart by reference — build new wrappers and every pane is new,
+// the iframe of a running preview reloads and the cursor jumps out of the notes
+// on every step the agent takes.
+
+// How wide a screen is, as a share of the strip. A column that a person can
+// widen is the difference between reading a terminal and squinting at one; the
+// steps are Niri's, and they are steps rather than a drag because a column that
+// lands on the same widths every time is a column you stop thinking about.
+const WIDTHS = [0.34, 0.5, 0.67, 1];
+const DEFAULT_WIDTH = 2; // two thirds: wide enough for a page, narrow enough to see the next step
 
 /** motion is one behaviour, asked once: the strip is the only thing that moves. */
 function motion(): ScrollBehavior {
@@ -29,168 +41,297 @@ function emptyID(segment: Segment): string {
   return segment.id + "|empty";
 }
 
-export default function RibbonView(): JSX.Element {
-  // Which pane the person is on, and whether they put themselves there. A
-  // person who moved on their own is not dragged along by the next step: the
-  // ribbon offers instead of yanking, the same way the graph never overrules a
-  // person.
-  const [focus, setFocus] = createSignal("");
+function paneIDs(view: RibbonView): string[] {
+  return list(view.segments).flatMap((segment) => {
+    const screens = list(segment.screens);
+    return screens.length === 0 ? [emptyID(segment)] : screens.map((s) => s.id);
+  });
+}
+
+export default function Ribbon(): JSX.Element {
+  // Where the person is: which strip, which pane of it, and whether they put
+  // themselves there. Somebody who moved on their own is not dragged along by
+  // the next step — the ribbon offers instead of yanking, the same way the
+  // graph never overrules a person.
+  // Focus is kept per ribbon, not once for the whole stack: coming back to a
+  // job should put you where you left it, and a single focus would drag every
+  // strip to the same column. Without a remembered one, the current step is
+  // where a strip opens.
+  const [focusAt, setFocusAt] = createSignal<Record<string, string>>({});
   const [pinned, setPinned] = createSignal(false);
-  let strip: HTMLDivElement | undefined;
-  let flownTo = "";
+  // Which ribbons have moved on since the person last looked at them. A step
+  // finishing on a strip somebody is not watching is worth a mark, not a jump.
+  const [moved, setMoved] = createSignal<Record<string, boolean>>({});
+  const [widths, setWidths] = createSignal<Record<string, number>>({});
 
-  // Only the ids are flattened — a list of strings for the arrow keys, and
-  // rebuilding it costs nothing because nothing is rendered from it.
-  const paneIDs = createMemo(() =>
-    list(ribbon.segments).flatMap((segment) => {
-      const screens = list(segment.screens);
-      return screens.length === 0 ? [emptyID(segment)] : screens.map((s) => s.id);
-    }),
-  );
+  let stack: HTMLDivElement | undefined;
+  const flown: Record<string, string> = {};
 
-  const flyTo = (id: string, behavior: ScrollBehavior = motion()) => {
+  const current = () => ribbons.find((r) => r.id === openRibbon());
+
+  const focus = () => focusAt()[openRibbon()] ?? current()?.focusId ?? "";
+  const setFocus = (id: string) => setFocusAt((f) => ({ ...f, [openRibbon()]: id }));
+
+  const paneEl = (id: string) =>
+    stack?.querySelector<HTMLElement>('[data-pane="' + CSS.escape(id) + '"]') ?? undefined;
+
+  const flyTo = (id: string) => {
     if (!id) return;
-    const el = strip?.querySelector<HTMLElement>('[data-pane="' + CSS.escape(id) + '"]');
+    const el = paneEl(id);
     if (!el) return;
-    el.scrollIntoView({ behavior, inline: "center", block: "nearest" });
+    el.scrollIntoView({ behavior: motion(), inline: "center", block: "nearest" });
     setFocus(id);
   };
 
-  // The card moved, so the strip has a new current segment. Flying there is the
-  // one movement in this application, and it carries meaning: a screen that
-  // appeared instantly at a new scroll position leaves no way to know you moved.
-  createEffect(() => {
-    const target = ribbon.focusId ?? "";
-    if (!target || target === flownTo) return;
-    flownTo = target;
-    if (pinned()) return;
-    queueMicrotask(() => flyTo(target));
-  });
+  const flyToRibbon = (cardID: string) => {
+    const el = stack?.querySelector<HTMLElement>('[data-ribbon="' + CSS.escape(cardID) + '"]');
+    el?.scrollIntoView({ behavior: motion(), block: "start" });
+    setOpenRibbon(cardID);
+    setMoved((m) => ({ ...m, [cardID]: false }));
+  };
 
-  // Switching ribbons is switching strips: the new one starts at its own
-  // current step, and nothing is pinned yet.
+  // A card moved, so its strip has a new current segment. Flying there is the
+  // one movement in this application, and it carries meaning: a screen that
+  // appeared instantly at a new scroll position leaves no way to know you
+  // moved. A strip nobody is watching is marked instead — jumping somebody to
+  // another job because it finished a step would be the application deciding
+  // what they are doing.
   createEffect(() => {
-    openRibbon();
-    setPinned(false);
-    flownTo = "";
+    for (const view of ribbons) {
+      const target = view.focusId ?? "";
+      if (!target || flown[view.id] === target) continue;
+      const first = flown[view.id] === undefined;
+      flown[view.id] = target;
+      if (first) continue;
+      if (view.id !== openRibbon()) {
+        setMoved((m) => ({ ...m, [view.id]: true }));
+        continue;
+      }
+      if (pinned()) continue;
+      queueMicrotask(() => flyTo(target));
+    }
   });
 
   // With nothing open, open the first one there is: arriving at an empty screen
-  // beside a list of ribbons would be asking a question with one answer.
+  // beside a stack of ribbons would be asking a question with one answer.
   createEffect(() => {
-    if (!openRibbon() && ribbons().length > 0) showRibbon(ribbons()[0].cardId);
+    const all = ribbons;
+    if (all.length === 0) return;
+    if (!all.some((r) => r.id === openRibbon())) setOpenRibbon(all[0].id);
   });
 
-  const step = (delta: number) => {
-    const all = paneIDs();
+  // Moving to another job is arriving at it, not carrying the last one's
+  // decisions along: whatever was pinned was pinned about a different strip.
+  createEffect(() => {
+    openRibbon();
+    setPinned(false);
+  });
+
+  // Scrolling is a way of choosing too: the strip filling the screen is the one
+  // the person is on, however they got there.
+  onMount(() => {
+    if (!stack) return;
+    const seen = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          const id = (e.target as HTMLElement).dataset.ribbon ?? "";
+          if (id && id !== openRibbon()) {
+            setOpenRibbon(id);
+            setMoved((m) => ({ ...m, [id]: false }));
+          }
+        }
+      },
+      { root: stack, threshold: 0.6 },
+    );
+    // Observing is re-run whenever the stack changes shape, which is cheap and
+    // spares keeping a second list of the elements in it.
+    const watch = () => {
+      seen.disconnect();
+      stack!.querySelectorAll<HTMLElement>("[data-ribbon]").forEach((el) => seen.observe(el));
+    };
+    watch();
+    const shape = new MutationObserver(watch);
+    shape.observe(stack, { childList: true });
+    onCleanup(() => { seen.disconnect(); shape.disconnect(); });
+  });
+
+  const stepPane = (delta: number) => {
+    const view = current();
+    if (!view) return;
+    const all = paneIDs(view);
     if (all.length === 0) return;
     const at = all.indexOf(focus());
-    const next = at < 0 ? 0 : Math.min(all.length - 1, Math.max(0, at + delta));
     setPinned(true);
-    flyTo(all[next]);
+    flyTo(all[at < 0 ? 0 : Math.min(all.length - 1, Math.max(0, at + delta))]);
   };
 
-  const switchRibbon = (delta: number) => {
-    const all = ribbons();
+  const stepRibbon = (delta: number) => {
+    const all = ribbons;
     if (all.length === 0) return;
-    const at = all.findIndex((r) => r.cardId === openRibbon());
-    showRibbon(all[(at + delta + all.length) % all.length].cardId);
+    const at = all.findIndex((r) => r.id === openRibbon());
+    setPinned(false);
+    flyToRibbon(all[(at + delta + all.length) % all.length].id);
   };
 
-  const onKeyDown = (e: KeyboardEvent) => {
-    // A person typing in the notes is typing, not steering.
-    const target = e.target as HTMLElement | null;
-    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-    if (e.metaKey || e.altKey) return;
+  const widthOf = (id: string) => widths()[id] ?? DEFAULT_WIDTH;
 
-    if (e.ctrlKey) {
-      if (e.key === "ArrowLeft") { e.preventDefault(); switchRibbon(-1); }
-      if (e.key === "ArrowRight") { e.preventDefault(); switchRibbon(1); }
+  const resize = (to: (at: number) => number) => {
+    const id = focus();
+    if (!id) return;
+    setWidths((w) => ({ ...w, [id]: to(widthOf(id)) }));
+    queueMicrotask(() => paneEl(id)?.scrollIntoView({ behavior: motion(), inline: "center", block: "nearest" }));
+  };
+
+  // Keys are listened for on the window rather than on the strip: the ribbon is
+  // the whole screen here, and a person who clicked into a terminal should
+  // still be able to leave it.
+  const onKeyDown = (e: KeyboardEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) {
+      if (e.key === "Escape") target.blur();
       return;
     }
-    const all = paneIDs();
+    if (e.metaKey || e.altKey) return;
+
     switch (e.key) {
-      case "ArrowLeft": e.preventDefault(); step(-1); break;
-      case "ArrowRight": e.preventDefault(); step(1); break;
-      case "Home": e.preventDefault(); setPinned(true); flyTo(all[0]); break;
-      case "End": e.preventDefault(); setPinned(true); flyTo(all[all.length - 1]); break;
+      case "ArrowLeft": e.preventDefault(); stepPane(-1); break;
+      case "ArrowRight": e.preventDefault(); stepPane(1); break;
+      case "ArrowUp": e.preventDefault(); stepRibbon(-1); break;
+      case "ArrowDown": e.preventDefault(); stepRibbon(1); break;
+      case "Home": {
+        const view = current();
+        if (!view) break;
+        e.preventDefault(); setPinned(true); flyTo(paneIDs(view)[0]);
+        break;
+      }
+      case "End": {
+        const view = current();
+        if (!view) break;
+        const all = paneIDs(view);
+        e.preventDefault(); setPinned(true); flyTo(all[all.length - 1]);
+        break;
+      }
+      case "r": case "R": case "к": case "К":
+        e.preventDefault(); resize((at) => (at + 1) % WIDTHS.length); break;
+      case "f": case "F": case "а": case "А":
+        e.preventDefault();
+        resize((at) => (at === WIDTHS.length - 1 ? DEFAULT_WIDTH : WIDTHS.length - 1));
+        break;
+      case "Escape": e.preventDefault(); setTab("inbox"); break;
     }
   };
+
+  onMount(() => {
+    window.addEventListener("keydown", onKeyDown);
+    onCleanup(() => window.removeEventListener("keydown", onKeyDown));
+  });
 
   // The strip has been left behind: the card is somewhere else and the person
   // asked to stay. Offered, not taken.
-  const behind = () => pinned() && !!ribbon.focusId && focus() !== ribbon.focusId;
+  const behind = () => {
+    const view = current();
+    return pinned() && !!view?.focusId && focus() !== view.focusId;
+  };
 
   return (
     <div class="ribbon">
-      <header class="ribbon-head">
-        <div class="ribbons">
-          <For each={ribbons()}>
-            {(r) => (
-              <button
-                class={`ribbon-tab ${r.cardId === openRibbon() ? "on" : ""}`}
-                onClick={() => showRibbon(r.cardId)}
-                title={`${r.flowName} · ${r.stageName}`}
-              >
-                <span class={`dot ${r.running ? "run" : ""}`} />
-                <span class="ribbon-name">{r.title}</span>
-              </button>
-            )}
-          </For>
-        </div>
+      {/* The only chrome: room for the window's own buttons, the name of the
+          job in front of you, and the one offer the ribbon ever makes. */}
+      <header class="ribbon-bar" style={{ "--wails-draggable": "drag" }}>
+        <span class="ribbon-where">
+          {current()?.title}
+          <Show when={current()?.stageName}>
+            <span class="ribbon-stage"> · {current()!.stageName}</span>
+          </Show>
+        </span>
         <div class="spacer" />
         <Show when={behind()}>
-          <button class="btn primary" onClick={() => { setPinned(false); flyTo(ribbon.focusId ?? ""); }}>
+          {/* The bar is the window's drag handle, and a button inside one has
+              to say it is not: dragging the window from a button is not what
+              pressing it means. */}
+          <button
+            class="btn primary tiny"
+            style={{ "--wails-draggable": "no-drag" }}
+            onClick={() => { setPinned(false); flyTo(current()!.focusId ?? ""); }}
+          >
             Дальше →
           </button>
         </Show>
       </header>
 
       <Show
-        when={openRibbon() && paneIDs().length > 0}
+        when={ribbons.length > 0}
         fallback={
-          <div class="empty" style={{ padding: "0 24px" }}>
-            {ribbons().length === 0
-              ? "Ни одна карточка не в работе. Нажмите «Сделай» во входящих — и здесь появится её лента."
-              : "Выберите ленту."}
+          <div class="ribbon-blank">
+            Ни одна карточка не в работе.
+            <br />Нажмите «Сделай» во входящих — и здесь появится её лента.
+            <br /><span class="meta">Esc — назад во входящие</span>
           </div>
         }
       >
-        <div class="strip" ref={strip} tabindex="0" onKeyDown={onKeyDown}>
-          <For each={list(ribbon.segments)}>
-            {(segment) => (
-              <>
-                {/* A segment with nothing to show still gets a pane. Every
-                    finished step is a step somebody may want to look at, and a
-                    step that contributes nothing to the strip is a step that
-                    looks like it never happened. */}
-                <Show when={list(segment.screens).length === 0}>
-                  <Pane
-                    segment={segment}
-                    id={emptyID(segment)}
-                    title={segment.stageName}
-                    first
-                    focused={focus() === emptyID(segment)}
-                    onFocus={() => { setPinned(true); setFocus(emptyID(segment)); }}
-                  />
-                </Show>
-                <For each={list(segment.screens)}>
-                  {(screen, i) => (
-                    <Pane
-                      segment={segment}
-                      screen={screen}
-                      id={screen.id}
-                      title={screen.title}
-                      first={i() === 0}
-                      focused={focus() === screen.id}
-                      onFocus={() => { setPinned(true); setFocus(screen.id); }}
-                    />
-                  )}
-                </For>
-              </>
+        <div class="stack" ref={stack}>
+          <For each={ribbons}>
+            {(view) => (
+              <section class="workspace" data-ribbon={view.id}>
+                <div class="strip">
+                  <For each={list(view.segments)}>
+                    {(segment) => (
+                      <>
+                        {/* A segment with nothing to show still gets a pane.
+                            Every finished step is a step somebody may want to
+                            look at, and a step that contributes nothing to the
+                            strip is a step that looks like it never happened. */}
+                        <Show when={list(segment.screens).length === 0}>
+                          <Pane
+                            segment={segment}
+                            id={emptyID(segment)}
+                            title={segment.stageName}
+                            first
+                            width={widthOf(emptyID(segment))}
+                            focused={focus() === emptyID(segment)}
+                            onFocus={() => { setPinned(true); setFocus(emptyID(segment)); }}
+                          />
+                        </Show>
+                        <For each={list(segment.screens)}>
+                          {(screen, i) => (
+                            <Pane
+                              segment={segment}
+                              screen={screen}
+                              cardId={view.cardId}
+                              id={screen.id}
+                              title={screen.title}
+                              first={i() === 0}
+                              width={widthOf(screen.id)}
+                              focused={focus() === screen.id}
+                              onFocus={() => { setPinned(true); setFocus(screen.id); }}
+                            />
+                          )}
+                        </For>
+                      </>
+                    )}
+                  </For>
+                </div>
+              </section>
             )}
           </For>
         </div>
+
+        {/* Where you are in the stack, and which other jobs moved while you
+            were not looking. One job needs no map of itself. */}
+        <Show when={ribbons.length > 1}>
+        <nav class="rail">
+          <For each={ribbons}>
+            {(view) => (
+              <button
+                class={`rail-dot ${view.id === openRibbon() ? "on" : ""} ${moved()[view.id] ? "moved" : ""} ${view.running ? "run" : ""}`}
+                title={`${view.title} · ${view.flowName} · ${view.stageName}`}
+                onClick={() => flyToRibbon(view.id)}
+              />
+            )}
+          </For>
+        </nav>
+        </Show>
       </Show>
     </div>
   );
@@ -199,9 +340,11 @@ export default function RibbonView(): JSX.Element {
 function Pane(props: {
   segment: Segment;
   screen?: ScreenView;
+  cardId?: string;
   id: string;
   title: string;
   first: boolean;
+  width: number;
   focused: boolean;
   onFocus: () => void;
 }): JSX.Element {
@@ -210,6 +353,7 @@ function Pane(props: {
   return (
     <section
       class={`screen ${props.focused ? "on" : ""}`}
+      style={{ "flex-basis": `calc(100% * ${WIDTHS[props.width] ?? WIDTHS[DEFAULT_WIDTH]})` }}
       data-pane={props.id}
       onMouseDown={props.onFocus}
     >
@@ -220,12 +364,12 @@ function Pane(props: {
         <span class="screen-title">{props.title}</span>
         <div class="spacer" />
         <Show when={props.screen?.kind === "browser" && waiting().length === 0}>
-          <a class="btn quiet" href={props.screen!.ref} target="_blank" rel="noreferrer" title="Открыть снаружи">↗</a>
+          <a class="btn quiet tiny" href={props.screen!.ref} target="_blank" rel="noreferrer" title="Открыть снаружи">↗</a>
         </Show>
       </header>
 
       <div class="screen-body">
-        <Switch fallback={<Body screen={props.screen!} />}>
+        <Switch fallback={<Body screen={props.screen!} cardId={props.cardId ?? ""} />}>
           {/* A stage removed from the flow does not take its part of the ribbon
               with it: what happened happened, and the segment says why it is
               empty. */}
@@ -251,14 +395,14 @@ function Pane(props: {
   );
 }
 
-function Body(props: { screen: ScreenView }): JSX.Element {
+function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
   return (
     <Switch fallback={<div class="screen-note">Неизвестный вид экрана «{props.screen.kind}».</div>}>
       <Match when={props.screen.kind === "agent"}>
         <AgentPane sessionId={props.screen.sessionId ?? ""} />
       </Match>
       <Match when={props.screen.kind === "notes"}>
-        <NotesPane cardId={ribbon.cardId} path={props.screen.ref ?? ""} />
+        <NotesPane cardId={props.cardId} path={props.screen.ref ?? ""} />
       </Match>
       <Match when={props.screen.kind === "browser"}>
         <BrowserPane url={props.screen.ref ?? ""} />
@@ -395,11 +539,11 @@ function BrowserPane(props: { url: string }): JSX.Element {
       <div class="browser-bar row">
         <span class="mono">{props.url}</span>
         <div class="spacer" />
-        <button class="btn quiet" onClick={() => setNonce((n) => n + 1)} title="Обновить">↻</button>
+        <button class="btn quiet tiny" onClick={() => setNonce((n) => n + 1)} title="Обновить">↻</button>
       </div>
       {/* Reloading is asked for, never incidental: the frame is rebuilt only
           when the button says so. Numbers compare by value, so a re-read of the
-          strip leaves the page a person was looking at alone. */}
+          stack leaves the page a person was looking at alone. */}
       <For each={[nonce()]}>
         {() => <iframe class="browser-frame" src={props.url} referrerpolicy="no-referrer" />}
       </For>

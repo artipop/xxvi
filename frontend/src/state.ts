@@ -6,7 +6,7 @@ import type { AgentsView, CardView, StageCard, Vocabulary } from "../bindings/gi
 import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp/models";
 import type { Card, Flow, InboxGroup, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { CardSummary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
-import type { RibbonSummary, RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
+import type { RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
 
 // Everything the screens read, in one place. The backend is the only copy of
 // the truth — nothing here is computed from an earlier answer — so a reload is
@@ -119,10 +119,7 @@ export function subscribe() {
   // The strip re-reads on the same events the rest of the screens do: a card
   // that moved is a segment that was added, and a session that said something
   // is a screen that has more to show.
-  const refreshRibbon = () => {
-    void loadRibbons();
-    if (openRibbon()) void loadRibbon(openRibbon());
-  };
+  const refreshRibbon = () => { void loadRibbons(); };
   Events.On("card", () => {
     void loadInbox(); void loadInWork(); void loadDone(); void refreshCard(); refreshRibbon();
   });
@@ -143,33 +140,35 @@ export async function loadFlowCards(flowID: string) {
 
 // ---- the ribbon ----
 //
-// One card in work is one ribbon, and there is no other kind. Which one is open
-// is a second axis of navigation, like the card panel: the strip stays where it
-// was while the tabs change around it.
+// One card in work is one ribbon, and there is no other kind. The ribbons are
+// stacked rather than chosen from a list: horizontally you move between the
+// screens of one card, vertically between cards. So all of them are held here
+// at once — the one below has to already be there when somebody scrolls onto
+// it, or the move lands on a blank and then fills in.
 
-export const [ribbons, setRibbons] = createSignal<RibbonSummary[]>([]);
+// A store rather than a signal, reconciled by id at every level. Every backend
+// event makes the stack re-read itself, and a plain replacement would rebuild
+// the DOM: the iframe of a running preview would reload and the cursor would
+// jump out of the notes on every step the agent takes.
+export const [ribbons, setRibbons] = createStore<RibbonView[]>([]);
+
+// Which ribbon the person is on. Not "which one is loaded" — they all are —
+// but where in the stack they are looking.
 export const [openRibbon, setOpenRibbon] = createSignal<string>("");
 
-// The ribbon is a store rather than a signal, and it is updated by reconcile
-// keyed on the screen id. Every backend event makes the strip re-read itself,
-// and a plain replacement would rebuild the DOM: the iframe of a running
-// preview would reload and the cursor would jump out of the notes on every
-// step the agent takes. Reconcile keeps the panes that did not change.
-const empty: RibbonView = { cardId: "", title: "", flowId: "", flowName: "", segments: [], focusId: "" };
-export const [ribbon, setRibbonStore] = createStore<RibbonView>({ ...empty });
-
 export async function loadRibbons() {
-  try { setRibbons(list(await API.Ribbons())); } catch (e) { report(e); }
+  try {
+    setRibbons(reconcile(list(await API.Ribbons()), { key: "id" }));
+  } catch (e) {
+    report(e);
+  }
 }
 
-export async function loadRibbon(cardID: string) {
-  if (!cardID) { setRibbonStore(reconcile({ ...empty }, { key: "id" })); return; }
-  const view = await guard(() => API.Ribbon(cardID));
-  if (!view) return;
-  // Reconcile only makes sense against the same ribbon; switching cards is a
-  // different strip, and every pane in it is genuinely new.
-  if (ribbon.cardId !== view.cardId) setRibbonStore({ ...empty, cardId: view.cardId });
-  setRibbonStore(reconcile(view, { key: "id" }));
+/** showRibbon opens one card's strip, which is what «Сделай» ends in. */
+export function showRibbon(cardID: string) {
+  setTab("ribbon");
+  setOpenRibbon(cardID);
+  void loadRibbons();
 }
 
 // Which screen is open. A signal rather than a local of the shell, because
@@ -177,10 +176,3 @@ export async function loadRibbon(cardID: string) {
 // and watching it start are the same moment.
 export type Tab = "inbox" | "ribbon" | "work" | "attention" | "flows" | "sources" | "agents";
 export const [tab, setTab] = createSignal<Tab>("inbox");
-
-/** showRibbon opens one card's strip, which is what «Сделай» ends in. */
-export function showRibbon(cardID: string) {
-  setTab("ribbon");
-  setOpenRibbon(cardID);
-  void loadRibbon(cardID);
-}
