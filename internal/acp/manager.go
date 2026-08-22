@@ -492,9 +492,32 @@ func (m *Manager) emitAttention(a Attention) {
 // two copies of one intention.
 func (m *Manager) WorkDir(cardID string) (string, error) { return m.workDir(cardID) }
 
-// workDir is where a card's agent works: one directory per card, so two cards
-// never share a working copy and an agent's file jail means something.
+// workDir is where a card's agent works.
+//
+// The card's project if it names one, and then it is a place that already
+// exists and belongs to somebody: it is not created here and not created if it
+// has gone. A card pointing at a project that is missing is an error rather
+// than a reason to quietly open somewhere else — working in the wrong place is
+// worse than not working, and the stage that could not start says which.
+//
+// Otherwise a directory of the card's own, so two cards never share a working
+// copy and the agent's file jail means something. That is the right answer for
+// work that starts from a blank page, which is why an empty project is a real
+// answer rather than an unfinished one.
 func (m *Manager) workDir(cardID string) (string, error) {
+	card, err := m.store.Card(cardID)
+	if err == nil && card.Project != "" {
+		project, err := m.store.Project(card.Project)
+		if err != nil {
+			return "", fmt.Errorf("проект карточки не найден в реестре: %w", err)
+		}
+		info, err := os.Stat(project.Path)
+		if err != nil || !info.IsDir() {
+			return "", fmt.Errorf("папка проекта «%s» не найдена: %s", project.Name, project.Path)
+		}
+		return project.Path, nil
+	}
+
 	base := m.opts.WorkDir
 	if base == "" {
 		base = filepath.Join(os.TempDir(), "xxvi-work")

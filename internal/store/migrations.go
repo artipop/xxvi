@@ -254,5 +254,20 @@ ALTER TABLE stage ADD COLUMN reads_json  TEXT NOT NULL DEFAULT '[]';`,
 		// which screen.
 		`
 ALTER TABLE stage ADD COLUMN screens_json TEXT NOT NULL DEFAULT '[]';`,
+
+		// 8. Where the work happens. A registry like the agents and the sources,
+		// and a card points at one by id — so renaming a project drags nothing
+		// behind it. Empty on the card is a real answer: a task starting from a
+		// blank page gets a folder of its own.
+		`
+CREATE TABLE IF NOT EXISTS project (
+	id         TEXT PRIMARY KEY,
+	name       TEXT NOT NULL,
+	name_key   TEXT NOT NULL UNIQUE,
+	kind       TEXT NOT NULL,
+	path       TEXT NOT NULL,
+	created_at INTEGER NOT NULL
+);
+ALTER TABLE card ADD COLUMN project TEXT NOT NULL DEFAULT '';`,
 	}
 }

@@ -538,11 +538,15 @@ func TestStageColumnsAreAddedToADatabaseThatAlreadyHasFlows(t *testing.T) {
 	// Back to the schema as it was before the stage learned to declare anything.
 	// The version rows go too, and all of them: the runner takes the highest
 	// applied version, so leaving a later one behind would hide the step being
-	// tested.
+	// tested. Which means every step from the sixth on has to be undone here —
+	// this list grows with them, and that is the price of building the old
+	// database by undoing rather than by keeping a copy that goes stale.
 	for _, stmt := range []string{
 		`ALTER TABLE stage DROP COLUMN writes_json`,
 		`ALTER TABLE stage DROP COLUMN reads_json`,
 		`ALTER TABLE stage DROP COLUMN screens_json`,
+		`ALTER TABLE card DROP COLUMN project`,
+		`DROP TABLE project`,
 		`DELETE FROM schema_migration WHERE version >= 6`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {

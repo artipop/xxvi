@@ -31,7 +31,7 @@ const (
 var Actions = []string{ActionNone, ActionAgent}
 
 // Screen kinds: what a stage puts in front of the person while a card stands on
-// it (docs/system.md §11.2).
+// it (docs/system.md §12.2).
 //
 // The set is closed for the same reason the triggers are: the flow says *what*
 // to show, the code decides *how*. A kind the editor can offer and nothing can
@@ -240,7 +240,7 @@ type Stage struct {
 	// Screens are what a person looking at this step sees: the notes, the
 	// terminal, the browser that belong to it. They are declared by any stage,
 	// including one that runs nothing — unlike Writes and Reads, and that is a
-	// decision rather than an oversight (docs/system.md §11.4). The subject
+	// decision rather than an oversight (docs/system.md §12.4). The subject
 	// differs: an output is about the card and there is nobody to produce one
 	// on a waiting stage, while a screen is about the person, and the review
 	// stage is exactly where the preview has to be open.

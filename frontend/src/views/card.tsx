@@ -1,6 +1,6 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import { agents, applyCard, closeCard, guard, list, openCard } from "../state";
+import { agents, applyCard, closeCard, guard, list, openCard, projects } from "../state";
 import { QuestionForm } from "./attention";
 
 // One card, in full: where it stands, what it is waiting for, what has been
@@ -106,6 +106,7 @@ export default function CardPanel() {
       </Show>
 
       <Props />
+      <Place />
       <Assignee />
 
       <div class="panel">
@@ -196,6 +197,35 @@ function Props() {
 
 /** Assignee is who the card is for. An agent's name means "let this agent work
  *  it"; anything else means a person took it, and then no agent starts. */
+// Beside the assignee on purpose: one says by whom, the other says where, and
+// both are a person's answer rather than the graph's.
+function Place() {
+  const view = () => openCard()!;
+  const set = async (id: string) =>
+    applyCard(await guard(() => API.SetCardProject(view().card.id, id)));
+  const current = () => projects().find((p) => p.id === view().card.project);
+
+  return (
+    <div class="panel">
+      <h3>Проект</h3>
+      <Show when={projects().length > 0} fallback={
+        <div class="meta">Реестр пуст. Пока в нём ничего нет, карточка работает в своей пустой папке.</div>
+      }>
+        <select value={view().card.project ?? ""} onChange={(e) => set(e.currentTarget.value)}
+                style={{ width: "auto" }}>
+          <option value="">своя папка</option>
+          <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
+        </select>
+        <div class="meta" style={{ "margin-top": "6px" }}>
+          {current()
+            ? `Агент, терминал и заметки открываются в ${current()!.path}`
+            : "Карточка получит свою пустую папку — это верно для работы с чистого листа."}
+        </div>
+      </Show>
+    </div>
+  );
+}
+
 function Assignee() {
   const view = () => openCard()!;
   const set = async (who: string) =>

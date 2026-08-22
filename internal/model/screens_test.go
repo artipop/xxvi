@@ -87,7 +87,7 @@ func TestUnresolvedScreenRefsWarnsAboutWhatNobodyWrites(t *testing.T) {
 // A stage that runs nothing may still declare screens, unlike writes and reads.
 // The subject differs: an output is about the card, a screen is about the person
 // looking — and the review stage is exactly where the preview has to be open
-// (docs/system.md §11.4).
+// (docs/system.md §12.4).
 func TestAWaitingStageMayDeclareScreens(t *testing.T) {
 	agents := []Agent{{Name: "Claude", Kind: KindClaude}}
 	f := Flow{

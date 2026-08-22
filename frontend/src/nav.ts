@@ -21,6 +21,7 @@ export const NAV: NavItem[] = [
   { tab: "work", label: "В работе", count: () => inWork().length },
   { tab: "attention", label: "Требуют внимания", count: () => attention().length, alert: true },
   { tab: "flows", label: "Флоу", apart: true },
+  { tab: "projects", label: "Проекты" },
   { tab: "sources", label: "Источники" },
   { tab: "agents", label: "Агенты" },
 ];

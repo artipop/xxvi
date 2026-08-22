@@ -16,6 +16,7 @@ export type {
     InboxGroup,
     Mark,
     Match,
+    Project,
     PropertyWrite,
     Rule,
     Screen,

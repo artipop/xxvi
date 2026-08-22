@@ -51,6 +51,10 @@ type Card struct {
 	// work it"; anything else means a person took it, and then no agent starts
 	// (see PickAgent).
 	Assignee string `json:"assignee,omitempty"`
+	// Project is where the work happens: the id of a registry entry, so the
+	// project can be renamed without the card noticing. Empty is a real answer —
+	// a task that starts from a blank page gets a folder of its own.
+	Project string `json:"project,omitempty"`
 
 	// Props are the card's own named values. A flow condition asks about these,
 	// and a person answers a waiting stage by setting one.

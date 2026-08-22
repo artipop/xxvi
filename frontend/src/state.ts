@@ -4,7 +4,7 @@ import { Events } from "@wailsio/runtime";
 import * as API from "../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { AgentsView, CardView, StageCard, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp/models";
-import type { Card, Flow, InboxGroup, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { Card, Flow, InboxGroup, Project, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { CardSummary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
 
@@ -19,9 +19,10 @@ export const [flows, setFlows] = createSignal<Flow[]>([]);
 export const [sources, setSources] = createSignal<Source[]>([]);
 export const [agents, setAgents] = createSignal<AgentsView>({ agents: [], adapters: [] });
 export const [attention, setAttention] = createSignal<Attention[]>([]);
+export const [projects, setProjects] = createSignal<Project[]>([]);
 export const [vocabulary, setVocabulary] = createSignal<Vocabulary>({
   triggers: [], actions: [], kinds: [], ruleActions: [],
-  outcomeProperty: "", outcomeValues: [], screenKinds: [],
+  outcomeProperty: "", outcomeValues: [], screenKinds: [], projectKinds: [],
 });
 
 // A Go slice that was empty arrives as null, and every screen would otherwise
@@ -76,12 +77,15 @@ export async function loadAgents() {
 export async function loadAttention() {
   try { setAttention(list(await API.Attention())); } catch (e) { report(e); }
 }
+export async function loadProjects() {
+  try { setProjects(list(await API.Projects())); } catch (e) { report(e); }
+}
 
 /** loadAll re-reads everything. Cheap enough locally, and it cannot go stale. */
 export async function loadAll() {
   await Promise.all([
     loadInbox(), loadInWork(), loadDone(), loadFlows(), loadSources(), loadAgents(), loadAttention(),
-    loadRibbons(),
+    loadProjects(), loadRibbons(),
   ]);
   try { setVocabulary(await API.Vocabulary()); } catch (e) { report(e); }
 }
@@ -129,6 +133,7 @@ export function subscribe() {
   Events.On("flows", () => { void loadFlows(); });
   Events.On("sources", () => { void loadSources(); });
   Events.On("agents", () => { void loadAgents(); });
+  Events.On("projects", () => { void loadProjects(); });
 }
 
 export const [stageCards, setStageCards] = createSignal<StageCard[]>([]);
@@ -174,5 +179,5 @@ export function showRibbon(cardID: string) {
 // Which screen is open. A signal rather than a local of the shell, because
 // «Сделай» is one gesture that ends on another screen: taking a card into work
 // and watching it start are the same moment.
-export type Tab = "inbox" | "ribbon" | "work" | "attention" | "flows" | "sources" | "agents";
+export type Tab = "inbox" | "ribbon" | "work" | "attention" | "flows" | "projects" | "sources" | "agents";
 export const [tab, setTab] = createSignal<Tab>("inbox");

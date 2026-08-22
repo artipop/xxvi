@@ -97,7 +97,13 @@ export interface Vocabulary {
     /**
      * What kinds of screen a stage may declare — the same closed set the
      * ribbon knows how to render, so the editor cannot offer a window nothing
-     * can open (docs/system.md §11.2).
+     * can open (docs/system.md §12.2).
      */
     "screenKinds": ScreenKind[] | null;
+
+    /**
+     * What kinds of place work can happen in. One for now — a folder — and the
+     * room for the rest is the same room the triggers keep for git.
+     */
+    "projectKinds": ScreenKind[] | null;
 }

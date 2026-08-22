@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Card, InboxGroup } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import { applyCard, flows, guard, inbox, list, loadInbox, openCardByID, setInbox, showRibbon, sources } from "../state";
+import { applyCard, flows, guard, inbox, list, loadInbox, openCardByID, projects, setInbox, showRibbon, sources } from "../state";
 
 // The inbox: what the sources brought, grouped by what brought it. A card here
 // does nothing until somebody takes it into work — that decision is the whole
@@ -154,6 +154,7 @@ function AddItem(props: { source: string; onDone: () => void }) {
 function InboxCard(props: { card: Card }) {
   const suggested = () => props.card.props?.[SUGGESTED] ?? "";
   const [flowID, setFlowID] = createSignal("");
+  const [projectID, setProjectID] = createSignal("");
 
   const chosen = () => {
     if (flowID()) return flowID();
@@ -164,7 +165,12 @@ function InboxCard(props: { card: Card }) {
   // «Сделай» is one gesture: the card goes onto the flow and the ribbon that
   // shows it opens. Taking a card into work and watching it start are the same
   // moment, and making them two clicks would be making them two decisions.
+  // Where and by which route, answered in one gesture. The project is a
+  // person's answer like the flow is, and this is the moment both are real.
   const take = async () => {
+    if (projectID()) {
+      if (!(await guard(() => API.SetCardProject(props.card.id, projectID())))) return;
+    }
     const view = await guard(() => API.TakeIntoWork(props.card.id, chosen()));
     if (!view) return;
     applyCard(view);
@@ -195,6 +201,13 @@ function InboxCard(props: { card: Card }) {
         <select value={chosen()} onChange={(e) => setFlowID(e.currentTarget.value)} style={{ width: "auto" }}>
           <For each={flows()}>{(f) => <option value={f.id}>{f.name}</option>}</For>
         </select>
+        <Show when={projects().length > 0}>
+          <select value={projectID()} onChange={(e) => setProjectID(e.currentTarget.value)}
+                  style={{ width: "auto" }} title="Где делать">
+            <option value="">своя папка</option>
+            <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
+          </select>
+        </Show>
         <button class="btn primary" onClick={take} disabled={flows().length === 0}>Сделай</button>
         <Show when={suggested()}>
           <span class="meta">источник предлагает «{suggested()}»</span>

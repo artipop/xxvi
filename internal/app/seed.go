@@ -95,7 +95,7 @@ func SeedFlows() []model.Flow {
 					},
 					// The address this stage writes is the address the screen
 					// beside it opens — declared output and declared screen are
-					// the same currency (docs/system.md §11.3).
+					// the same currency (docs/system.md §12.3).
 					Screens: []model.Screen{
 						{Kind: model.ScreenBrowser, Title: "Превью", Ref: "{Превью}"},
 						{Kind: model.ScreenTerminal},
@@ -104,7 +104,7 @@ func SeedFlows() []model.Flow {
 				},
 				// A stage where nothing runs still shows something: this is
 				// where somebody looks at the preview and decides by it, which
-				// is why screens are not tied to an action (docs/system.md §11.4).
+				// is why screens are not tied to an action (docs/system.md §12.4).
 				{
 					ID: "dev-review", Name: "На ревью", Action: model.ActionNone,
 					Screens: []model.Screen{{Kind: model.ScreenBrowser, Title: "Превью", Ref: "{Превью}"}},

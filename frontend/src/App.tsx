@@ -5,6 +5,7 @@ import WorkView from "./views/work";
 import FlowsView from "./views/flows";
 import AgentsView from "./views/agents";
 import SourcesView from "./views/sources";
+import ProjectsView from "./views/projects";
 import AttentionView from "./views/attention";
 import RibbonView from "./views/ribbon";
 import CardPanel from "./views/card";
@@ -66,6 +67,7 @@ export default function App(): JSX.Element {
           <Show when={tab() === "work"}><WorkView /></Show>
           <Show when={tab() === "attention"}><AttentionView /></Show>
           <Show when={tab() === "flows"}><FlowsView /></Show>
+          <Show when={tab() === "projects"}><ProjectsView /></Show>
           <Show when={tab() === "sources"}><SourcesView /></Show>
           <Show when={tab() === "agents"}><AgentsView /></Show>
         </div>

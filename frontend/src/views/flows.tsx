@@ -389,7 +389,7 @@ function StagePanel(props: {
   // Unlike writes and reads, screens are offered on every stage: an output is
   // about the card and there is nobody to produce one where nothing runs, while
   // a screen is about the person, and the review stage is exactly where the
-  // preview has to be open (docs/system.md §11.4).
+  // preview has to be open (docs/system.md §12.4).
 
   const screens = () => list(stage().screens);
 

@@ -85,6 +85,13 @@ export interface Card {
     "assignee"?: string;
 
     /**
+     * Project is where the work happens: the id of a registry entry, so the
+     * project can be renamed without the card noticing. Empty is a real answer —
+     * a task that starts from a blank page gets a folder of its own.
+     */
+    "project"?: string;
+
+    /**
      * Props are the card's own named values. A flow condition asks about these,
      * and a person answers a waiting stage by setting one.
      */
@@ -253,6 +260,27 @@ export interface Match {
 }
 
 /**
+ * Project is one place work is done.
+ */
+export interface Project {
+    /**
+     * ID is what a card points at, and the one field that never changes: a
+     * project can be renamed without dragging anything behind it, because a
+     * name is a label and this is the reference.
+     */
+    "id": string;
+    "name": string;
+    "kind": string;
+
+    /**
+     * Path is the folder, absolute. For a kind that is not a folder this is
+     * where it lands on this machine once it is fetched.
+     */
+    "path": string;
+    "createdAt": string;
+}
+
+/**
  * PropertyWrite is one property a stage puts on the card: its name, and whether
  * the stage may finish without it. The value is not here — the agent supplies it
  * when it ends.
@@ -404,7 +432,7 @@ export interface Stage {
      * Screens are what a person looking at this step sees: the notes, the
      * terminal, the browser that belong to it. They are declared by any stage,
      * including one that runs nothing — unlike Writes and Reads, and that is a
-     * decision rather than an oversight (docs/system.md §11.4). The subject
+     * decision rather than an oversight (docs/system.md §12.4). The subject
      * differs: an output is about the card and there is nobody to produce one
      * on a waiting stage, while a screen is about the person, and the review
      * stage is exactly where the preview has to be open.

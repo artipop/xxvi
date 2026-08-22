@@ -11,7 +11,7 @@ import (
 // screenFlow is dataFlow with screens on it: the agent stage keeps a plan, the
 // check declares the preview it writes and opens it, and the waiting stage that
 // nothing runs opens the same preview — which is the whole reason a stage with
-// no action may declare screens (docs/system.md §11.4).
+// no action may declare screens (docs/system.md §12.4).
 func screenFlow() model.Flow {
 	f := dataFlow()
 	f.Stages[0].Screens = []model.Screen{{Kind: model.ScreenNotes, Title: "План", Ref: "план.md"}}

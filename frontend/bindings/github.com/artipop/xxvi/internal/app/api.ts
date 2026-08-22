@@ -116,6 +116,13 @@ export function DeleteFlow(flowID: string): $CancellablePromise<void> {
 }
 
 /**
+ * DeleteProject removes one, refusing while a card still names it.
+ */
+export function DeleteProject(id: string): $CancellablePromise<void> {
+    return $Call.ByID(1914798965, id);
+}
+
+/**
  * DeleteSource removes a source. The cards it brought stay: they are work, and
  * the source is only where they came from.
  */
@@ -221,6 +228,13 @@ export function PollSource(name: string): $CancellablePromise<model$0.InboxGroup
 }
 
 /**
+ * Projects is the registry of places work happens.
+ */
+export function Projects(): $CancellablePromise<model$0.Project[] | null> {
+    return $Call.ByID(3674097273);
+}
+
+/**
  * ReadDoc opens a notes screen's file. The path is relative to the card's
  * working folder — the same folder the agent works in, so a plan it wrote is
  * the file a person edits rather than a copy of it.
@@ -249,7 +263,7 @@ export function Ribbon(cardID: string): $CancellablePromise<engine$0.RibbonView>
 
 /**
  * Ribbons is every card in work: one card in work is one ribbon, and there is
- * no other kind (docs/system.md §11.1).
+ * no other kind (docs/system.md §12.1).
  */
 export function Ribbons(): $CancellablePromise<engine$0.RibbonView[] | null> {
     return $Call.ByID(62943144);
@@ -268,6 +282,17 @@ export function SaveAgent(a: model$0.Agent): $CancellablePromise<model$0.Agent> 
  */
 export function SaveFlow(flow: model$0.Flow): $CancellablePromise<model$0.Flow> {
     return $Call.ByID(2157757914, flow);
+}
+
+/**
+ * SaveProject adds or edits one entry.
+ * 
+ * Whether the folder is actually there is asked here rather than in the domain,
+ * which touches no disk — and here is also where a person is looking, so a path
+ * with a typo in it is refused while they can still see what they typed.
+ */
+export function SaveProject(p: model$0.Project): $CancellablePromise<model$0.Project> {
+    return $Call.ByID(4242958159, p);
 }
 
 /**
@@ -296,6 +321,15 @@ export function SessionEvents(sessionID: string, sinceSeq: number): $Cancellable
  */
 export function SetAssignee(cardID: string, who: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(3654695766, cardID, who);
+}
+
+/**
+ * SetCardProject says where a card's work happens. Beside the assignee on
+ * purpose: both are about by whom and where, and both are a person's answer
+ * rather than the graph's.
+ */
+export function SetCardProject(cardID: string, projectID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(1424901168, cardID, projectID);
 }
 
 /**

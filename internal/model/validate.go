@@ -102,7 +102,7 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 		// Screens are checked but not restricted by action: unlike writes and
 		// reads they are about the person looking rather than about the card,
 		// and a stage where nothing runs is exactly where somebody is looking
-		// (docs/system.md §11.4).
+		// (docs/system.md §12.4).
 		screens, err := normalizeScreens(s.Screens)
 		if err != nil {
 			return Flow{}, fmt.Errorf("стадия «%s»: %w", s.Name, err)

@@ -25,6 +25,7 @@ type cardRow struct {
 	URL         string `db:"url"`
 	State       string `db:"state"`
 	Assignee    string `db:"assignee"`
+	Project     string `db:"project"`
 	CreatedAt   int64  `db:"created_at"`
 	UpdatedAt   int64  `db:"updated_at"`
 }
@@ -33,7 +34,7 @@ func (r cardRow) card() model.Card {
 	return model.Card{
 		ID: r.ID, Source: r.Source, ExternalID: r.ExternalID, ItemVersion: r.ItemVersion,
 		Title: r.Title, Body: r.Body, URL: r.URL,
-		State: model.CardState(r.State), Assignee: r.Assignee,
+		State: model.CardState(r.State), Assignee: r.Assignee, Project: r.Project,
 		CreatedAt: fromMillis(r.CreatedAt), UpdatedAt: fromMillis(r.UpdatedAt),
 	}
 }
@@ -58,10 +59,10 @@ func (s *Store) CreateCard(c model.Card) (model.Card, error) {
 
 	err := s.tx(func(tx *sqlx.Tx) error {
 		if _, err := tx.Exec(`
-			INSERT INTO card (id, source, external_id, item_version, title, body, url, state, assignee, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			INSERT INTO card (id, source, external_id, item_version, title, body, url, state, assignee, project, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			c.ID, c.Source, c.ExternalID, c.ItemVersion, c.Title, c.Body, c.URL,
-			string(c.State), c.Assignee, millis(c.CreatedAt), millis(c.UpdatedAt)); err != nil {
+			string(c.State), c.Assignee, c.Project, millis(c.CreatedAt), millis(c.UpdatedAt)); err != nil {
 			return err
 		}
 		return writeProps(tx, c.ID, c.Props)

@@ -204,7 +204,7 @@ func (s *API) AddComment(cardID, text string) (CardView, error) {
 // ---- the ribbon ----
 
 // Ribbons is every card in work: one card in work is one ribbon, and there is
-// no other kind (docs/system.md §11.1).
+// no other kind (docs/system.md §12.1).
 func (s *API) Ribbons() ([]engine.RibbonView, error) { return s.app.Engine.Ribbons() }
 
 // Ribbon is one card's strip of screens.
@@ -388,8 +388,11 @@ type Vocabulary struct {
 	OutcomeValues   []string `json:"outcomeValues"`
 	// What kinds of screen a stage may declare — the same closed set the
 	// ribbon knows how to render, so the editor cannot offer a window nothing
-	// can open (docs/system.md §11.2).
+	// can open (docs/system.md §12.2).
 	ScreenKinds []ScreenKind `json:"screenKinds"`
+	// What kinds of place work can happen in. One for now — a folder — and the
+	// room for the rest is the same room the triggers keep for git.
+	ProjectKinds []ScreenKind `json:"projectKinds"`
 }
 
 // ScreenKind is one screen kind with the name a person reads. The constant is
@@ -410,7 +413,16 @@ func (s *API) Vocabulary() Vocabulary {
 		OutcomeProperty: model.OutcomeProperty,
 		OutcomeValues:   model.OutcomeValues,
 		ScreenKinds:     screenKinds(),
+		ProjectKinds:    projectKinds(),
 	}
+}
+
+func projectKinds() []ScreenKind {
+	out := make([]ScreenKind, 0, len(model.ProjectKinds))
+	for _, k := range model.ProjectKinds {
+		out = append(out, ScreenKind{Kind: k, Label: model.ProjectKindLabel(k)})
+	}
+	return out
 }
 
 func screenKinds() []ScreenKind {
@@ -487,6 +499,58 @@ func (s *API) AddCard(sourceName, title, body string) (model.Card, error) {
 	return card, nil
 }
 
+// ---- projects ----
+
+// Projects is the registry of places work happens.
+func (s *API) Projects() ([]model.Project, error) { return s.app.Store.Projects() }
+
+// SaveProject adds or edits one entry.
+//
+// Whether the folder is actually there is asked here rather than in the domain,
+// which touches no disk — and here is also where a person is looking, so a path
+// with a typo in it is refused while they can still see what they typed.
+func (s *API) SaveProject(p model.Project) (model.Project, error) {
+	checked, err := model.ValidateProject(p)
+	if err != nil {
+		return model.Project{}, err
+	}
+	info, err := os.Stat(checked.Path)
+	if err != nil || !info.IsDir() {
+		return model.Project{}, fmt.Errorf("папка не найдена: %s", checked.Path)
+	}
+	saved, err := s.app.Store.SaveProject(checked)
+	if err != nil {
+		return model.Project{}, err
+	}
+	s.app.Emit(EventProjects, map[string]any{"project": saved.ID})
+	return saved, nil
+}
+
+// DeleteProject removes one, refusing while a card still names it.
+func (s *API) DeleteProject(id string) error {
+	if err := s.app.Store.DeleteProject(id); err != nil {
+		return err
+	}
+	s.app.Emit(EventProjects, map[string]any{"project": id})
+	return nil
+}
+
+// SetCardProject says where a card's work happens. Beside the assignee on
+// purpose: both are about by whom and where, and both are a person's answer
+// rather than the graph's.
+func (s *API) SetCardProject(cardID, projectID string) (CardView, error) {
+	if projectID != "" {
+		if _, err := s.app.Store.Project(projectID); err != nil {
+			return CardView{}, err
+		}
+	}
+	if err := s.app.Store.SetCardProject(cardID, projectID); err != nil {
+		return CardView{}, err
+	}
+	s.app.Emit(engine.EventCard, map[string]any{"cardId": cardID})
+	return s.Card(cardID)
+}
+
 // ---- agents ----
 
 // AgentsView is the registry and what this machine can actually run.
@@ -555,7 +619,8 @@ func (s *API) CancelCard(cardID string) error {
 // emit their own (engine.EventCard, acp.EventSession, acp.EventAttention,
 // inbox.EventInbox); these are the ones this facade produces.
 const (
-	EventFlows   = "flows"
-	EventSources = "sources"
-	EventAgents  = "agents"
+	EventFlows    = "flows"
+	EventSources  = "sources"
+	EventAgents   = "agents"
+	EventProjects = "projects"
 )
