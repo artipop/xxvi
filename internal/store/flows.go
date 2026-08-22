@@ -133,9 +133,10 @@ func (s *Store) SaveFlow(f model.Flow) (model.Flow, error) {
 		}
 		for i, st := range f.Stages {
 			if _, err := tx.Exec(`
-				INSERT INTO stage (id, flow_id, ord, name, action, prompt, max_running, final, x, y)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				st.ID, f.ID, i, st.Name, st.Action, st.Prompt, st.MaxRunning, st.Final, st.X, st.Y); err != nil {
+				INSERT INTO stage (id, flow_id, ord, name, action, prompt, max_running, final, x, y, writes_json, reads_json, screens_json)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				st.ID, f.ID, i, st.Name, st.Action, st.Prompt, st.MaxRunning, st.Final, st.X, st.Y,
+				encodeJSON(st.Writes), encodeJSON(st.Reads), encodeJSON(st.Screens)); err != nil {
 				return err
 			}
 			for j, name := range st.Crew {
@@ -235,16 +236,19 @@ type flowRow struct {
 }
 
 type stageRow struct {
-	ID         string  `db:"id"`
-	FlowID     string  `db:"flow_id"`
-	Ord        int     `db:"ord"`
-	Name       string  `db:"name"`
-	Action     string  `db:"action"`
-	Prompt     string  `db:"prompt"`
-	MaxRunning int     `db:"max_running"`
-	Final      bool    `db:"final"`
-	X          float64 `db:"x"`
-	Y          float64 `db:"y"`
+	ID          string  `db:"id"`
+	FlowID      string  `db:"flow_id"`
+	Ord         int     `db:"ord"`
+	Name        string  `db:"name"`
+	Action      string  `db:"action"`
+	Prompt      string  `db:"prompt"`
+	MaxRunning  int     `db:"max_running"`
+	Final       bool    `db:"final"`
+	X           float64 `db:"x"`
+	Y           float64 `db:"y"`
+	WritesJSON  string  `db:"writes_json"`
+	ReadsJSON   string  `db:"reads_json"`
+	ScreensJSON string  `db:"screens_json"`
 }
 
 type edgeRow struct {
@@ -273,10 +277,14 @@ func (s *Store) loadGraph(r flowRow) (model.Flow, error) {
 		return model.Flow{}, err
 	}
 	for _, st := range stages {
-		f.Stages = append(f.Stages, model.Stage{
+		stage := model.Stage{
 			ID: st.ID, Name: st.Name, Action: st.Action, Prompt: st.Prompt,
 			Crew: crews[st.ID], MaxRunning: st.MaxRunning, Final: st.Final, X: st.X, Y: st.Y,
-		})
+		}
+		decodeJSON(st.WritesJSON, &stage.Writes)
+		decodeJSON(st.ReadsJSON, &stage.Reads)
+		decodeJSON(st.ScreensJSON, &stage.Screens)
+		f.Stages = append(f.Stages, stage)
 	}
 
 	var edges []edgeRow

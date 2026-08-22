@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dschz/solid-flow": "^0.1.4",
     "@wailsio/runtime": "latest",
     "solid-js": "^1.9.4"
   },

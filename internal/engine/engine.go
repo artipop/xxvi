@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/artipop/xxvi/internal/model"
@@ -160,6 +161,11 @@ func (e *Engine) Finished(cardID, outcome, detail, agentText string) {
 		return
 	}
 	e.mu.Lock()
+	// What the stage owed the card is taken off the agent's closing words and
+	// put on the card before the flow reads anything: an edge may branch on one
+	// of these values, and a missing required one turns a finished step into a
+	// failed one.
+	outcome, detail = e.harvestWritesLocked(cardID, outcome, detail, agentText)
 	stage := e.advanceLocked(cardID, outcome, detail, agentText)
 	e.mu.Unlock()
 
@@ -211,6 +217,11 @@ func (e *Engine) advanceLocked(cardID, on, detail, agentText string) (leftStage 
 		e.comment(cardID, fmt.Sprintf("Флоу «%s»: стадия исчезла из маршрута — карточка осталась на месте.", flow.Name))
 		return ""
 	}
+	// How the stage ended goes onto the card before anything is decided by it:
+	// an edge may branch on it, and the comment below is something a person
+	// will read. Every stage produces one, so nothing has to declare it.
+	e.writeOutcome(cardID, on)
+
 	if !flow.HasEdge(stage.ID, on) {
 		// A missing edge for an outcome is worth saying out loud: the flow
 		// stops here and somebody has to know why.
@@ -237,8 +248,21 @@ func (e *Engine) advanceLocked(cardID, on, detail, agentText string) (leftStage 
 		return stage.ID
 	}
 
-	// One event moves a card once.
-	key := fmt.Sprintf("flow|%s|%s|%s", cardID, stage.ID, on)
+	// One event moves a card once. The visit is part of the key, not just the
+	// stage: a route loops by design (docs/system.md §5.3), and a card that
+	// comes back to a stage it has already left is at a new step rather than
+	// repeating an old one. Keyed on the stage alone, the second success out of
+	// a stage would be swallowed as a duplicate and the card would stand there
+	// for good — which is the same guarantee turned into a trap.
+	//
+	// The visit is named by the journal row that recorded it rather than by the
+	// time it happened: two transitions can share a millisecond, and then two
+	// different steps would answer to one key.
+	visit := int64(0)
+	if last, ok, err := e.store.LastFlowEvent(cardID); err == nil && ok {
+		visit = last.ID
+	}
+	key := fmt.Sprintf("flow|%s|%s|%d|%s", cardID, stage.ID, visit, on)
 	if fresh, err := e.store.Claim(key); err != nil {
 		e.log.Error("проверка идемпотентности не удалась", "err", err)
 		return stage.ID
@@ -342,7 +366,8 @@ func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
 		return
 	}
 
-	job := Job{Card: card, Flow: flow, Stage: stage, Agent: agent, Prompt: ComposePrompt(card, flow, stage, agent)}
+	job := Job{Card: card, Flow: flow, Stage: stage, Agent: agent,
+		Prompt: ComposePrompt(card, flow, stage, agent, e.arrival(card.ID, flow, stage))}
 	if err := e.runner.Start(job); err != nil {
 		e.failStage(card, flow, stage, err)
 		return
@@ -358,6 +383,98 @@ func (e *Engine) failStage(card model.Card, flow model.Flow, stage model.Stage, 
 	e.log.Warn("стадия не запустилась", "card", card.ID, "stage", stage.Name, "err", cause)
 	e.comment(card.ID, fmt.Sprintf("Флоу «%s», стадия «%s»: шаг не запущен: %v", flow.Name, stage.Name, cause))
 	e.advanceLocked(card.ID, model.TriggerFailure, "шаг не удалось запустить", "")
+}
+
+// harvestWritesLocked puts a finished stage's declared outputs on the card and
+// says what happened to them. It returns the outcome the flow should act on:
+// unchanged, unless a required value never arrived — a stage that owed one and
+// did not deliver it has not finished, whatever it said about itself.
+//
+// Callers hold mu.
+func (e *Engine) harvestWritesLocked(cardID, outcome, detail, agentText string) (string, string) {
+	st, ok, err := e.store.FlowState(cardID)
+	if err != nil || !ok {
+		return outcome, detail
+	}
+	flow, err := e.store.Flow(st.FlowID)
+	if err != nil {
+		return outcome, detail
+	}
+	stage, ok := flow.Stage(st.StageID)
+	if !ok || len(stage.Writes) == 0 {
+		return outcome, detail
+	}
+
+	delivered := ParseWrites(agentText, stage.Writes)
+	if len(delivered) > 0 {
+		if _, err := e.store.UpdateCard(cardID, store.CardEdit{Props: delivered}); err != nil {
+			e.log.Warn("не удалось записать выходы стадии", "card", cardID, "stage", stage.Name, "err", err)
+			e.comment(cardID, fmt.Sprintf("Не удалось записать результат стадии «%s» на карточку: %v", stage.Name, err))
+		} else {
+			e.comment(cardID, fmt.Sprintf("Стадия «%s» записала на карточку: %s.", stage.Name, describeWrites(stage.Writes, delivered)))
+		}
+	}
+
+	// Only a step that reported success can be held to its contract. One that
+	// already failed is on its way to the failure branch, and refusing it a
+	// second time would say nothing new.
+	if outcome != model.TriggerSuccess {
+		return outcome, detail
+	}
+	missing := MissingRequired(stage.Writes, delivered)
+	if len(missing) == 0 {
+		return outcome, detail
+	}
+	e.comment(cardID, fmt.Sprintf(
+		"Стадия «%s» обязана записать %s — этого в ответе агента нет, шаг считается неудачным.",
+		stage.Name, quoteAll(missing)))
+	return model.TriggerFailure, fmt.Sprintf("не записано обязательное: %s", strings.Join(missing, ", "))
+}
+
+// writeOutcome puts how a stage ended into the card's own outcome field. Silent
+// about anything that is not a stage's own outcome: a person's answer on the
+// card is news about the work rather than a verdict the machine reached, and
+// writing it back would answer the person with their own words.
+func (e *Engine) writeOutcome(cardID, on string) {
+	value := model.OutcomeValue(on)
+	if value == "" {
+		return
+	}
+	if _, err := e.store.UpdateCard(cardID, store.CardEdit{Props: map[string]string{model.OutcomeProperty: value}}); err != nil {
+		e.log.Warn("не удалось записать исход стадии на карточку", "card", cardID, "outcome", value, "err", err)
+	}
+}
+
+// arrival is what this stage's agent is told about how the card got here. Read
+// off the card's own history rather than passed down the call chain: a card
+// starting from the queue arrives at runStage with no event in hand, and it has
+// the same right to know it is the second attempt.
+func (e *Engine) arrival(cardID string, flow model.Flow, stage model.Stage) string {
+	event, ok, err := e.store.LastFlowEvent(cardID)
+	if err != nil || !ok || event.ToStage != stage.ID {
+		return ""
+	}
+	st, onFlow, err := e.store.FlowState(cardID)
+	if err != nil || !onFlow {
+		return ""
+	}
+	revisit := false
+	for _, id := range st.Visited {
+		if id == stage.ID {
+			revisit = true
+			break
+		}
+	}
+	return ArrivalNote(flow, event, revisit)
+}
+
+// quoteAll is a list of property names as a person reads them.
+func quoteAll(names []string) string {
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		out = append(out, fmt.Sprintf("«%s»", n))
+	}
+	return strings.Join(out, ", ")
 }
 
 // ---- the stage queue ----

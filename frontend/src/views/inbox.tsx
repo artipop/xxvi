@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Card, InboxGroup } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import { applyCard, flows, guard, inbox, loadInbox, openCardByID, setInbox } from "../state";
+import { applyCard, flows, guard, inbox, list, loadInbox, openCardByID, setInbox, showRibbon } from "../state";
 
 // The inbox: what the sources brought, grouped by what brought it. A card here
 // does nothing until somebody takes it into work — that decision is the whole
@@ -38,7 +38,7 @@ function Group(props: { group: InboxGroup }) {
     <>
       <div class="list-head">
         <h2>{name()}</h2>
-        <span class="meta">{props.group.cards.length}</span>
+        <span class="meta">{list(props.group.cards).length}</span>
         <div class="spacer" />
         <Show when={props.group.source}>
           <button class="btn quiet" onClick={poll}>Прочитать сейчас</button>
@@ -98,9 +98,14 @@ function InboxCard(props: { card: Card }) {
     return byName?.id ?? flows()[0]?.id ?? "";
   };
 
+  // «Сделай» is one gesture: the card goes onto the flow and the ribbon that
+  // shows it opens. Taking a card into work and watching it start are the same
+  // moment, and making them two clicks would be making them two decisions.
   const take = async () => {
     const view = await guard(() => API.TakeIntoWork(props.card.id, chosen()));
+    if (!view) return;
     applyCard(view);
+    showRibbon(props.card.id);
   };
 
   const drop = async () => {
@@ -127,7 +132,7 @@ function InboxCard(props: { card: Card }) {
         <select value={chosen()} onChange={(e) => setFlowID(e.currentTarget.value)} style={{ width: "auto" }}>
           <For each={flows()}>{(f) => <option value={f.id}>{f.name}</option>}</For>
         </select>
-        <button class="btn primary" onClick={take} disabled={flows().length === 0}>В работу</button>
+        <button class="btn primary" onClick={take} disabled={flows().length === 0}>Сделай</button>
         <Show when={suggested()}>
           <span class="meta">источник предлагает «{suggested()}»</span>
         </Show>

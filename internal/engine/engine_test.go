@@ -645,3 +645,34 @@ func lastCardID(t *testing.T, f fixture) string {
 	t.Fatal("карточек нет")
 	return ""
 }
+
+// A route loops by design, and a card may go round it more than once: the check
+// fails twice, the agent fixes it twice. "One event moves a card once" is about
+// one event, not about one pair of stage and trigger — keyed on the pair, the
+// second success out of a stage is swallowed as a duplicate and the card stands
+// on it for good.
+func TestACardCanGoRoundALoopTwice(t *testing.T) {
+	f := setup(t, dataFlow())
+	card := f.card(t, "Починить форму")
+
+	if err := f.engine.TakeIntoWork(card.ID, f.flow.ID); err != nil {
+		t.Fatalf("взять в работу: %v", err)
+	}
+	for i := 1; i <= 2; i++ {
+		f.runner.finish(card.ID, model.TriggerSuccess, "")
+		if got := f.stageOf(t, card.ID); got != "qa" {
+			t.Fatalf("круг %d: карточка должна приехать на проверку, а стоит на %q", i, got)
+		}
+		f.runner.finish(card.ID, model.TriggerSuccess, "Вердикт: fail")
+		if got := f.stageOf(t, card.ID); got != "work" {
+			t.Fatalf("круг %d: провалившая проверку карточка возвращается агенту, а стоит на %q", i, got)
+		}
+	}
+
+	// And the way out of the loop still works after it.
+	f.runner.finish(card.ID, model.TriggerSuccess, "")
+	f.runner.finish(card.ID, model.TriggerSuccess, "Вердикт: ok")
+	if got := f.stateOf(t, card.ID); got != model.StateDone {
+		t.Fatalf("после двух кругов карточка должна доехать до конца, а она %q", got)
+	}
+}

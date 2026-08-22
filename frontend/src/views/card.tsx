@@ -1,6 +1,6 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import { agents, applyCard, closeCard, guard, openCard } from "../state";
+import { agents, applyCard, closeCard, guard, list, openCard } from "../state";
 import { QuestionForm } from "./attention";
 
 // One card, in full: where it stands, what it is waiting for, what has been
@@ -31,7 +31,7 @@ export default function CardPanel() {
 
         <Show when={flow()}>
           <div class="strip">
-            <For each={flow()!.stages}>
+            <For each={list(flow()!.stages)}>
               {(s) => (
                 <button
                   class={`stage ${s.current ? "current" : ""} ${s.done ? "done" : ""} ${s.final ? "final" : ""}`}
@@ -53,6 +53,27 @@ export default function CardPanel() {
           <Show when={(flow()!.waitingFor?.length ?? 0) > 0}>
             <div class="meta" style={{ "margin-top": "8px" }}>
               Стадия ждёт: {flow()!.waitingFor!.join("; ")}
+            </div>
+          </Show>
+
+          {/* A stage where nobody works and nothing runs waits for a person to
+              say how it went, and saying so used to mean finding the field in
+              «Свойства» and typing a value into it. There are two answers and
+              the flow already knows where each of them leads, so they are two
+              buttons naming the stage they lead to. */}
+          <Show when={list(flow()!.marks).length > 0}>
+            <div class="row wrap" style={{ "margin-top": "10px" }}>
+              <For each={list(flow()!.marks)}>
+                {(mark) => (
+                  <button
+                    class={`btn ${mark.forward ? "primary" : "quiet"}`}
+                    title={`Отметить «${mark.value}» — карточка уедет в «${mark.stage}»`}
+                    onClick={() => act(() => API.MarkOutcome(card().id, mark.value))}
+                  >
+                    {mark.forward ? `${mark.stage} →` : `← ${mark.stage}`}
+                  </button>
+                )}
+              </For>
             </div>
           </Show>
 
@@ -91,7 +112,7 @@ export default function CardPanel() {
         <h3>История</h3>
         <NewComment />
         <div class="comments">
-          <For each={[...view().comments].reverse()}>
+          <For each={[...list(view().comments)].reverse()}>
             {(c) => (
               <div class="comment">
                 <div class="who">{c.author || "система"} · {when(c.createdAt)}</div>
@@ -100,7 +121,7 @@ export default function CardPanel() {
             )}
           </For>
         </div>
-        <Show when={view().comments.length === 0}>
+        <Show when={list(view().comments).length === 0}>
           <div class="empty">Пока ничего не происходило.</div>
         </Show>
       </div>
@@ -201,7 +222,7 @@ function Assignee() {
 }
 
 function isAgent(name: string): boolean {
-  return agents().agents.some((a) => a.name.toLowerCase() === name.toLowerCase());
+  return list(agents().agents).some((a) => a.name.toLowerCase() === name.toLowerCase());
 }
 
 function NewComment() {

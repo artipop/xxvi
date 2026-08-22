@@ -238,5 +238,21 @@ CREATE TABLE setting (
 	key   TEXT PRIMARY KEY,
 	value TEXT NOT NULL DEFAULT ''
 );`, d.AutoIncrementPK()),
+
+		// 6. What a stage declares it leaves on the card and what it is handed
+		// on the way in. JSON in a column rather than two more tables: neither
+		// is ever queried across flows — they are read with the stage and
+		// written with it — and a table would be a join for something that is
+		// part of the stage's own text.
+		`
+ALTER TABLE stage ADD COLUMN writes_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE stage ADD COLUMN reads_json  TEXT NOT NULL DEFAULT '[]';`,
+
+		// 7. What a stage puts in front of the person standing at it. Same seam
+		// as 6 and for the same reason: screens are read with the stage and
+		// written with it, and nothing ever asks across flows which stage shows
+		// which screen.
+		`
+ALTER TABLE stage ADD COLUMN screens_json TEXT NOT NULL DEFAULT '[]';`,
 	}
 }

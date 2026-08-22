@@ -486,6 +486,12 @@ func (m *Manager) emitAttention(a Attention) {
 	m.ui.Emit(EventAttention, a)
 }
 
+// WorkDir is a card's working folder from outside — what the ribbon's notes
+// screen opens files in. The same folder the agent is confined to, on purpose:
+// a plan the agent writes and a plan a person edits are one file rather than
+// two copies of one intention.
+func (m *Manager) WorkDir(cardID string) (string, error) { return m.workDir(cardID) }
+
 // workDir is where a card's agent works: one directory per card, so two cards
 // never share a working copy and an agent's file jail means something.
 func (m *Manager) workDir(cardID string) (string, error) {

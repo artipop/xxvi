@@ -60,35 +60,88 @@ func defaultAgent() model.Agent {
 
 // SeedFlows are the two example routes. Together they use every trigger this
 // application has, which is what makes them worth reading: «Разработка» is the
-// short one with a human checkpoint and a loop back, «Разбор и решение» is the
-// one where the agent chooses the branch itself.
+// one where a stage owes the card a value and the next arrow reads it, «Разбор и
+// решение» is the one where the agent chooses the branch with its own words.
 func SeedFlows() []model.Flow {
 	return []model.Flow{
 		{
-			Name:        "Разработка",
-			Description: "Агент делает, человек проверяет. Отказ возвращает карточку агенту.",
-			EntryStage:  "dev-work",
+			Name: "Разработка",
+			Description: "Агент делает, агент проверяет, человек решает. " +
+				"Всё, что не прошло, возвращается агенту, а не человеку.",
+			EntryStage: "dev-work",
 			Stages: []model.Stage{
 				{
 					ID: "dev-work", Name: "В работе", Action: model.ActionAgent, Crew: []string{"Claude"},
 					Prompt: "Сделай то, что просит карточка. Если чего-то не хватает — спроси.",
-					X:      80, Y: 160,
+					// What this stage leaves on the card. Not required: a task
+					// that needed no branch still finished.
+					Writes: []model.PropertyWrite{{Property: "Ветка"}},
+					// What the ribbon shows while this step runs: the plan the
+					// agent keeps, in the card's own folder, so the file it
+					// writes is the file a person edits.
+					Screens: []model.Screen{{Kind: model.ScreenNotes, Title: "План", Ref: "план.md"}},
+					X:       80, Y: 160,
 				},
-				{ID: "dev-review", Name: "На проверке", Action: model.ActionNone, X: 360, Y: 160},
-				{ID: "dev-done", Name: "Готово", Final: true, X: 640, Y: 80},
-				{ID: "dev-blocked", Name: "Заблокировано", Final: true, X: 360, Y: 320},
+				{
+					ID: "dev-check", Name: "Проверка", Action: model.ActionAgent, Crew: []string{"Claude"},
+					Prompt: "Проверь сделанное. Ответь «pass», если всё хорошо, и «fail», если нет — " +
+						"и напиши, что именно не так.",
+					// A verdict the fork below reads, and a required one: the
+					// stage cannot end without it, because an edge branching on
+					// a value nobody set would send the card down the fallback.
+					Writes: []model.PropertyWrite{
+						{Property: "Вердикт", Required: true},
+						{Property: "Превью"},
+					},
+					// The address this stage writes is the address the screen
+					// beside it opens — declared output and declared screen are
+					// the same currency (docs/system.md §11.3).
+					Screens: []model.Screen{
+						{Kind: model.ScreenBrowser, Title: "Превью", Ref: "{Превью}"},
+						{Kind: model.ScreenTerminal},
+					},
+					X: 360, Y: 160,
+				},
+				// A stage where nothing runs still shows something: this is
+				// where somebody looks at the preview and decides by it, which
+				// is why screens are not tied to an action (docs/system.md §11.4).
+				{
+					ID: "dev-review", Name: "На ревью", Action: model.ActionNone,
+					Screens: []model.Screen{{Kind: model.ScreenBrowser, Title: "Превью", Ref: "{Превью}"}},
+					X:       640, Y: 160,
+				},
+				{ID: "dev-done", Name: "Готово", Final: true, X: 900, Y: 160},
 			},
 			Edges: []model.Edge{
-				{From: "dev-work", To: "dev-review", On: model.TriggerSuccess},
-				{From: "dev-work", To: "dev-blocked", On: model.TriggerFailure},
+				{From: "dev-work", To: "dev-check", On: model.TriggerSuccess},
+
+				// The fork reads what the stage before it was obliged to write.
+				// Conditional first, fallback second — the order the editor
+				// draws them in, though Next does not depend on it.
+				{
+					From: "dev-check", To: "dev-work", On: model.TriggerSuccess,
+					If: &model.Cond{Property: "Вердикт", Value: "fail"},
+				},
+				{From: "dev-check", To: "dev-review", On: model.TriggerSuccess},
+
+				// A review that says no is the one arrow a person draws. Nothing
+				// runs on «На ревью», so it has no failure of its own to leave
+				// by — the signal is the reviewer marking the card, in the same
+				// field a stage that *does* run writes.
 				{
 					From: "dev-review", To: "dev-done", On: model.TriggerCardChanged,
-					If: &model.Cond{Property: "Проверено", Value: "Да"},
+					If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomePassed},
 				},
 				{
 					From: "dev-review", To: "dev-work", On: model.TriggerCardChanged,
-					If: &model.Cond{Property: "Проверено", Value: "Нет"},
+					If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomeFailed},
 				},
+
+				// What has no arrow is not an oversight: an agent stage that
+				// failed leaves the card where it stopped, because sending a
+				// task back to the agent that has just failed it is a loop with
+				// nothing new in it. The card carries «Исход» and the reason is
+				// in its comments.
 			},
 		},
 		{

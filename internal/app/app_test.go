@@ -164,3 +164,78 @@ func mustFlow(t *testing.T, a *App, name string) model.Flow {
 	}
 	return f
 }
+
+// The ribbon end to end, through the same facade the UI calls: a seeded card
+// taken into work opens a strip whose first segment carries the screens the
+// example flow declares, and the notes screen writes into the card's own
+// working folder — the one the agent is confined to.
+func TestRibbonOpensOnTheScreensTheExampleDeclares(t *testing.T) {
+	a := open(t)
+	api := NewAPI(a)
+
+	flows, _ := a.Store.Flows()
+	var dev model.Flow
+	for _, f := range flows {
+		if f.Name == "Разработка" {
+			dev = f
+		}
+	}
+	if dev.ID == "" {
+		t.Fatal("пример «Разработка» не создан")
+	}
+
+	card, err := api.AddCard("", "Починить форму входа", "")
+	if err != nil {
+		t.Fatalf("карточка: %v", err)
+	}
+	if _, err := api.TakeIntoWork(card.ID, dev.ID); err != nil {
+		t.Fatalf("взять в работу: %v", err)
+	}
+
+	rows, err := api.Ribbons()
+	if err != nil || len(rows) != 1 || rows[0].CardID != card.ID {
+		t.Fatalf("карточка в работе — это одна лента: %+v (%v)", rows, err)
+	}
+
+	view, err := api.Ribbon(card.ID)
+	if err != nil {
+		t.Fatalf("лента: %v", err)
+	}
+	if len(view.Segments) != 1 || !view.Segments[0].Current {
+		t.Fatalf("лента начинается первым же шагом: %+v", view.Segments)
+	}
+	// The stage runs an agent, so the strip carries its stream as well as the
+	// plan the flow declares — the undeclared screen first, because what the
+	// step did reads before what it was told to show.
+	screens := view.Segments[0].Screens
+	if len(screens) != 2 || screens[0].Kind != "agent" || screens[0].SessionID == "" {
+		t.Fatalf("ход агента — первый экран его сегмента: %+v", screens)
+	}
+	notes := screens[1]
+	if notes.Kind != model.ScreenNotes || notes.Ref != "план.md" {
+		t.Fatalf("первый шаг показывает план, который ведёт агент: %+v", notes)
+	}
+	if view.FocusID != screens[0].ID {
+		t.Fatalf("фокус — первый экран текущего сегмента: %q", view.FocusID)
+	}
+
+	// The notes screen and the agent share one folder, so what is written here
+	// is what an agent would read there.
+	if err := api.WriteDoc(card.ID, notes.Ref, "# План\n1. Найти форму\n"); err != nil {
+		t.Fatalf("записать заметки: %v", err)
+	}
+	back, err := api.ReadDoc(card.ID, notes.Ref)
+	if err != nil || back != "# План\n1. Найти форму\n" {
+		t.Fatalf("заметки должны прочитаться обратно: %q (%v)", back, err)
+	}
+
+	// A file nobody has written yet is empty rather than a failure: a stage may
+	// declare notes the agent has not got to.
+	if text, err := api.ReadDoc(card.ID, "нет-такого.md"); err != nil || text != "" {
+		t.Fatalf("несуществующие заметки — пустая страница, а не ошибка: %q (%v)", text, err)
+	}
+	// And the folder is a boundary at the moment of opening, not only in the editor.
+	if _, err := api.ReadDoc(card.ID, "../../секрет"); err == nil {
+		t.Fatal("путь за пределы папки карточки должен быть отвергнут")
+	}
+}

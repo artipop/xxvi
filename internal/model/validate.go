@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"path"
 	"strings"
 )
 
@@ -80,6 +81,33 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 		if s.Final && s.Action != ActionNone {
 			return Flow{}, fmt.Errorf("финальная стадия «%s» ничего не делает — уберите действие «%s»", s.Name, s.Action)
 		}
+
+		writes, err := normalizeWrites(s.Writes)
+		if err != nil {
+			return Flow{}, fmt.Errorf("стадия «%s»: %w", s.Name, err)
+		}
+		s.Writes = writes
+		s.Reads = normalizeReads(s.Reads)
+
+		// Only a stage that runs something can produce a value. A stage that
+		// waits gets its answer from a person, and that answer is the card's own
+		// property — declared nowhere, because nobody is being told to write it.
+		if len(s.Writes) > 0 && s.Action != ActionAgent {
+			return Flow{}, fmt.Errorf("стадия «%s» ничего не запускает — писать на карточку там некому", s.Name)
+		}
+		if len(s.Reads) > 0 && s.Action != ActionAgent {
+			return Flow{}, fmt.Errorf("стадия «%s» ничего не запускает — читать с карточки там некому", s.Name)
+		}
+
+		// Screens are checked but not restricted by action: unlike writes and
+		// reads they are about the person looking rather than about the card,
+		// and a stage where nothing runs is exactly where somebody is looking
+		// (docs/system.md §11.4).
+		screens, err := normalizeScreens(s.Screens)
+		if err != nil {
+			return Flow{}, fmt.Errorf("стадия «%s»: %w", s.Name, err)
+		}
+		s.Screens = screens
 
 		seenID[s.ID], seenName[lower] = true, true
 		f.Stages[i] = s
@@ -201,6 +229,143 @@ func normalizeCrew(crew []string, agents []Agent) ([]string, error) {
 		return nil, nil
 	}
 	return out, nil
+}
+
+// normalizeWrites trims a stage's declared outputs and refuses the two things
+// that would be a lie: the same property twice, and the outcome field.
+//
+// The outcome is refused rather than dropped. The engine writes it after every
+// stage without anybody declaring it, so a stage that declares it is a person
+// who believes they are turning something on — and a silently ignored
+// declaration is the kind of thing found out an afternoon later.
+func normalizeWrites(writes []PropertyWrite) ([]PropertyWrite, error) {
+	out := make([]PropertyWrite, 0, len(writes))
+	seen := make(map[string]bool, len(writes))
+	for _, w := range writes {
+		w.Property = strings.TrimSpace(w.Property)
+		if w.Property == "" {
+			continue
+		}
+		if IsOutcomeProperty(w.Property) {
+			return nil, fmt.Errorf("«%s» пишется само после каждой стадии — объявлять его не нужно", OutcomeProperty)
+		}
+		key := strings.ToLower(w.Property)
+		if seen[key] {
+			return nil, fmt.Errorf("свойство «%s» объявлено дважды", w.Property)
+		}
+		seen[key] = true
+		out = append(out, w)
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
+}
+
+// normalizeScreens trims a stage's screens and refuses the ones that could not
+// be shown.
+//
+// A repeat is refused rather than dropped, unlike a repeated read: two
+// identical screens are two windows on the strip, and a person who asked for
+// them twice meant something by it — most likely a typo in one of the two.
+//
+// The notes path is confined here rather than only where it is read, because a
+// path that escapes the card's folder is a mistake in the flow, and the place
+// to say so is the editor rather than the moment somebody opens the screen.
+func normalizeScreens(screens []Screen) ([]Screen, error) {
+	out := make([]Screen, 0, len(screens))
+	seen := make(map[string]bool, len(screens))
+	for _, sc := range screens {
+		sc.Kind = strings.TrimSpace(sc.Kind)
+		sc.Title = strings.TrimSpace(sc.Title)
+		sc.Ref = strings.TrimSpace(sc.Ref)
+		if sc.Kind == "" && sc.Ref == "" {
+			continue
+		}
+		if !isScreenKind(sc.Kind) {
+			return nil, fmt.Errorf("неизвестный вид экрана «%s»", sc.Kind)
+		}
+		// A terminal without a command is a shell in the card's folder, and
+		// that is a screen worth having. The other two point at something, and
+		// without it there is nothing to open.
+		if sc.Ref == "" && sc.Kind != ScreenTerminal {
+			return nil, fmt.Errorf("экран «%s» не говорит, что показывать", ScreenKindLabel(sc.Kind))
+		}
+		if sc.Kind == ScreenNotes {
+			if err := checkNotesPath(sc.Ref); err != nil {
+				return nil, err
+			}
+		}
+		key := strings.ToLower(sc.Kind + "\x00" + sc.Ref)
+		if seen[key] {
+			return nil, fmt.Errorf("экран «%s» на «%s» объявлен дважды", ScreenKindLabel(sc.Kind), sc.Ref)
+		}
+		seen[key] = true
+		out = append(out, sc)
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
+}
+
+func isScreenKind(kind string) bool {
+	for _, k := range ScreenKinds {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// checkNotesPath keeps a notes screen inside the card's working folder — the
+// same folder the agent is confined to, so both sides of one file have the same
+// boundary.
+// The path is judged in slashes rather than with path/filepath, because it is
+// stored in a flow and read on whichever machine opens it: a rule that means one
+// thing on macOS and another on Windows would let a flow travel and change its
+// mind.
+func checkNotesPath(ref string) error {
+	slashed := strings.ReplaceAll(ref, `\`, "/")
+	abs := strings.HasPrefix(slashed, "/")
+	// A Windows drive letter is absolute even without a leading slash.
+	if len(slashed) >= 2 && slashed[1] == ':' {
+		abs = true
+	}
+	if abs {
+		return fmt.Errorf("путь к заметкам «%s» должен быть относительным — он лежит в папке карточки", ref)
+	}
+	// Checked on the cleaned path so that "a/../../b" is caught as well as the
+	// plainly written "../b".
+	clean := path.Clean(slashed)
+	if clean == ".." || strings.HasPrefix(clean, "../") {
+		return fmt.Errorf("путь к заметкам «%s» выходит из папки карточки", ref)
+	}
+	return nil
+}
+
+// normalizeReads trims a stage's declared inputs and drops repeats. Repeats are
+// dropped rather than refused: a read asks for nothing, so naming one twice is
+// untidy rather than wrong.
+func normalizeReads(reads []string) []string {
+	out := make([]string, 0, len(reads))
+	seen := make(map[string]bool, len(reads))
+	for _, name := range reads {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, name)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // stageName is a stage's name for an error message, falling back to its id for

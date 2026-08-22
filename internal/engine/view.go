@@ -33,6 +33,10 @@ type CardFlow struct {
 	WaitingFor []string `json:"waitingFor,omitempty"`
 	Queued     bool     `json:"queued,omitempty"`  // waiting for a place on the stage
 	Running    bool     `json:"running,omitempty"` // a session of this stage is working now
+	// Marks are the moves a person can make from here — see model.Mark. Empty
+	// wherever the flow does not offer one, which is every stage that decides
+	// for itself.
+	Marks []model.Mark `json:"marks,omitempty"`
 }
 
 // CardFlowFor describes where a card stands. It returns nothing — and no error
@@ -68,6 +72,9 @@ func (e *Engine) CardFlowFor(cardID string) (*CardFlow, error) {
 		out.Running = e.runner.RunningOnStage(st.StageID) > 0 && e.cardIsRunning(cardID)
 	}
 	if !out.Running {
+		// A stage that is working answers for itself; two buttons beside a
+		// running session would be a second way to answer for it.
+		out.Marks = flow.MarksFrom(st.StageID)
 		out.Queued, _ = e.store.IsQueued(cardID)
 	}
 	return out, nil

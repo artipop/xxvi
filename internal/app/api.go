@@ -1,7 +1,11 @@
 package app
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/artipop/xxvi/internal/acp"
@@ -117,6 +121,21 @@ func (s *API) SetProp(cardID, name, value string) (CardView, error) {
 	return s.Card(cardID)
 }
 
+// MarkOutcome is a person answering for a stage that runs nothing: «прошло» or
+// «не прошло», put on the card so the flow sees it and moves.
+//
+// It goes through SetProp rather than straight to the store, and that is the
+// point: the engine's own write of the outcome is silent, because the machine
+// recording a fact must not set the card's own automation off. This one has to
+// — it is a person's edit, and it goes the way a person's edit goes.
+func (s *API) MarkOutcome(cardID, value string) (CardView, error) {
+	value = strings.TrimSpace(value)
+	if value != model.OutcomePassed && value != model.OutcomeFailed {
+		return CardView{}, fmt.Errorf("исход бывает «%s» или «%s»", model.OutcomePassed, model.OutcomeFailed)
+	}
+	return s.SetProp(cardID, model.OutcomeProperty, value)
+}
+
 // SetAssignee says who the card is for. An agent's name means "let this agent
 // work it"; anything else means a person took it, and then no agent starts.
 func (s *API) SetAssignee(cardID, who string) (CardView, error) {
@@ -182,6 +201,90 @@ func (s *API) AddComment(cardID, text string) (CardView, error) {
 	return s.Card(cardID)
 }
 
+// ---- the ribbon ----
+
+// Ribbons is every card in work: one card in work is one ribbon, and there is
+// no other kind (docs/system.md §11.1).
+func (s *API) Ribbons() ([]engine.RibbonSummary, error) { return s.app.Engine.Ribbons() }
+
+// Ribbon is one card's strip of screens.
+func (s *API) Ribbon(cardID string) (engine.RibbonView, error) {
+	return s.app.Engine.Ribbon(cardID)
+}
+
+// SessionEvents is one agent run as it happened: its messages, its thoughts and
+// its tool calls, oldest first. sinceSeq is what the caller already has, so a
+// screen that is following a live session asks only for the rest of it.
+//
+// It reads the same rows the manager writes as it goes, rather than a second
+// stream alongside them: what the card's history is made of and what the
+// ribbon shows are one record.
+func (s *API) SessionEvents(sessionID string, sinceSeq int64) ([]store.SessionEvent, error) {
+	events, err := s.app.Store.SessionEvents(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]store.SessionEvent, 0, len(events))
+	for _, e := range events {
+		if e.Seq > sinceSeq {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
+// ReadDoc opens a notes screen's file. The path is relative to the card's
+// working folder — the same folder the agent works in, so a plan it wrote is
+// the file a person edits rather than a copy of it.
+//
+// A file that is not there yet is empty rather than an error: a stage may well
+// declare notes the agent has not written yet, and an error there would be the
+// ribbon refusing to show a blank page.
+func (s *API) ReadDoc(cardID, name string) (string, error) {
+	path, err := s.docPath(cardID, name)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("прочитать «%s»: %w", name, err)
+	}
+	return string(data), nil
+}
+
+// WriteDoc saves a notes screen's file, creating the folders it needs.
+func (s *API) WriteDoc(cardID, name, text string) error {
+	path, err := s.docPath(cardID, name)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("создать папку для «%s»: %w", name, err)
+	}
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		return fmt.Errorf("сохранить «%s»: %w", name, err)
+	}
+	return nil
+}
+
+// docPath is where a notes screen's file actually is. The flow editor already
+// refuses a path that leaves the card's folder; this refuses it again at the
+// moment of opening, because the folder is a boundary and a boundary checked
+// only where it is declared is a boundary until somebody edits the database.
+func (s *API) docPath(cardID, name string) (string, error) {
+	if strings.TrimSpace(name) == "" {
+		return "", fmt.Errorf("не сказано, какой файл открывать")
+	}
+	dir, err := s.app.Agents.WorkDir(cardID)
+	if err != nil {
+		return "", err
+	}
+	return acp.Within(dir, name)
+}
+
 // ---- flows ----
 
 // Flows is every flow, whole.
@@ -243,6 +346,23 @@ type Vocabulary struct {
 	Actions  []string        `json:"actions"`
 	Kinds    []string        `json:"kinds"`
 	Rules    []string        `json:"ruleActions"`
+	// The card's own field for how a stage ended, and the two values it takes.
+	// Sent so the editor can keep it out of what a stage declares — the engine
+	// writes it for every stage — while still offering it to a condition, which
+	// is the whole point of it being a closed set.
+	OutcomeProperty string   `json:"outcomeProperty"`
+	OutcomeValues   []string `json:"outcomeValues"`
+	// What kinds of screen a stage may declare — the same closed set the
+	// ribbon knows how to render, so the editor cannot offer a window nothing
+	// can open (docs/system.md §11.2).
+	ScreenKinds []ScreenKind `json:"screenKinds"`
+}
+
+// ScreenKind is one screen kind with the name a person reads. The constant is
+// what the flow stores; the label is what the editor shows.
+type ScreenKind struct {
+	Kind  string `json:"kind"`
+	Label string `json:"label"`
 }
 
 // Vocabulary returns those sets.
@@ -252,7 +372,19 @@ func (s *API) Vocabulary() Vocabulary {
 		Actions:  model.Actions,
 		Kinds:    model.Kinds,
 		Rules:    model.RuleActions,
+
+		OutcomeProperty: model.OutcomeProperty,
+		OutcomeValues:   model.OutcomeValues,
+		ScreenKinds:     screenKinds(),
 	}
+}
+
+func screenKinds() []ScreenKind {
+	out := make([]ScreenKind, 0, len(model.ScreenKinds))
+	for _, k := range model.ScreenKinds {
+		out = append(out, ScreenKind{Kind: k, Label: model.ScreenKindLabel(k)})
+	}
+	return out
 }
 
 // ---- sources ----

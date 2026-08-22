@@ -11,7 +11,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -22,6 +22,9 @@ import * as engine$0 from "../engine/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as model$0 from "../model/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as store$0 from "../store/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -31,18 +34,14 @@ import * as $models from "./models.js";
  * AddCard files a card somebody typed straight into the inbox.
  */
 export function AddCard(sourceName: string, title: string, body: string): $CancellablePromise<model$0.Card> {
-    return $Call.ByID(3801214340, sourceName, title, body).then(($result: any) => {
-        return $$createType0($result);
-    });
+    return $Call.ByID(3801214340, sourceName, title, body);
 }
 
 /**
  * AddComment writes a person's note into a card's history.
  */
 export function AddComment(cardID: string, text: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(2030529371, cardID, text).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(2030529371, cardID, text);
 }
 
 /**
@@ -50,10 +49,8 @@ export function AddComment(cardID: string, text: string): $CancellablePromise<$m
  * file rather than straight into a card, so a hand-added item is an item like
  * any other: it meets the same rules and survives the file being read again.
  */
-export function AddItem(sourceName: string, title: string, body: string): $CancellablePromise<model$0.InboxGroup[]> {
-    return $Call.ByID(1502436789, sourceName, title, body).then(($result: any) => {
-        return $$createType3($result);
-    });
+export function AddItem(sourceName: string, title: string, body: string): $CancellablePromise<model$0.InboxGroup[] | null> {
+    return $Call.ByID(1502436789, sourceName, title, body);
 }
 
 /**
@@ -61,9 +58,7 @@ export function AddItem(sourceName: string, title: string, body: string): $Cance
  * agent usable here" is the question a person opens that screen with.
  */
 export function Agents(): $CancellablePromise<$models.AgentsView> {
-    return $Call.ByID(4132736297).then(($result: any) => {
-        return $$createType4($result);
-    });
+    return $Call.ByID(4132736297);
 }
 
 /**
@@ -76,10 +71,8 @@ export function Answer(questionID: string, answer: acp$0.Answer): $CancellablePr
 /**
  * Attention is every question an agent is waiting on, oldest first.
  */
-export function Attention(): $CancellablePromise<acp$0.Attention[]> {
-    return $Call.ByID(978520023).then(($result: any) => {
-        return $$createType6($result);
-    });
+export function Attention(): $CancellablePromise<acp$0.Attention[] | null> {
+    return $Call.ByID(978520023);
 }
 
 /**
@@ -94,9 +87,7 @@ export function CancelCard(cardID: string): $CancellablePromise<void> {
  * Card is everything about one card.
  */
 export function Card(cardID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(1660277701, cardID).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(1660277701, cardID);
 }
 
 /**
@@ -127,10 +118,8 @@ export function DeleteSource(name: string): $CancellablePromise<void> {
 /**
  * Done is the closed cards, newest first.
  */
-export function Done(): $CancellablePromise<model$0.Card[]> {
-    return $Call.ByID(669172479).then(($result: any) => {
-        return $$createType7($result);
-    });
+export function Done(): $CancellablePromise<model$0.Card[] | null> {
+    return $Call.ByID(669172479);
 }
 
 /**
@@ -145,91 +134,112 @@ export function DropCard(cardID: string): $CancellablePromise<void> {
  * EditCard changes a card's own text.
  */
 export function EditCard(cardID: string, title: string, body: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(2223589865, cardID, title, body).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(2223589865, cardID, title, body);
 }
 
 /**
  * FlowCards lists the cards travelling a flow, with the stage each stands on.
  */
-export function FlowCards(flowID: string): $CancellablePromise<$models.StageCard[]> {
-    return $Call.ByID(3466565678, flowID).then(($result: any) => {
-        return $$createType9($result);
-    });
+export function FlowCards(flowID: string): $CancellablePromise<$models.StageCard[] | null> {
+    return $Call.ByID(3466565678, flowID);
 }
 
 /**
  * FlowOverview is one flow and where its cards are along it.
  */
 export function FlowOverview(flowID: string): $CancellablePromise<engine$0.FlowOverview> {
-    return $Call.ByID(283715336, flowID).then(($result: any) => {
-        return $$createType10($result);
-    });
+    return $Call.ByID(283715336, flowID);
 }
 
 /**
  * Flows is every flow, whole.
  */
-export function Flows(): $CancellablePromise<model$0.Flow[]> {
-    return $Call.ByID(2493457172).then(($result: any) => {
-        return $$createType12($result);
-    });
+export function Flows(): $CancellablePromise<model$0.Flow[] | null> {
+    return $Call.ByID(2493457172);
 }
 
 /**
  * InWork is every card currently travelling a flow.
  */
-export function InWork(): $CancellablePromise<$models.CardSummary[]> {
-    return $Call.ByID(2027618605).then(($result: any) => {
-        return $$createType14($result);
-    });
+export function InWork(): $CancellablePromise<$models.CardSummary[] | null> {
+    return $Call.ByID(2027618605);
 }
 
 /**
  * Inbox is everything waiting to be taken into work, grouped by what brought it.
  */
-export function Inbox(): $CancellablePromise<model$0.InboxGroup[]> {
-    return $Call.ByID(64525769).then(($result: any) => {
-        return $$createType3($result);
-    });
+export function Inbox(): $CancellablePromise<model$0.InboxGroup[] | null> {
+    return $Call.ByID(64525769);
+}
+
+/**
+ * MarkOutcome is a person answering for a stage that runs nothing: «прошло» or
+ * «не прошло», put on the card so the flow sees it and moves.
+ * 
+ * It goes through SetProp rather than straight to the store, and that is the
+ * point: the engine's own write of the outcome is silent, because the machine
+ * recording a fact must not set the card's own automation off. This one has to
+ * — it is a person's edit, and it goes the way a person's edit goes.
+ */
+export function MarkOutcome(cardID: string, value: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(4204052738, cardID, value);
 }
 
 /**
  * MoveTo puts a card on a stage by hand. A person is always above the graph.
  */
 export function MoveTo(cardID: string, stageID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(3200309791, cardID, stageID).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(3200309791, cardID, stageID);
 }
 
 /**
  * PollSource reads a source now, so nobody has to wait out an interval to see a
  * change.
  */
-export function PollSource(name: string): $CancellablePromise<model$0.InboxGroup[]> {
-    return $Call.ByID(3976612943, name).then(($result: any) => {
-        return $$createType3($result);
-    });
+export function PollSource(name: string): $CancellablePromise<model$0.InboxGroup[] | null> {
+    return $Call.ByID(3976612943, name);
+}
+
+/**
+ * ReadDoc opens a notes screen's file. The path is relative to the card's
+ * working folder — the same folder the agent works in, so a plan it wrote is
+ * the file a person edits rather than a copy of it.
+ * 
+ * A file that is not there yet is empty rather than an error: a stage may well
+ * declare notes the agent has not written yet, and an error there would be the
+ * ribbon refusing to show a blank page.
+ */
+export function ReadDoc(cardID: string, name: string): $CancellablePromise<string> {
+    return $Call.ByID(3010567507, cardID, name);
 }
 
 /**
  * RemoveFromFlow takes a card off its flow and back into the inbox.
  */
 export function RemoveFromFlow(cardID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(361858351, cardID).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(361858351, cardID);
+}
+
+/**
+ * Ribbon is one card's strip of screens.
+ */
+export function Ribbon(cardID: string): $CancellablePromise<engine$0.RibbonView> {
+    return $Call.ByID(898382539, cardID);
+}
+
+/**
+ * Ribbons is every card in work: one card in work is one ribbon, and there is
+ * no other kind (docs/system.md §11.1).
+ */
+export function Ribbons(): $CancellablePromise<engine$0.RibbonSummary[] | null> {
+    return $Call.ByID(62943144);
 }
 
 /**
  * SaveAgent adds or replaces a registry entry.
  */
 export function SaveAgent(a: model$0.Agent): $CancellablePromise<model$0.Agent> {
-    return $Call.ByID(1761974331, a).then(($result: any) => {
-        return $$createType15($result);
-    });
+    return $Call.ByID(1761974331, a);
 }
 
 /**
@@ -237,18 +247,27 @@ export function SaveAgent(a: model$0.Agent): $CancellablePromise<model$0.Agent> 
  * is taken, and a refusal says which part is wrong.
  */
 export function SaveFlow(flow: model$0.Flow): $CancellablePromise<model$0.Flow> {
-    return $Call.ByID(2157757914, flow).then(($result: any) => {
-        return $$createType11($result);
-    });
+    return $Call.ByID(2157757914, flow);
 }
 
 /**
  * SaveSource adds or replaces a source.
  */
 export function SaveSource(src: model$0.Source): $CancellablePromise<model$0.Source> {
-    return $Call.ByID(890995235, src).then(($result: any) => {
-        return $$createType16($result);
-    });
+    return $Call.ByID(890995235, src);
+}
+
+/**
+ * SessionEvents is one agent run as it happened: its messages, its thoughts and
+ * its tool calls, oldest first. sinceSeq is what the caller already has, so a
+ * screen that is following a live session asks only for the rest of it.
+ * 
+ * It reads the same rows the manager writes as it goes, rather than a second
+ * stream alongside them: what the card's history is made of and what the
+ * ribbon shows are one record.
+ */
+export function SessionEvents(sessionID: string, sinceSeq: number): $CancellablePromise<store$0.SessionEvent[] | null> {
+    return $Call.ByID(1587394828, sessionID, sinceSeq);
 }
 
 /**
@@ -256,9 +275,7 @@ export function SaveSource(src: model$0.Source): $CancellablePromise<model$0.Sou
  * work it"; anything else means a person took it, and then no agent starts.
  */
 export function SetAssignee(cardID: string, who: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(3654695766, cardID, who).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(3654695766, cardID, who);
 }
 
 /**
@@ -268,18 +285,14 @@ export function SetAssignee(cardID: string, who: string): $CancellablePromise<$m
  * simply not addressed to it.
  */
 export function SetProp(cardID: string, name: string, value: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(3244103020, cardID, name, value).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(3244103020, cardID, name, value);
 }
 
 /**
  * Sources is the registry with every source's rules.
  */
-export function Sources(): $CancellablePromise<model$0.Source[]> {
-    return $Call.ByID(3797444719).then(($result: any) => {
-        return $$createType17($result);
-    });
+export function Sources(): $CancellablePromise<model$0.Source[] | null> {
+    return $Call.ByID(3797444719);
 }
 
 /**
@@ -287,37 +300,19 @@ export function Sources(): $CancellablePromise<model$0.Source[]> {
  * starts moving, and it is a person's decision.
  */
 export function TakeIntoWork(cardID: string, flowID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(1683275391, cardID, flowID).then(($result: any) => {
-        return $$createType1($result);
-    });
+    return $Call.ByID(1683275391, cardID, flowID);
 }
 
 /**
  * Vocabulary returns those sets.
  */
 export function Vocabulary(): $CancellablePromise<$models.Vocabulary> {
-    return $Call.ByID(3928170955).then(($result: any) => {
-        return $$createType18($result);
-    });
+    return $Call.ByID(3928170955);
 }
 
-// Private type creation functions
-const $$createType0 = model$0.Card.createFrom;
-const $$createType1 = $models.CardView.createFrom;
-const $$createType2 = model$0.InboxGroup.createFrom;
-const $$createType3 = $Create.Array($$createType2);
-const $$createType4 = $models.AgentsView.createFrom;
-const $$createType5 = acp$0.Attention.createFrom;
-const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = $Create.Array($$createType0);
-const $$createType8 = $models.StageCard.createFrom;
-const $$createType9 = $Create.Array($$createType8);
-const $$createType10 = engine$0.FlowOverview.createFrom;
-const $$createType11 = model$0.Flow.createFrom;
-const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = $models.CardSummary.createFrom;
-const $$createType14 = $Create.Array($$createType13);
-const $$createType15 = model$0.Agent.createFrom;
-const $$createType16 = model$0.Source.createFrom;
-const $$createType17 = $Create.Array($$createType16);
-const $$createType18 = $models.Vocabulary.createFrom;
+/**
+ * WriteDoc saves a notes screen's file, creating the folders it needs.
+ */
+export function WriteDoc(cardID: string, name: string, text: string): $CancellablePromise<void> {
+    return $Call.ByID(130752024, cardID, name, text);
+}

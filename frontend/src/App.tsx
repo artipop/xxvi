@@ -1,4 +1,4 @@
-import { createSignal, onMount, Show, type JSX } from "solid-js";
+import { onMount, Show, type JSX } from "solid-js";
 import {
   attention, error, inbox, inWork, loadAll, setError, subscribe,
 } from "./state";
@@ -8,20 +8,17 @@ import FlowsView from "./views/flows";
 import AgentsView from "./views/agents";
 import SourcesView from "./views/sources";
 import AttentionView from "./views/attention";
+import RibbonView from "./views/ribbon";
 import CardPanel from "./views/card";
-import { openCard } from "./state";
-
-type Tab = "inbox" | "work" | "attention" | "flows" | "sources" | "agents";
+import { list, openCard, ribbons, tab, setTab, type Tab } from "./state";
 
 export default function App(): JSX.Element {
-  const [tab, setTab] = createSignal<Tab>("inbox");
-
   onMount(() => {
     void loadAll();
     subscribe();
   });
 
-  const inboxCount = () => inbox().reduce((n, g) => n + g.cards.length, 0);
+  const inboxCount = () => inbox().reduce((n, g) => n + list(g.cards).length, 0);
 
   const nav = (id: Tab, label: string, count?: () => number, alert = false) => (
     <button class={`nav ${tab() === id ? "on" : ""}`} onClick={() => setTab(id)}>
@@ -37,6 +34,7 @@ export default function App(): JSX.Element {
       <aside class="sidebar">
         <div class="brand">XXVI</div>
         {nav("inbox", "Входящие", inboxCount)}
+        {nav("ribbon", "Лента", () => ribbons().length)}
         {nav("work", "В работе", () => inWork().length)}
         {nav("attention", "Требуют внимания", () => attention().length, true)}
         <div style={{ height: "14px" }} />
@@ -45,6 +43,22 @@ export default function App(): JSX.Element {
         {nav("agents", "Агенты")}
       </aside>
 
+      {/* The ribbon is the one screen that is not a document on a desk: it is
+          full-bleed and scrolls sideways on its own, so it steps outside the
+          padded, vertically scrolling main column rather than fighting it. */}
+      <Show when={tab() === "ribbon"}>
+        <main class="main ribbon-mode">
+          <Show when={error()}>
+            <div class="error">
+              <pre>{error()}</pre>
+              <button class="btn quiet" onClick={() => setError("")}>×</button>
+            </div>
+          </Show>
+          <RibbonView />
+        </main>
+      </Show>
+
+      <Show when={tab() !== "ribbon"}>
       <main class={`main ${openCard() ? "with-panel" : ""}`}>
         <div>
           <Show when={error()}>
@@ -69,6 +83,7 @@ export default function App(): JSX.Element {
           <CardPanel />
         </Show>
       </main>
+      </Show>
     </div>
   );
 }

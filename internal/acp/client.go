@@ -284,49 +284,19 @@ func (c *sessionClient) WriteTextFile(ctx context.Context, params acpsdk.WriteTe
 	return acpsdk.WriteTextFileResponse{}, nil
 }
 
+// jail is the protocol's side of the card's working folder. The absolute-path
+// rule is the protocol's own — a relative path from an agent means nothing here
+// — and the boundary itself is shared with the notes screen (see Within).
 func (c *sessionClient) jail(path string) (string, error) {
 	if !filepath.IsAbs(path) {
 		return "", fmt.Errorf("путь должен быть абсолютным: %s", path)
 	}
-	clean := filepath.Clean(path)
-	root := c.s.cwd
-	if root == "" {
-		return "", fmt.Errorf("у сессии нет рабочей папки")
+	inside, err := Within(c.s.cwd, path)
+	if err != nil {
+		c.m.log.Warn("доступ за пределы рабочей папки запрещён", "session", c.s.id, "path", filepath.Clean(path))
+		return "", fmt.Errorf("путь %s вне рабочей папки сессии", filepath.Clean(path))
 	}
-	// The agent may well spell the working directory differently than we do and
-	// still mean it: on macOS the temp and home trees are reached through
-	// symlinks (/var → /private/var), and an agent that resolved the path
-	// before asking would be refused its own working directory.
-	for _, candidate := range []string{clean, resolvedPath(clean)} {
-		for _, r := range []string{root, resolvedPath(root)} {
-			if underRoot(candidate, r) {
-				return clean, nil
-			}
-		}
-	}
-	c.m.log.Warn("доступ за пределы рабочей папки запрещён", "session", c.s.id, "path", clean)
-	return "", fmt.Errorf("путь %s вне рабочей папки сессии", clean)
-}
-
-func underRoot(path, root string) bool {
-	if root == "" {
-		return false
-	}
-	return path == root || strings.HasPrefix(path, root+string(filepath.Separator))
-}
-
-// resolvedPath follows symlinks, falling back to the path as given — a path
-// that cannot be resolved is not a reason to refuse everything. A file being
-// created does not exist yet, so its directory is resolved instead.
-func resolvedPath(path string) string {
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		return resolved
-	}
-	dir, base := filepath.Split(path)
-	if resolved, err := filepath.EvalSymlinks(filepath.Clean(dir)); err == nil {
-		return filepath.Join(resolved, base)
-	}
-	return path
+	return inside, nil
 }
 
 // Terminal capability is not advertised, so these are never reached.

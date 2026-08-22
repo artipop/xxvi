@@ -3,10 +3,6 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Create as $Create } from "@wailsio/runtime";
-
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
 import * as acp$0 from "../acp/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -21,242 +17,78 @@ import * as store$0 from "../store/models.js";
 /**
  * AgentsView is the registry and what this machine can actually run.
  */
-export class AgentsView {
-    "agents": model$0.Agent[];
-    "adapters": acp$0.AdapterStatus[];
-
-    /** Creates a new AgentsView instance. */
-    constructor($$source: Partial<AgentsView> = {}) {
-        if (!("agents" in $$source)) {
-            this["agents"] = [];
-        }
-        if (!("adapters" in $$source)) {
-            this["adapters"] = [];
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new AgentsView instance from a string or object.
-     */
-    static createFrom($$source: any = {}): AgentsView {
-        const $$createField0_0 = $$createType1;
-        const $$createField1_0 = $$createType3;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("agents" in $$parsedSource) {
-            $$parsedSource["agents"] = $$createField0_0($$parsedSource["agents"]);
-        }
-        if ("adapters" in $$parsedSource) {
-            $$parsedSource["adapters"] = $$createField1_0($$parsedSource["adapters"]);
-        }
-        return new AgentsView($$parsedSource as Partial<AgentsView>);
-    }
+export interface AgentsView {
+    "agents": model$0.Agent[] | null;
+    "adapters": acp$0.AdapterStatus[] | null;
 }
 
 /**
  * CardSummary is a card in a list: itself, where it is, and whether it wants
  * something from a person.
  */
-export class CardSummary {
+export interface CardSummary {
     "card": model$0.Card;
     "flow"?: engine$0.CardFlow | null;
     "asking"?: boolean;
-
-    /** Creates a new CardSummary instance. */
-    constructor($$source: Partial<CardSummary> = {}) {
-        if (!("card" in $$source)) {
-            this["card"] = (new model$0.Card());
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new CardSummary instance from a string or object.
-     */
-    static createFrom($$source: any = {}): CardSummary {
-        const $$createField0_0 = $$createType4;
-        const $$createField1_0 = $$createType6;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("card" in $$parsedSource) {
-            $$parsedSource["card"] = $$createField0_0($$parsedSource["card"]);
-        }
-        if ("flow" in $$parsedSource) {
-            $$parsedSource["flow"] = $$createField1_0($$parsedSource["flow"]);
-        }
-        return new CardSummary($$parsedSource as Partial<CardSummary>);
-    }
 }
 
 /**
  * CardView is the whole card screen in one answer.
  */
-export class CardView {
+export interface CardView {
     "card": model$0.Card;
     "flow"?: engine$0.CardFlow | null;
-    "comments": model$0.Comment[];
-    "sessions": store$0.Session[];
-    "events": model$0.FlowEvent[];
+    "comments": model$0.Comment[] | null;
+    "sessions": store$0.Session[] | null;
+    "events": model$0.FlowEvent[] | null;
 
     /**
      * Question is what the agent is waiting to hear, if it is waiting.
      */
     "question"?: acp$0.Question | null;
+}
 
-    /** Creates a new CardView instance. */
-    constructor($$source: Partial<CardView> = {}) {
-        if (!("card" in $$source)) {
-            this["card"] = (new model$0.Card());
-        }
-        if (!("comments" in $$source)) {
-            this["comments"] = [];
-        }
-        if (!("sessions" in $$source)) {
-            this["sessions"] = [];
-        }
-        if (!("events" in $$source)) {
-            this["events"] = [];
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new CardView instance from a string or object.
-     */
-    static createFrom($$source: any = {}): CardView {
-        const $$createField0_0 = $$createType4;
-        const $$createField1_0 = $$createType6;
-        const $$createField2_0 = $$createType8;
-        const $$createField3_0 = $$createType10;
-        const $$createField4_0 = $$createType12;
-        const $$createField5_0 = $$createType14;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("card" in $$parsedSource) {
-            $$parsedSource["card"] = $$createField0_0($$parsedSource["card"]);
-        }
-        if ("flow" in $$parsedSource) {
-            $$parsedSource["flow"] = $$createField1_0($$parsedSource["flow"]);
-        }
-        if ("comments" in $$parsedSource) {
-            $$parsedSource["comments"] = $$createField2_0($$parsedSource["comments"]);
-        }
-        if ("sessions" in $$parsedSource) {
-            $$parsedSource["sessions"] = $$createField3_0($$parsedSource["sessions"]);
-        }
-        if ("events" in $$parsedSource) {
-            $$parsedSource["events"] = $$createField4_0($$parsedSource["events"]);
-        }
-        if ("question" in $$parsedSource) {
-            $$parsedSource["question"] = $$createField5_0($$parsedSource["question"]);
-        }
-        return new CardView($$parsedSource as Partial<CardView>);
-    }
+/**
+ * ScreenKind is one screen kind with the name a person reads. The constant is
+ * what the flow stores; the label is what the editor shows.
+ */
+export interface ScreenKind {
+    "kind": string;
+    "label": string;
 }
 
 /**
  * StageCard is a card as the flow view draws it.
  */
-export class StageCard {
+export interface StageCard {
     "card": model$0.Card;
     "stageId": string;
     "asking"?: boolean;
-
-    /** Creates a new StageCard instance. */
-    constructor($$source: Partial<StageCard> = {}) {
-        if (!("card" in $$source)) {
-            this["card"] = (new model$0.Card());
-        }
-        if (!("stageId" in $$source)) {
-            this["stageId"] = "";
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new StageCard instance from a string or object.
-     */
-    static createFrom($$source: any = {}): StageCard {
-        const $$createField0_0 = $$createType4;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("card" in $$parsedSource) {
-            $$parsedSource["card"] = $$createField0_0($$parsedSource["card"]);
-        }
-        return new StageCard($$parsedSource as Partial<StageCard>);
-    }
 }
 
 /**
  * Vocabulary is the closed sets the editor offers. Sent from here so the UI can
  * never offer a trigger or an action the engine does not implement.
  */
-export class Vocabulary {
-    "triggers": model$0.Trigger[];
-    "actions": string[];
-    "kinds": string[];
-    "ruleActions": string[];
-
-    /** Creates a new Vocabulary instance. */
-    constructor($$source: Partial<Vocabulary> = {}) {
-        if (!("triggers" in $$source)) {
-            this["triggers"] = [];
-        }
-        if (!("actions" in $$source)) {
-            this["actions"] = [];
-        }
-        if (!("kinds" in $$source)) {
-            this["kinds"] = [];
-        }
-        if (!("ruleActions" in $$source)) {
-            this["ruleActions"] = [];
-        }
-
-        Object.assign(this, $$source);
-    }
+export interface Vocabulary {
+    "triggers": model$0.Trigger[] | null;
+    "actions": string[] | null;
+    "kinds": string[] | null;
+    "ruleActions": string[] | null;
 
     /**
-     * Creates a new Vocabulary instance from a string or object.
+     * The card's own field for how a stage ended, and the two values it takes.
+     * Sent so the editor can keep it out of what a stage declares — the engine
+     * writes it for every stage — while still offering it to a condition, which
+     * is the whole point of it being a closed set.
      */
-    static createFrom($$source: any = {}): Vocabulary {
-        const $$createField0_0 = $$createType16;
-        const $$createField1_0 = $$createType17;
-        const $$createField2_0 = $$createType17;
-        const $$createField3_0 = $$createType17;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("triggers" in $$parsedSource) {
-            $$parsedSource["triggers"] = $$createField0_0($$parsedSource["triggers"]);
-        }
-        if ("actions" in $$parsedSource) {
-            $$parsedSource["actions"] = $$createField1_0($$parsedSource["actions"]);
-        }
-        if ("kinds" in $$parsedSource) {
-            $$parsedSource["kinds"] = $$createField2_0($$parsedSource["kinds"]);
-        }
-        if ("ruleActions" in $$parsedSource) {
-            $$parsedSource["ruleActions"] = $$createField3_0($$parsedSource["ruleActions"]);
-        }
-        return new Vocabulary($$parsedSource as Partial<Vocabulary>);
-    }
-}
+    "outcomeProperty": string;
+    "outcomeValues": string[] | null;
 
-// Private type creation functions
-const $$createType0 = model$0.Agent.createFrom;
-const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = acp$0.AdapterStatus.createFrom;
-const $$createType3 = $Create.Array($$createType2);
-const $$createType4 = model$0.Card.createFrom;
-const $$createType5 = engine$0.CardFlow.createFrom;
-const $$createType6 = $Create.Nullable($$createType5);
-const $$createType7 = model$0.Comment.createFrom;
-const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = store$0.Session.createFrom;
-const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = model$0.FlowEvent.createFrom;
-const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = acp$0.Question.createFrom;
-const $$createType14 = $Create.Nullable($$createType13);
-const $$createType15 = model$0.Trigger.createFrom;
-const $$createType16 = $Create.Array($$createType15);
-const $$createType17 = $Create.Array($Create.Any);
+    /**
+     * What kinds of screen a stage may declare — the same closed set the
+     * ribbon knows how to render, so the editor cannot offer a window nothing
+     * can open (docs/system.md §11.2).
+     */
+    "screenKinds": ScreenKind[] | null;
+}

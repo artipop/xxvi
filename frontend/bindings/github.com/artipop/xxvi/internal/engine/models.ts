@@ -3,19 +3,15 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Create as $Create } from "@wailsio/runtime";
-
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
 import * as model$0 from "../model/models.js";
 
 /**
  * CardFlow is the whole answer for one card.
  */
-export class CardFlow {
+export interface CardFlow {
     "flowId": string;
     "flowName": string;
-    "stages": CardStage[];
+    "stages": CardStage[] | null;
     "stageId": string;
     "since": string;
 
@@ -23,7 +19,7 @@ export class CardFlow {
      * WaitingFor is what the stage is waiting on, in a person's words and with
      * the conditions spelled out. Empty on a stage that runs something.
      */
-    "waitingFor"?: string[];
+    "waitingFor"?: string[] | null;
 
     /**
      * waiting for a place on the stage
@@ -35,52 +31,22 @@ export class CardFlow {
      */
     "running"?: boolean;
 
-    /** Creates a new CardFlow instance. */
-    constructor($$source: Partial<CardFlow> = {}) {
-        if (!("flowId" in $$source)) {
-            this["flowId"] = "";
-        }
-        if (!("flowName" in $$source)) {
-            this["flowName"] = "";
-        }
-        if (!("stages" in $$source)) {
-            this["stages"] = [];
-        }
-        if (!("stageId" in $$source)) {
-            this["stageId"] = "";
-        }
-        if (!("since" in $$source)) {
-            this["since"] = "0001-01-01T00:00:00.000Z";
-        }
-
-        Object.assign(this, $$source);
-    }
-
     /**
-     * Creates a new CardFlow instance from a string or object.
+     * Marks are the moves a person can make from here — see model.Mark. Empty
+     * wherever the flow does not offer one, which is every stage that decides
+     * for itself.
      */
-    static createFrom($$source: any = {}): CardFlow {
-        const $$createField2_0 = $$createType1;
-        const $$createField5_0 = $$createType2;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("stages" in $$parsedSource) {
-            $$parsedSource["stages"] = $$createField2_0($$parsedSource["stages"]);
-        }
-        if ("waitingFor" in $$parsedSource) {
-            $$parsedSource["waitingFor"] = $$createField5_0($$parsedSource["waitingFor"]);
-        }
-        return new CardFlow($$parsedSource as Partial<CardFlow>);
-    }
+    "marks"?: model$0.Mark[] | null;
 }
 
 /**
  * CardStage is one stage of the flow as the card sees it.
  */
-export class CardStage {
+export interface CardStage {
     "id": string;
     "name": string;
     "action": string;
-    "crew"?: string[];
+    "crew"?: string[] | null;
     "final"?: boolean;
     "current": boolean;
 
@@ -88,85 +54,112 @@ export class CardStage {
      * the card has already been through it
      */
     "done": boolean;
-
-    /** Creates a new CardStage instance. */
-    constructor($$source: Partial<CardStage> = {}) {
-        if (!("id" in $$source)) {
-            this["id"] = "";
-        }
-        if (!("name" in $$source)) {
-            this["name"] = "";
-        }
-        if (!("action" in $$source)) {
-            this["action"] = "";
-        }
-        if (!("current" in $$source)) {
-            this["current"] = false;
-        }
-        if (!("done" in $$source)) {
-            this["done"] = false;
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new CardStage instance from a string or object.
-     */
-    static createFrom($$source: any = {}): CardStage {
-        const $$createField3_0 = $$createType2;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("crew" in $$parsedSource) {
-            $$parsedSource["crew"] = $$createField3_0($$parsedSource["crew"]);
-        }
-        return new CardStage($$parsedSource as Partial<CardStage>);
-    }
 }
 
 /**
  * FlowOverview is one flow and where its cards are along it.
  */
-export class FlowOverview {
+export interface FlowOverview {
     "flow": model$0.Flow;
-    "stages": StageLoad[];
+    "stages": StageLoad[] | null;
     "cards": number;
+}
 
-    /** Creates a new FlowOverview instance. */
-    constructor($$source: Partial<FlowOverview> = {}) {
-        if (!("flow" in $$source)) {
-            this["flow"] = (new model$0.Flow());
-        }
-        if (!("stages" in $$source)) {
-            this["stages"] = [];
-        }
-        if (!("cards" in $$source)) {
-            this["cards"] = 0;
-        }
+/**
+ * RibbonSummary is one ribbon in the switcher.
+ */
+export interface RibbonSummary {
+    "cardId": string;
+    "title": string;
+    "flowName": string;
+    "stageName": string;
+    "running"?: boolean;
+}
 
-        Object.assign(this, $$source);
-    }
+/**
+ * RibbonView is one card in work, shown as a strip.
+ */
+export interface RibbonView {
+    "cardId": string;
+    "title": string;
+    "flowId": string;
+    "flowName": string;
+    "segments": Segment[] | null;
 
     /**
-     * Creates a new FlowOverview instance from a string or object.
+     * FocusID is where the ribbon flies when a step ends: the first screen of
+     * the segment the card stands in.
      */
-    static createFrom($$source: any = {}): FlowOverview {
-        const $$createField0_0 = $$createType3;
-        const $$createField1_0 = $$createType5;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("flow" in $$parsedSource) {
-            $$parsedSource["flow"] = $$createField0_0($$parsedSource["flow"]);
-        }
-        if ("stages" in $$parsedSource) {
-            $$parsedSource["stages"] = $$createField1_0($$parsedSource["stages"]);
-        }
-        return new FlowOverview($$parsedSource as Partial<FlowOverview>);
-    }
+    "focusId"?: string;
+}
+
+/**
+ * ScreenView is one window on the strip.
+ */
+export interface ScreenView {
+    /**
+     * ID is derived rather than stored, and stable across re-reads: the UI
+     * keys its panes by it, and a pane that loses its identity is an iframe
+     * that reloads and a cursor that jumps out of the notes.
+     */
+    "id": string;
+    "kind": string;
+    "title": string;
+
+    /**
+     * Ref is what to open, with the card's properties already put in.
+     */
+    "ref"?: string;
+
+    /**
+     * Waiting names the properties that had no value yet. The screen stands
+     * blank and says so rather than opening nothing and staying silent.
+     */
+    "waiting"?: string[] | null;
+
+    /**
+     * SessionID is set on the screens that belong to an agent's run — its
+     * stream, and later the terminals of the commands it ran.
+     */
+    "sessionId"?: string;
+}
+
+/**
+ * Segment is one visit to one stage: everything that happened between this
+ * transition and the next.
+ */
+export interface Segment {
+    /**
+     * ID is the segment's identity for the UI, which reconciles the strip by
+     * it: without one, a re-read would rebuild every pane and the iframe of a
+     * running preview would reload on every step the agent takes.
+     */
+    "id": string;
+
+    /**
+     * EventID is the flow_event this segment is, and the first half of every
+     * screen id under it.
+     */
+    "eventId": number;
+    "stageId": string;
+    "stageName": string;
+    "on"?: string;
+    "detail"?: string;
+    "enteredAt": string;
+    "current": boolean;
+
+    /**
+     * Gone says the stage was removed from the flow while the card was on it.
+     * The segment stays — what happened happened — and says why it is empty.
+     */
+    "gone"?: boolean;
+    "screens"?: ScreenView[] | null;
 }
 
 /**
  * StageLoad is how busy one stage is right now.
  */
-export class StageLoad {
+export interface StageLoad {
     "stageId": string;
 
     /**
@@ -183,38 +176,4 @@ export class StageLoad {
      * of those, being worked on now
      */
     "running": number;
-
-    /** Creates a new StageLoad instance. */
-    constructor($$source: Partial<StageLoad> = {}) {
-        if (!("stageId" in $$source)) {
-            this["stageId"] = "";
-        }
-        if (!("cards" in $$source)) {
-            this["cards"] = 0;
-        }
-        if (!("queued" in $$source)) {
-            this["queued"] = 0;
-        }
-        if (!("running" in $$source)) {
-            this["running"] = 0;
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new StageLoad instance from a string or object.
-     */
-    static createFrom($$source: any = {}): StageLoad {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new StageLoad($$parsedSource as Partial<StageLoad>);
-    }
 }
-
-// Private type creation functions
-const $$createType0 = CardStage.createFrom;
-const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = $Create.Array($Create.Any);
-const $$createType3 = model$0.Flow.createFrom;
-const $$createType4 = StageLoad.createFrom;
-const $$createType5 = $Create.Array($$createType4);

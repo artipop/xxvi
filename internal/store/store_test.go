@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -470,4 +471,153 @@ func stageIDs(f model.Flow) []string {
 		out = append(out, s.ID)
 	}
 	return out
+}
+
+// What a stage declares it writes and reads is part of the stage, so it survives
+// the same way the rest of it does: saved whole, read back whole.
+func TestStageDeclarationsSurviveARoundTrip(t *testing.T) {
+	st := open(t)
+	if _, err := st.SaveAgent(model.Agent{Name: "Claude", Kind: model.KindClaude}); err != nil {
+		t.Fatalf("агент: %v", err)
+	}
+	saved, err := st.SaveFlow(model.Flow{
+		Name: "С проверкой", EntryStage: "qa",
+		Stages: []model.Stage{{
+			ID: "qa", Name: "Проверка", Action: model.ActionAgent, Crew: []string{"Claude"},
+			Writes: []model.PropertyWrite{{Property: "Вердикт", Required: true}, {Property: "Превью"}},
+			Reads:  []string{"Ветка"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("сохранить флоу: %v", err)
+	}
+
+	back, err := st.Flow(saved.ID)
+	if err != nil {
+		t.Fatalf("прочитать флоу: %v", err)
+	}
+	stage := back.Stages[0]
+	if len(stage.Writes) != 2 || stage.Writes[0].Property != "Вердикт" || !stage.Writes[0].Required {
+		t.Fatalf("выходы стадии не пережили сохранение: %+v", stage.Writes)
+	}
+	if stage.Writes[1].Required {
+		t.Fatalf("необязательный выход не должен стать обязательным: %+v", stage.Writes[1])
+	}
+	if len(stage.Reads) != 1 || stage.Reads[0] != "Ветка" {
+		t.Fatalf("входы стадии не пережили сохранение: %+v", stage.Reads)
+	}
+}
+
+// The upgrade path, on a database that already has flows in it. A column is
+// added to a populated table, and every step of the list has to survive that —
+// which is not the same thing as a fresh database running the whole list.
+//
+// The "old" database is made by undoing the step rather than by keeping a copy
+// of the previous schema: a copy is a second description of the same thing, and
+// it is the one that goes stale.
+func TestStageColumnsAreAddedToADatabaseThatAlreadyHasFlows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "xxvi.db")
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("открыть базу: %v", err)
+	}
+	claude(t, s)
+	saved, err := s.SaveFlow(model.Flow{
+		Name: "С проверкой", EntryStage: "qa",
+		Stages: []model.Stage{{
+			ID: "qa", Name: "Проверка", Action: model.ActionAgent, Crew: []string{"Claude"},
+			Writes:  []model.PropertyWrite{{Property: "Вердикт", Required: true}},
+			Screens: []model.Screen{{Kind: model.ScreenBrowser, Ref: "{Превью}"}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("сохранить флоу: %v", err)
+	}
+
+	// Back to the schema as it was before the stage learned to declare anything.
+	// The version rows go too, and all of them: the runner takes the highest
+	// applied version, so leaving a later one behind would hide the step being
+	// tested.
+	for _, stmt := range []string{
+		`ALTER TABLE stage DROP COLUMN writes_json`,
+		`ALTER TABLE stage DROP COLUMN reads_json`,
+		`ALTER TABLE stage DROP COLUMN screens_json`,
+		`DELETE FROM schema_migration WHERE version >= 6`,
+	} {
+		if _, err := s.db.Exec(stmt); err != nil {
+			t.Fatalf("вернуть старую схему (%s): %v", stmt, err)
+		}
+	}
+	s.Close()
+
+	back, err := Open(path)
+	if err != nil {
+		t.Fatalf("открыть старую базу заново: %v", err)
+	}
+	defer back.Close()
+
+	flow, err := back.Flow(saved.ID)
+	if err != nil {
+		t.Fatalf("прочитать флоу после обновления: %v", err)
+	}
+	// The declaration itself is gone with the column — that is what dropping it
+	// means. What has to be true is that the flow is still readable and the
+	// stage can declare again.
+	if len(flow.Stages) != 1 || flow.Stages[0].Name != "Проверка" {
+		t.Fatalf("флоу должен читаться после обновления схемы: %+v", flow.Stages)
+	}
+	flow.Stages[0].Writes = []model.PropertyWrite{{Property: "Вердикт", Required: true}}
+	flow.Stages[0].Screens = []model.Screen{{Kind: model.ScreenBrowser, Ref: "{Превью}"}}
+	if _, err := back.SaveFlow(flow); err != nil {
+		t.Fatalf("сохранить выходы стадии после обновления: %v", err)
+	}
+	again, err := back.Flow(saved.ID)
+	if err != nil {
+		t.Fatalf("прочитать флоу: %v", err)
+	}
+	if len(again.Stages[0].Writes) != 1 || !again.Stages[0].Writes[0].Required {
+		t.Fatalf("выходы стадии не пережили обновление схемы: %+v", again.Stages[0].Writes)
+	}
+	if len(again.Stages[0].Screens) != 1 || again.Stages[0].Screens[0].Ref != "{Превью}" {
+		t.Fatalf("экраны стадии не пережили обновление схемы: %+v", again.Stages[0].Screens)
+	}
+}
+
+// A stage's screens are stored with it and come back as declared — including
+// the one that has no reference at all, because a terminal without a command is
+// a shell in the card's folder rather than an unfinished screen.
+func TestStageScreensSurviveSaving(t *testing.T) {
+	s := open(t)
+	claude(t, s)
+
+	saved, err := s.SaveFlow(model.Flow{
+		Name: "С экранами", EntryStage: "work",
+		Stages: []model.Stage{{
+			ID: "work", Name: "Работа", Action: model.ActionAgent, Crew: []string{"Claude"},
+			Screens: []model.Screen{
+				{Kind: model.ScreenNotes, Title: "План", Ref: "план.md"},
+				{Kind: model.ScreenTerminal},
+				{Kind: model.ScreenBrowser, Ref: "{Превью}"},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("сохранить флоу: %v", err)
+	}
+
+	back, err := s.Flow(saved.ID)
+	if err != nil {
+		t.Fatalf("прочитать флоу: %v", err)
+	}
+	screens := back.Stages[0].Screens
+	if len(screens) != 3 {
+		t.Fatalf("экраны не пережили сохранение: %+v", screens)
+	}
+	if screens[0].Kind != model.ScreenNotes || screens[0].Title != "План" || screens[0].Ref != "план.md" {
+		t.Fatalf("первый экран разошёлся с объявленным: %+v", screens[0])
+	}
+	if screens[1].Kind != model.ScreenTerminal || screens[1].Ref != "" {
+		t.Fatalf("терминал без команды должен пережить сохранение: %+v", screens[1])
+	}
 }

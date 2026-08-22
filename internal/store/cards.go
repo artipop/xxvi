@@ -356,6 +356,35 @@ func (s *Store) FlowEvents(cardID string) ([]model.FlowEvent, error) {
 	return out, nil
 }
 
+// LastFlowEvent is how the card got where it stands: the most recent transition
+// it made. What the engine asks when it is about to tell an agent why the card
+// is in front of it — a card that came back on a failure arrived with a reason,
+// and the reason is the one thing the next session needs and would otherwise
+// have to be told by hand.
+func (s *Store) LastFlowEvent(cardID string) (model.FlowEvent, bool, error) {
+	var r struct {
+		ID        int64  `db:"id"`
+		CardID    string `db:"card_id"`
+		FlowID    string `db:"flow_id"`
+		FromStage string `db:"from_stage"`
+		ToStage   string `db:"to_stage"`
+		OnTrigger string `db:"on_trigger"`
+		Detail    string `db:"detail"`
+		CreatedAt int64  `db:"created_at"`
+	}
+	err := s.db.Get(&r, `SELECT * FROM flow_event WHERE card_id = ? ORDER BY id DESC LIMIT 1`, cardID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return model.FlowEvent{}, false, nil
+	}
+	if err != nil {
+		return model.FlowEvent{}, false, err
+	}
+	return model.FlowEvent{
+		ID: r.ID, CardID: r.CardID, FlowID: r.FlowID, FromStage: r.FromStage,
+		ToStage: r.ToStage, On: r.OnTrigger, Detail: r.Detail, CreatedAt: fromMillis(r.CreatedAt),
+	}, true, nil
+}
+
 // CardsOnStage counts the cards standing on each stage of a flow — what the
 // flow overview draws, as a query rather than a second bookkeeping.
 func (s *Store) CardsOnStage(flowID string) (map[string]int, error) {

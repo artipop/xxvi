@@ -6,10 +6,11 @@ export {
     API
 };
 
-export {
+export type {
     AgentsView,
     CardSummary,
     CardView,
+    ScreenKind,
     StageCard,
     Vocabulary
 } from "./models.js";
