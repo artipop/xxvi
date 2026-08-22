@@ -57,6 +57,13 @@ export default function ProjectsView() {
   );
 }
 
+// A project picked and not named yet is named after its folder — which is what
+// it is called anyway, and one field fewer to fill in.
+function basename(path: string): string {
+  const parts = path.replace(/\/+$/, "").split("/");
+  return parts[parts.length - 1] ?? "";
+}
+
 function kindLabel(kind: string): string {
   return list(vocabulary().projectKinds).find((k) => k.kind === kind)?.label ?? kind;
 }
@@ -75,6 +82,17 @@ function ProjectForm(props: { project: Project; onDone: () => void }) {
       // The refusal is a sentence written for a person — a path with a typo in
       // it says so while they can still see what they typed.
       setError(String(e?.message ?? e));
+    }
+  };
+
+  const pick = async () => {
+    const chosen = await guard(() => API.PickFolder(draft.path));
+    // Empty is a person closing the dialog without choosing, and then what
+    // they had stays what they have.
+    if (chosen) {
+      setDraft("path", chosen);
+      if (!draft.name.trim()) setDraft("name", basename(chosen));
+      setError("");
     }
   };
 
@@ -101,9 +119,16 @@ function ProjectForm(props: { project: Project; onDone: () => void }) {
         </label>
       </div>
       <label class="field">
-        <span>Папка (абсолютный путь)</span>
-        <input type="text" placeholder="/Users/…/sources/проект" value={draft.path}
-               onInput={(e) => setDraft("path", e.currentTarget.value)} />
+        <span>Папка</span>
+        <div class="row">
+          <input type="text" placeholder="/Users/…/sources/проект" value={draft.path}
+                 style={{ flex: "1" }}
+                 onInput={(e) => setDraft("path", e.currentTarget.value)} />
+          {/* Typed only when there is no other way: somebody who knows where
+              their project is knows it as a place they can point at, not as a
+              string they can spell. */}
+          <button class="btn" onClick={pick}>Выбрать…</button>
+        </div>
       </label>
 
       <Show when={error()}>

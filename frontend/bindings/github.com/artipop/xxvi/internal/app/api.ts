@@ -220,6 +220,19 @@ export function OpenTerminal(cardID: string, screenID: string, command: string):
 }
 
 /**
+ * PickFolder opens the system's own folder dialog and returns what was chosen,
+ * or empty if the person closed it without choosing.
+ * 
+ * A path is typed only when there is no other way. Somebody who knows where
+ * their project is knows it as a place they can point at, not as a string they
+ * can spell — and a typo in a path is a project that refuses to save with a
+ * sentence about a folder that is not there.
+ */
+export function PickFolder($from: string): $CancellablePromise<string> {
+    return $Call.ByID(78060566, $from);
+}
+
+/**
  * PollSource reads a source now, so nobody has to wait out an interval to see a
  * change.
  */

@@ -69,6 +69,7 @@ func main() {
 	// this line everything emitted is dropped — correct, because there is
 	// nobody to show it to and the state it describes is in the database.
 	core.SetUI(emitter{wails})
+	core.SetChooser(chooser{wails})
 	if notifier != nil {
 		core.SetNotifier(app.NewNotifier(core, notifier))
 	}
@@ -131,3 +132,22 @@ func main() {
 type emitter struct{ app *application.App }
 
 func (e emitter) Emit(event string, payload any) { e.app.Event.Emit(event, payload) }
+
+// chooser adapts the window's own file dialog. It lives here rather than in the
+// application because asking a person to point at a folder needs a window, and
+// the window is what this file is.
+type chooser struct{ app *application.App }
+
+func (c chooser) Folder(title, from string) (string, error) {
+	dialog := c.app.Dialog.OpenFile().
+		SetTitle(title).
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		CanCreateDirectories(true)
+	if from != "" {
+		dialog = dialog.SetDirectory(from)
+	}
+	// A dialog closed without choosing is not a failure: it is a person
+	// deciding not to, and the caller carries on with what it had.
+	return dialog.PromptForSingleSelection()
+}

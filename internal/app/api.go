@@ -526,6 +526,23 @@ func (s *API) SaveProject(p model.Project) (model.Project, error) {
 	return saved, nil
 }
 
+// PickFolder opens the system's own folder dialog and returns what was chosen,
+// or empty if the person closed it without choosing.
+//
+// A path is typed only when there is no other way. Somebody who knows where
+// their project is knows it as a place they can point at, not as a string they
+// can spell — and a typo in a path is a project that refuses to save with a
+// sentence about a folder that is not there.
+func (s *API) PickFolder(from string) (string, error) {
+	s.app.uiMu.RLock()
+	chooser := s.app.chooser
+	s.app.uiMu.RUnlock()
+	if chooser == nil {
+		return "", fmt.Errorf("выбор папки доступен только в окне приложения")
+	}
+	return chooser.Folder("Папка проекта", from)
+}
+
 // DeleteProject removes one, refusing while a card still names it.
 func (s *API) DeleteProject(id string) error {
 	if err := s.app.Store.DeleteProject(id); err != nil {

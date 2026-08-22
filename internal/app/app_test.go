@@ -404,3 +404,39 @@ func TestAProjectInUseIsNotDeleted(t *testing.T) {
 		t.Fatalf("свободный проект должен удаляться: %v", err)
 	}
 }
+
+// Without a window there is no dialog to open, and that is said rather than
+// crashed: everything else in the application works headless, and this is the
+// one thing that cannot.
+func TestPickingAFolderNeedsAWindow(t *testing.T) {
+	api := NewAPI(open(t))
+	if _, err := api.PickFolder(""); err == nil {
+		t.Fatal("без окна выбор папки невозможен и должен об этом сказать")
+	}
+}
+
+// What the dialog hands back is what the registry gets, and a person who closed
+// it without choosing keeps what they had.
+func TestAPickedFolderBecomesTheProjectPath(t *testing.T) {
+	a := open(t)
+	api := NewAPI(a)
+	folder := t.TempDir()
+	a.SetChooser(fakeChooser{folder: folder})
+
+	got, err := api.PickFolder("")
+	if err != nil || got != folder {
+		t.Fatalf("выбранная папка должна вернуться как есть: %q (%v)", got, err)
+	}
+	if _, err := api.SaveProject(model.Project{Name: "Сайт", Path: got}); err != nil {
+		t.Fatalf("выбранная папка должна сохраняться без правки: %v", err)
+	}
+
+	a.SetChooser(fakeChooser{})
+	if got, err := api.PickFolder(""); err != nil || got != "" {
+		t.Fatalf("закрытый диалог — это пусто, а не ошибка: %q (%v)", got, err)
+	}
+}
+
+type fakeChooser struct{ folder string }
+
+func (f fakeChooser) Folder(string, string) (string, error) { return f.folder, nil }

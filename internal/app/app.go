@@ -40,12 +40,22 @@ type App struct {
 	// looking at the application. Optional: without it a question is still
 	// shown on its card and in the attention panel.
 	notifier *Notifier
+	// chooser is the native file dialog, set once the window exists.
+	chooser Chooser
 }
 
 // Emitter is how events reach the UI. The Wails application implements it;
 // tests and a headless run leave it unset.
 type Emitter interface {
 	Emit(event string, payload any)
+}
+
+// Chooser asks a person for something only the window can ask for: a folder on
+// their own disk. The same seam as the emitter and the notifier — the window
+// implements it, and everything here works without one, so a headless run and a
+// test simply have no picker.
+type Chooser interface {
+	Folder(title, from string) (string, error)
 }
 
 // Open builds the application over a data directory, creating and seeding the
@@ -118,6 +128,13 @@ func (a *App) Close() error {
 	a.Agents.Close()
 	a.Terminals.Close()
 	return a.Store.Close()
+}
+
+// SetChooser supplies the native file dialog once the window exists.
+func (a *App) SetChooser(c Chooser) {
+	a.uiMu.Lock()
+	defer a.uiMu.Unlock()
+	a.chooser = c
 }
 
 // SetUI supplies the event sink once the window exists.
