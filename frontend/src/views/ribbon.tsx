@@ -18,6 +18,14 @@ import { NAV } from "../nav";
 // in work is its own strip, stacked, and moving between them is moving between
 // jobs rather than between steps of one.
 //
+// A plain scroll is never ours. It belongs to whatever is under the pointer —
+// the page in the preview, the agent's stream, the terminal — and taking it to
+// move the view is how a ribbon ends up fighting the window inside it. This is
+// niri's own rule: every one of its navigation binds is Mod+something, its
+// wheel binds are Mod+Wheel with a cooldown, and focus-follows-mouse is off by
+// default, so a bare scroll always reaches the application. Moving the view is
+// a separate, deliberate gesture here too.
+//
 // Everything is rendered straight off the store's own objects rather than off a
 // flattened copy of them. That is not a matter of style: the stack re-reads on
 // every event, `reconcile` keeps the objects that did not change, and `For`
@@ -66,6 +74,11 @@ export default function Ribbon(): JSX.Element {
   const [widths, setWidths] = createSignal<Record<string, number>>({});
 
   const [menu, setMenu] = createSignal(false);
+  // Which pane has taken the keyboard: a preview or a note that a person
+  // clicked into. Worth saying out loud, because from inside a preview the
+  // ribbon cannot hear a key at all — the page has it — and a person pressing
+  // arrows at a window that is not listening deserves to be told why.
+  const [captured, setCaptured] = createSignal("");
 
   let stack: HTMLDivElement | undefined;
   const flown: Record<string, string> = {};
@@ -86,9 +99,15 @@ export default function Ribbon(): JSX.Element {
     setFocus(id);
   };
 
+  // The stack is moved by index rather than by asking an element to bring
+  // itself into view: every ribbon is exactly the stack's own height, so the
+  // n-th one starts at n heights, and arithmetic cannot land between two of
+  // them the way a scroll can.
   const flyToRibbon = (cardID: string) => {
-    const el = stack?.querySelector<HTMLElement>('[data-ribbon="' + CSS.escape(cardID) + '"]');
-    el?.scrollIntoView({ behavior: motion(), block: "start" });
+    const at = ribbons.findIndex((r) => r.id === cardID);
+    if (at >= 0 && stack) {
+      stack.scrollTo({ top: at * stack.clientHeight, behavior: motion() });
+    }
     setOpenRibbon(cardID);
     setMoved((m) => ({ ...m, [cardID]: false }));
   };
@@ -130,34 +149,42 @@ export default function Ribbon(): JSX.Element {
     setPinned(false);
   });
 
-  // Scrolling is a way of choosing too: the strip filling the screen is the one
-  // the person is on, however they got there.
+  // Who has the keyboard. Focus moving into a preview blurs the window itself,
+  // which is the only way to notice it from out here; everything else in the
+  // ribbon is an element of this document and says so directly.
   onMount(() => {
-    if (!stack) return;
-    const seen = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (!e.isIntersecting) continue;
-          const id = (e.target as HTMLElement).dataset.ribbon ?? "";
-          if (id && id !== openRibbon()) {
-            setOpenRibbon(id);
-            setMoved((m) => ({ ...m, [id]: false }));
-          }
-        }
-      },
-      { root: stack, threshold: 0.6 },
-    );
-    // Observing is re-run whenever the stack changes shape, which is cheap and
-    // spares keeping a second list of the elements in it.
-    const watch = () => {
-      seen.disconnect();
-      stack!.querySelectorAll<HTMLElement>("[data-ribbon]").forEach((el) => seen.observe(el));
+    const note = () => {
+      const el = document.activeElement as HTMLElement | null;
+      const inside = el && /^(IFRAME|TEXTAREA|INPUT)$/.test(el.tagName)
+        ? (el.closest("[data-pane]") as HTMLElement | null)?.dataset.pane ?? ""
+        : "";
+      setCaptured(inside);
     };
-    watch();
-    const shape = new MutationObserver(watch);
-    shape.observe(stack, { childList: true });
-    onCleanup(() => { seen.disconnect(); shape.disconnect(); });
+    document.addEventListener("focusin", note);
+    document.addEventListener("focusout", () => queueMicrotask(note));
+    window.addEventListener("blur", note);
+    window.addEventListener("focus", note);
+    onCleanup(() => {
+      document.removeEventListener("focusin", note);
+      window.removeEventListener("blur", note);
+      window.removeEventListener("focus", note);
+    });
   });
+
+  // A wheel with the modifier held moves between jobs; a wheel without it is
+  // not addressed to us and is left alone. The cooldown is niri's: without one
+  // a single flick carries through several ribbons and lands nowhere in
+  // particular.
+  let lastWheel = 0;
+  const onWheel = (e: WheelEvent) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    const now = e.timeStamp;
+    if (now - lastWheel < 150) return;
+    lastWheel = now;
+    stepRibbon(e.deltaY > 0 ? 1 : -1);
+  };
 
   const stepPane = (delta: number) => {
     const view = current();
@@ -177,6 +204,15 @@ export default function Ribbon(): JSX.Element {
     flyToRibbon(all[(at + delta + all.length) % all.length].id);
   };
 
+  // Taking the keyboard back. Blurring whatever holds it is enough for a note;
+  // a preview needs the window itself asked for, because the page inside it is
+  // what the keyboard is currently talking to.
+  const release = () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    window.focus();
+    setCaptured("");
+  };
+
   const widthOf = (id: string) => widths()[id] ?? DEFAULT_WIDTH;
 
   const resize = (to: (at: number) => number) => {
@@ -187,15 +223,23 @@ export default function Ribbon(): JSX.Element {
   };
 
   // Keys are listened for on the window rather than on the strip: the ribbon is
-  // the whole screen here, and a person who clicked into a terminal should
-  // still be able to leave it.
+  // the whole screen here.
+  //
+  // The modifier is what makes a key ours rather than the pane's, and it is the
+  // only form that works from inside a note. From inside a preview nothing
+  // works — a cross-origin page keeps every key it is given, and no application
+  // outside it can take one back. That is why the pane says when it has the
+  // keyboard: clicking its header hands it back.
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement | null;
-    if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) {
+    const typing = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
+    const mod = e.metaKey || e.ctrlKey;
+
+    if (typing && !mod) {
       if (e.key === "Escape") target.blur();
       return;
     }
-    if (e.metaKey || e.altKey) return;
+    if (e.altKey) return;
 
     switch (e.key) {
       case "ArrowLeft": e.preventDefault(); stepPane(-1); break;
@@ -241,7 +285,7 @@ export default function Ribbon(): JSX.Element {
   };
 
   return (
-    <div class="ribbon">
+    <div class="ribbon" onWheel={onWheel}>
       {/* The only chrome: room for the window's own buttons, the name of the
           job in front of you, and the one offer the ribbon ever makes. */}
       <header class="ribbon-bar" style={{ "--wails-draggable": "drag" }}>
@@ -297,7 +341,9 @@ export default function Ribbon(): JSX.Element {
                             first
                             width={widthOf(emptyID(segment))}
                             focused={focus() === emptyID(segment)}
+                            captured={false}
                             onFocus={() => { setPinned(true); setFocus(emptyID(segment)); }}
+                            onRelease={release}
                           />
                         </Show>
                         <For each={list(segment.screens)}>
@@ -311,7 +357,9 @@ export default function Ribbon(): JSX.Element {
                               first={i() === 0}
                               width={widthOf(screen.id)}
                               focused={focus() === screen.id}
+                              captured={captured() === screen.id}
                               onFocus={() => { setPinned(true); setFocus(screen.id); }}
+                              onRelease={release}
                             />
                           )}
                         </For>
@@ -398,22 +446,32 @@ function Pane(props: {
   first: boolean;
   width: number;
   focused: boolean;
+  captured: boolean;
   onFocus: () => void;
+  onRelease: () => void;
 }): JSX.Element {
   const waiting = () => list(props.screen?.waiting);
 
   return (
     <section
-      class={`screen ${props.focused ? "on" : ""}`}
+      class={`screen ${props.focused ? "on" : ""} ${props.captured ? "held" : ""}`}
       style={{ "flex-basis": `calc(100% * ${WIDTHS[props.width] ?? WIDTHS[DEFAULT_WIDTH]})` }}
       data-pane={props.id}
       onMouseDown={props.onFocus}
     >
-      <header class="screen-head">
+      {/* Clicking the header is how the keyboard comes back: a person who
+          clicked into a preview has nowhere else to press, because the page
+          inside it keeps every key. */}
+      <header class="screen-head" onClick={() => props.captured && props.onRelease()}>
         <Show when={props.first}>
           <span class={`tag ${props.segment.current ? "accent" : ""}`}>{props.segment.stageName}</span>
         </Show>
         <span class="screen-title">{props.title}</span>
+        <Show when={props.captured}>
+          <span class="tag warn" title="Клавиши уходят сюда. Нажмите на заголовок, чтобы вернуть их ленте">
+            клавиши здесь
+          </span>
+        </Show>
         <div class="spacer" />
         <Show when={props.screen?.kind === "browser" && waiting().length === 0}>
           <a class="btn quiet tiny" href={props.screen!.ref} target="_blank" rel="noreferrer" title="Открыть снаружи">↗</a>
