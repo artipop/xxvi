@@ -6,6 +6,7 @@ import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
 import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
 import { guard, list, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
+import { NAV } from "../nav";
 
 // The ribbon is the card's journal of transitions made visible: one segment per
 // entry onto a stage, and the screens of that stage inside it. Nothing here
@@ -63,6 +64,8 @@ export default function Ribbon(): JSX.Element {
   // finishing on a strip somebody is not watching is worth a mark, not a jump.
   const [moved, setMoved] = createSignal<Record<string, boolean>>({});
   const [widths, setWidths] = createSignal<Record<string, number>>({});
+
+  const [menu, setMenu] = createSignal(false);
 
   let stack: HTMLDivElement | undefined;
   const flown: Record<string, string> = {};
@@ -218,7 +221,10 @@ export default function Ribbon(): JSX.Element {
         e.preventDefault();
         resize((at) => (at === WIDTHS.length - 1 ? DEFAULT_WIDTH : WIDTHS.length - 1));
         break;
-      case "Escape": e.preventDefault(); setTab("inbox"); break;
+      case "Escape":
+        e.preventDefault();
+        menu() ? setMenu(false) : setTab("inbox");
+        break;
     }
   };
 
@@ -239,6 +245,7 @@ export default function Ribbon(): JSX.Element {
       {/* The only chrome: room for the window's own buttons, the name of the
           job in front of you, and the one offer the ribbon ever makes. */}
       <header class="ribbon-bar" style={{ "--wails-draggable": "drag" }}>
+        <Sections open={menu()} setOpen={setMenu} />
         <span class="ribbon-where">
           {current()?.title}
           <Show when={current()?.stageName}>
@@ -332,6 +339,51 @@ export default function Ribbon(): JSX.Element {
           </For>
         </nav>
         </Show>
+      </Show>
+    </div>
+  );
+}
+
+// The ribbon has no sidebar, so the way out of it is a chevron: the sections
+// are still one list (see nav.ts), just folded away until asked for. A bar with
+// seven buttons in it would be the sidebar again, lying down.
+function Sections(props: { open: boolean; setOpen: (v: boolean) => void }): JSX.Element {
+  let box: HTMLDivElement | undefined;
+
+  // Clicking anywhere else is an answer too — «not this», and a menu that
+  // needs to be dismissed on its own terms is a menu in the way.
+  onMount(() => {
+    const away = (e: MouseEvent) => {
+      if (box && !box.contains(e.target as Node)) props.setOpen(false);
+    };
+    document.addEventListener("mousedown", away);
+    onCleanup(() => document.removeEventListener("mousedown", away));
+  });
+
+  return (
+    <div class="sections" ref={box} style={{ "--wails-draggable": "no-drag" }}>
+      <button class="chevron" onClick={() => props.setOpen(!props.open)} title="Разделы (Esc — во входящие)">
+        XXVI <span class={`caret ${props.open ? "up" : ""}`}>⌄</span>
+      </button>
+      <Show when={props.open}>
+        <div class="menu">
+          <For each={NAV}>
+            {(item) => (
+              <>
+                <Show when={item.apart}><hr /></Show>
+                <button
+                  class={item.tab === "ribbon" ? "on" : ""}
+                  onClick={() => { props.setOpen(false); setTab(item.tab); }}
+                >
+                  <span>{item.label}</span>
+                  <Show when={item.count && item.count()! > 0}>
+                    <span class={`count ${item.alert ? "alert" : ""}`}>{item.count!()}</span>
+                  </Show>
+                </button>
+              </>
+            )}
+          </For>
+        </div>
       </Show>
     </div>
   );

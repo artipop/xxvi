@@ -1,7 +1,5 @@
-import { onMount, Show, type JSX } from "solid-js";
-import {
-  attention, error, inbox, inWork, loadAll, setError, subscribe,
-} from "./state";
+import { onMount, Show, For, type JSX } from "solid-js";
+import { error, loadAll, setError, subscribe } from "./state";
 import InboxView from "./views/inbox";
 import WorkView from "./views/work";
 import FlowsView from "./views/flows";
@@ -10,24 +8,14 @@ import SourcesView from "./views/sources";
 import AttentionView from "./views/attention";
 import RibbonView from "./views/ribbon";
 import CardPanel from "./views/card";
-import { list, openCard, ribbons, tab, setTab, type Tab } from "./state";
+import { openCard, tab, setTab } from "./state";
+import { NAV } from "./nav";
 
 export default function App(): JSX.Element {
   onMount(() => {
     void loadAll();
     subscribe();
   });
-
-  const inboxCount = () => inbox().reduce((n, g) => n + list(g.cards).length, 0);
-
-  const nav = (id: Tab, label: string, count?: () => number, alert = false) => (
-    <button class={`nav ${tab() === id ? "on" : ""}`} onClick={() => setTab(id)}>
-      <span>{label}</span>
-      <Show when={count && count()! > 0}>
-        <span class={`count ${alert ? "alert" : ""}`}>{count!()}</span>
-      </Show>
-    </button>
-  );
 
   // The ribbon is not a document on a desk, so it does not sit on one: it takes
   // the whole window, the way the thing it is modelled on does. Everything else
@@ -50,14 +38,19 @@ export default function App(): JSX.Element {
     <div class="shell">
       <aside class="sidebar">
         <div class="brand">XXVI</div>
-        {nav("inbox", "Входящие", inboxCount)}
-        {nav("ribbon", "Лента", () => ribbons.length)}
-        {nav("work", "В работе", () => inWork().length)}
-        {nav("attention", "Требуют внимания", () => attention().length, true)}
-        <div style={{ height: "14px" }} />
-        {nav("flows", "Флоу")}
-        {nav("sources", "Источники")}
-        {nav("agents", "Агенты")}
+        <For each={NAV}>
+          {(item) => (
+            <>
+              <Show when={item.apart}><div style={{ height: "14px" }} /></Show>
+              <button class={`nav ${tab() === item.tab ? "on" : ""}`} onClick={() => setTab(item.tab)}>
+                <span>{item.label}</span>
+                <Show when={item.count && item.count()! > 0}>
+                  <span class={`count ${item.alert ? "alert" : ""}`}>{item.count!()}</span>
+                </Show>
+              </button>
+            </>
+          )}
+        </For>
       </aside>
 
       <main class={`main ${openCard() ? "with-panel" : ""}`}>

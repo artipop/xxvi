@@ -260,6 +260,42 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
   font-size: 12px; color: var(--faint);
 }
 .ribbon-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The way out. Folded away because a bar with seven buttons in it would be the
+   sidebar again, lying down. */
+.sections { position: relative; flex: none; }
+
+.chevron {
+  display: flex; align-items: center; gap: 5px;
+  padding: 2px 7px; border: 0; border-radius: 6px;
+  background: none; color: var(--faint); cursor: pointer;
+  font-size: 11px; font-weight: 600; letter-spacing: .1em;
+}
+.chevron:hover { background: var(--panel-2); color: var(--text); }
+.chevron .caret { font-weight: 400; letter-spacing: 0; font-size: 12px; line-height: 1; }
+.chevron .caret.up { transform: rotate(180deg); }
+
+.menu {
+  position: absolute; top: 26px; left: 0; z-index: 5;
+  min-width: 200px; padding: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.menu button {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 9px; border: 0; border-radius: 6px;
+  background: none; color: var(--dim); cursor: pointer; text-align: left;
+  font-size: 13px; letter-spacing: 0; font-weight: 400;
+}
+.menu button:hover { background: var(--panel); color: var(--text); }
+.menu button.on { color: var(--text); }
+.menu .count {
+  margin-left: auto; font-size: 12px; color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.menu .count.alert { color: var(--warn); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
 .ribbon-stage { color: var(--faint); opacity: .7; }
 
 .ribbon-blank { color: var(--faint); padding: 60px 0 0 84px; line-height: 1.9; }
