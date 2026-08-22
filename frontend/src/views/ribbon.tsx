@@ -1,5 +1,5 @@
 import {
-  createEffect, createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch, type JSX,
+  createEffect, createMemo, createSignal, For, lazy, Match, onCleanup, onMount, Show, Suspense, Switch, type JSX,
 } from "solid-js";
 import { Events } from "@wailsio/runtime";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
@@ -7,6 +7,10 @@ import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/
 import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
 import { guard, list, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
 import { NAV } from "../nav";
+
+// The emulator is a large chunk and most screens are not terminals, so it
+// arrives only when one is opened.
+const TerminalPane = lazy(() => import("./terminal"));
 
 // The ribbon is the card's journal of transitions made visible: one segment per
 // entry onto a stage, and the screens of that stage inside it. Nothing here
@@ -234,9 +238,13 @@ export default function Ribbon(): JSX.Element {
     const target = e.target as HTMLElement | null;
     const typing = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
     const mod = e.metaKey || e.ctrlKey;
+    // A terminal wants every key it is given, Escape most of all: it is how a
+    // person leaves insert mode, and stealing it to leave the pane would make
+    // an editor unusable inside one. Only the modifier gets through.
+    const terminal = !!target?.closest(".terminal");
 
     if (typing && !mod) {
-      if (e.key === "Escape") target.blur();
+      if (e.key === "Escape" && !terminal) target.blur();
       return;
     }
     if (e.altKey) return;
@@ -518,10 +526,9 @@ function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
         <BrowserPane url={props.screen.ref ?? ""} />
       </Match>
       <Match when={props.screen.kind === "terminal"}>
-        <div class="screen-note">
-          Терминал: <span class="mono">{props.screen.ref || "шелл в папке карточки"}</span>.
-          <br />Экран появится, когда терминалы будут включены.
-        </div>
+        <Suspense fallback={<div class="screen-note">Терминал открывается…</div>}>
+          <TerminalPane cardId={props.cardId} screenId={props.screen.id} command={props.screen.ref ?? ""} />
+        </Suspense>
       </Match>
     </Switch>
   );

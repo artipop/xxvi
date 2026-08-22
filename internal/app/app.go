@@ -16,16 +16,18 @@ import (
 	"github.com/artipop/xxvi/internal/engine"
 	"github.com/artipop/xxvi/internal/inbox"
 	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/xxvi/internal/term"
 )
 
 // App is everything the application is made of.
 type App struct {
-	DataDir  string
-	Store    *store.Store
-	Engine   *engine.Engine
-	Agents   *acp.Manager
-	Pipeline *inbox.Pipeline
-	Poller   *inbox.Poller
+	DataDir   string
+	Store     *store.Store
+	Engine    *engine.Engine
+	Agents    *acp.Manager
+	Terminals *term.Manager
+	Pipeline  *inbox.Pipeline
+	Poller    *inbox.Poller
 
 	log *slog.Logger
 
@@ -83,6 +85,17 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	// The two know about each other, so one of them is wired second.
 	a.Engine.SetRunner(a.Agents)
 
+	// A terminal opens in the card's own working folder — the same one its
+	// agent works in, so what a person types and what the agent did are one
+	// working copy rather than two.
+	a.Terminals = term.NewManager(a.Agents.WorkDir, log)
+	if err := a.Terminals.Listen(); err != nil {
+		// A terminal that cannot be opened is a screen that says so. Everything
+		// else in the application works without one, and refusing to start over
+		// it would be the wrong size of failure.
+		log.Warn("терминалы выключены", "почему", err)
+	}
+
 	a.Pipeline = inbox.NewPipeline(st, a, log)
 	a.Poller = inbox.NewPoller(st, a.Pipeline, log)
 
@@ -103,6 +116,7 @@ func (a *App) Start() {
 func (a *App) Close() error {
 	a.Poller.Stop()
 	a.Agents.Close()
+	a.Terminals.Close()
 	return a.Store.Close()
 }
 

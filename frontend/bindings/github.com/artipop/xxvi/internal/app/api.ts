@@ -91,6 +91,14 @@ export function Card(cardID: string): $CancellablePromise<$models.CardView> {
 }
 
 /**
+ * CloseTerminal ends one shell. A person closing a terminal means the process
+ * in it, not just the window onto it — the ribbon has no windows to close.
+ */
+export function CloseTerminal(id: string): $CancellablePromise<void> {
+    return $Call.ByID(575378589, id);
+}
+
+/**
  * DeleteAgent removes an entry, refusing while a flow still names it: a stage
  * whose crew is nobody is a card that silently never starts, and finding that
  * out here is better than finding it out mid-run.
@@ -190,6 +198,18 @@ export function MarkOutcome(cardID: string, value: string): $CancellablePromise<
  */
 export function MoveTo(cardID: string, stageID: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(3200309791, cardID, stageID);
+}
+
+/**
+ * OpenTerminal starts the shell behind one terminal screen, or hands back the
+ * one already running there.
+ * 
+ * Keyed by screen: a screen id is derived from the card's journal and does not
+ * change, so re-reading the ribbon — which happens on every step the agent
+ * takes — must not leave a second shell behind each time.
+ */
+export function OpenTerminal(cardID: string, screenID: string, command: string): $CancellablePromise<$models.TerminalHandle> {
+    return $Call.ByID(3998944851, cardID, screenID, command);
 }
 
 /**

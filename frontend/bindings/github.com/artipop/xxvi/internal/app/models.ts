@@ -67,6 +67,15 @@ export interface StageCard {
 }
 
 /**
+ * TerminalHandle is what a terminal screen needs to connect: which terminal,
+ * and where its socket is.
+ */
+export interface TerminalHandle {
+    "id": string;
+    "url": string;
+}
+
+/**
  * Vocabulary is the closed sets the editor offers. Sent from here so the UI can
  * never offer a trigger or an action the engine does not implement.
  */

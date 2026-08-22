@@ -12,5 +12,6 @@ export type {
     CardView,
     ScreenKind,
     StageCard,
+    TerminalHandle,
     Vocabulary
 } from "./models.js";

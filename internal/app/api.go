@@ -285,6 +285,40 @@ func (s *API) docPath(cardID, name string) (string, error) {
 	return acp.Within(dir, name)
 }
 
+// TerminalHandle is what a terminal screen needs to connect: which terminal,
+// and where its socket is.
+type TerminalHandle struct {
+	ID  string `json:"id"`
+	URL string `json:"url"`
+}
+
+// OpenTerminal starts the shell behind one terminal screen, or hands back the
+// one already running there.
+//
+// Keyed by screen: a screen id is derived from the card's journal and does not
+// change, so re-reading the ribbon — which happens on every step the agent
+// takes — must not leave a second shell behind each time.
+func (s *API) OpenTerminal(cardID, screenID, command string) (TerminalHandle, error) {
+	endpoint := s.app.Terminals.Endpoint()
+	if endpoint == "" {
+		return TerminalHandle{}, fmt.Errorf("терминалы выключены: не удалось открыть локальный порт")
+	}
+	session, err := s.app.Terminals.Open(cardID, screenID, command)
+	if err != nil {
+		return TerminalHandle{}, err
+	}
+	return TerminalHandle{ID: session.ID, URL: endpoint + session.ID}, nil
+}
+
+// CloseTerminal ends one shell. A person closing a terminal means the process
+// in it, not just the window onto it — the ribbon has no windows to close.
+func (s *API) CloseTerminal(id string) error {
+	if session := s.app.Terminals.Get(id); session != nil {
+		session.Close()
+	}
+	return nil
+}
+
 // ---- flows ----
 
 // Flows is every flow, whole.
