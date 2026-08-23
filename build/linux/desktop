@@ -1,7 +1,7 @@
 [Desktop Entry]
 Version=1.0
-Name=My Product
-Comment=A xxvi application
+Name=XXVI
+Comment=Входящие и флоу с агентами
 # The Exec line includes %u to pass the URL to the application
 Exec=/usr/local/bin/xxvi %u
 Terminal=false

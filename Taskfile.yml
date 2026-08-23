@@ -37,6 +37,20 @@ tasks:
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
+  version:set:
+    summary: Writes one version number into every file that states one (VERSION=x.y.z)
+    # The first half of cutting a release: bump here, commit, tag `v{{.VERSION}}`,
+    # push, and .github/workflows/release.yml builds and publishes it.
+    #
+    # Deliberately not `common:update:build-assets`, which regenerates the
+    # platform assets from build/config.yml: it writes them from the CLI's own
+    # templates, so every hand-written line in them goes with it. The number is
+    # the only thing a release has to move.
+    requires:
+      vars: [VERSION]
+    cmds:
+      - go run ./cmd/setversion {{.VERSION}}
+
   setup:docker:
     summary: Builds Docker image for cross-compilation (~800MB download)
     cmds:

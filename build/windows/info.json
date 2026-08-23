@@ -5,11 +5,11 @@
 	"info": {
 		"0000": {
 			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "A xxvi application",
-			"LegalCopyright": "© 2026, My Company",
-			"ProductName": "My Product",
-			"Comments": "This is a comment"
+			"CompanyName": "artipop",
+			"FileDescription": "Входящие и флоу с агентами",
+			"LegalCopyright": "Copyright (c) 2026 Artem",
+			"ProductName": "XXVI",
+			"Comments": "Входящие и флоу с агентами"
 		}
 	}
 }
