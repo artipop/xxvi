@@ -13,5 +13,6 @@ export type {
     ScreenKind,
     StageCard,
     TerminalHandle,
+    UpdateState,
     Vocabulary
 } from "./models.js";

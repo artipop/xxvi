@@ -435,6 +435,9 @@ function Sections(props: { open: boolean; setOpen: (v: boolean) => void }): JSX.
                   <Show when={item.count && item.count()! > 0}>
                     <span class={`count ${item.alert ? "alert" : ""}`}>{item.count!()}</span>
                   </Show>
+                  <Show when={item.mark && item.mark()}>
+                    <span class="mark" title="Есть новая версия" />
+                  </Show>
                 </button>
               </>
             )}

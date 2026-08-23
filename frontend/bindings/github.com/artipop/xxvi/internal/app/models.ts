@@ -76,6 +76,53 @@ export interface TerminalHandle {
 }
 
 /**
+ * UpdateState is what the «Обновление» screen draws.
+ */
+export interface UpdateState {
+    /**
+     * Supported is false where there is nothing to update: a headless run, a
+     * test, a build with no updater wired in.
+     */
+    "supported": boolean;
+    "enabled": boolean;
+    "currentVersion": string;
+
+    /**
+     * Status is the framework's own state — one of unconfigured, idle,
+     * checking, up-to-date, available, downloading, verifying, installing,
+     * ready, error — read off the Updater rather than inferred from which
+     * event arrived: the bus dispatches each event in a goroutine of its own,
+     * so two can be seen out of order, and a status that went backwards would
+     * be a progress bar that did.
+     */
+    "status": string;
+    "availableVersion"?: string;
+    "releaseName"?: string;
+    "notes"?: string;
+    "sizeBytes"?: number;
+    "downloaded"?: number;
+    "skippedVersion"?: string;
+    "lastCheckedAt"?: string;
+
+    /**
+     * Error is what went wrong, verbatim and in the framework's English:
+     * "dial tcp: lookup updates.deffun.org: no such host". ErrorStage is the
+     * step it went wrong at — check, download, verify, install — and it is
+     * there because the screen says the actionable half itself, in Russian.
+     * The verbatim text stays underneath it, in small print: it is what a bug
+     * report needs and nothing on this side can supply it.
+     */
+    "error"?: string;
+    "errorStage"?: string;
+
+    /**
+     * Path is where the settings file lives, so the screen can name it when
+     * something has to be looked at by hand.
+     */
+    "path"?: string;
+}
+
+/**
  * Vocabulary is the closed sets the editor offers. Sent from here so the UI can
  * never offer a trigger or an action the engine does not implement.
  */

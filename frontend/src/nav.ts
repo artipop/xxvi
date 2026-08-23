@@ -1,4 +1,4 @@
-import { attention, inbox, inWork, list, ribbons, type Tab } from "./state";
+import { attention, inbox, inWork, list, ribbons, updateWaiting, type Tab } from "./state";
 
 // The sections, named once. The sidebar shows them down the left of every other
 // screen; the ribbon, which has no sidebar, shows the same list under a chevron.
@@ -13,6 +13,9 @@ export type NavItem = {
   alert?: boolean;
   /** apart separates what you work in from what you set up. */
   apart?: boolean;
+  /** mark is a dot rather than a number: a waiting update is one thing, not a
+   *  pile of them, and «1» beside a section reads as a count of nothing. */
+  mark?: () => boolean;
 };
 
 export const NAV: NavItem[] = [
@@ -24,4 +27,5 @@ export const NAV: NavItem[] = [
   { tab: "projects", label: "Проекты" },
   { tab: "sources", label: "Источники" },
   { tab: "agents", label: "Агенты" },
+  { tab: "updates", label: "Обновление", mark: updateWaiting },
 ];

@@ -15,6 +15,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
+	"github.com/wailsapp/wails/v3/pkg/updater"
 
 	"github.com/artipop/xxvi/internal/app"
 )
@@ -31,6 +32,12 @@ const (
 )
 
 func main() {
+	// First line of main, and it has to be: this process may be the helper the
+	// updater spawned, whose whole job is to wait for the old copy to die and
+	// swap the bundle. application.New calls this too, but by then we would
+	// have opened SQLite, taken the terminal socket and started agents.
+	updater.HandleHelperMode()
+
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	core, err := app.Open("", logger)
@@ -38,6 +45,7 @@ func main() {
 		log.Fatalf("не удалось открыть приложение: %v", err)
 	}
 	defer core.Close()
+	core.Version = appVersion
 
 	// A question an agent asked has to reach somebody who is not looking at the
 	// window, so notifications are a service of the application rather than
@@ -69,10 +77,19 @@ func main() {
 	// this line everything emitted is dropped — correct, because there is
 	// nobody to show it to and the state it describes is in the database.
 	core.SetUI(emitter{wails})
+
 	core.SetChooser(chooser{wails})
 	if notifier != nil {
 		core.SetNotifier(app.NewNotifier(core, notifier))
 	}
+	// Replacing this application with a newer one. Wired after the event sink,
+	// because the first thing it does is say what state it is in, and before
+	// the window, because a check on a timer does not need one.
+	if updates := newUpdateController(wails, core, logger); updates != nil {
+		defer updates.close()
+		core.SetUpdates(updates)
+	}
+
 	core.Start()
 
 	win := wails.Window.NewWithOptions(application.WebviewWindowOptions{

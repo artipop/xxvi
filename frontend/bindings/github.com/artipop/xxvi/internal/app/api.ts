@@ -91,6 +91,15 @@ export function Card(cardID: string): $CancellablePromise<$models.CardView> {
 }
 
 /**
+ * CheckForUpdate asks the release feed. The answer arrives as the update event,
+ * so the screen draws the checking state from the same place it draws
+ * everything else rather than from a promise.
+ */
+export function CheckForUpdate(): $CancellablePromise<void> {
+    return $Call.ByID(1344566209);
+}
+
+/**
  * CloseTerminal ends one shell. A person closing a terminal means the process
  * in it, not just the window onto it — the ribbon has no windows to close.
  */
@@ -188,6 +197,15 @@ export function Inbox(): $CancellablePromise<model$0.InboxGroup[] | null> {
 }
 
 /**
+ * InstallUpdate downloads what the last check found, checks its signature
+ * against the key this binary was built with, and stages it. Nothing is
+ * replaced until RestartToUpdate.
+ */
+export function InstallUpdate(): $CancellablePromise<void> {
+    return $Call.ByID(1867268347);
+}
+
+/**
  * MarkOutcome is a person answering for a stage that runs nothing: «прошло» or
  * «не прошло», put on the card so the flow sees it and moves.
  * 
@@ -265,6 +283,15 @@ export function ReadDoc(cardID: string, name: string): $CancellablePromise<strin
  */
 export function RemoveFromFlow(cardID: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(361858351, cardID);
+}
+
+/**
+ * RestartToUpdate closes this application and brings back the newer one.
+ * Everything a card was in the middle of is in the database; a running agent is
+ * not, and is closed the way quitting closes it.
+ */
+export function RestartToUpdate(): $CancellablePromise<void> {
+    return $Call.ByID(2248632910);
 }
 
 /**
@@ -356,6 +383,22 @@ export function SetProp(cardID: string, name: string, value: string): $Cancellab
 }
 
 /**
+ * SetUpdatesEnabled turns the automatic check on or off. It takes effect on the
+ * next tick, not at the next launch.
+ */
+export function SetUpdatesEnabled(enabled: boolean): $CancellablePromise<$models.UpdateState> {
+    return $Call.ByID(2468448178, enabled);
+}
+
+/**
+ * SkipUpdate stops offering the release now on offer. Remembered across
+ * restarts, or the button would mean «до перезапуска».
+ */
+export function SkipUpdate(): $CancellablePromise<void> {
+    return $Call.ByID(1510861001);
+}
+
+/**
  * Sources is the registry with every source's rules.
  */
 export function Sources(): $CancellablePromise<model$0.Source[] | null> {
@@ -368,6 +411,15 @@ export function Sources(): $CancellablePromise<model$0.Source[] | null> {
  */
 export function TakeIntoWork(cardID: string, flowID: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(1683275391, cardID, flowID);
+}
+
+/**
+ * UpdateState is everything the «Обновление» screen draws. A build with no
+ * updater answers too, and says so: the screen then shows the version and
+ * nothing else, rather than an empty panel.
+ */
+export function UpdateState(): $CancellablePromise<$models.UpdateState> {
+    return $Call.ByID(3371956631);
 }
 
 /**

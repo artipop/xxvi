@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { Events } from "@wailsio/runtime";
 import * as API from "../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { AgentsView, CardView, StageCard, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
+import type { AgentsView, CardView, StageCard, UpdateState, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp/models";
 import type { Card, Flow, InboxGroup, Project, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { CardSummary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
@@ -20,6 +20,13 @@ export const [sources, setSources] = createSignal<Source[]>([]);
 export const [agents, setAgents] = createSignal<AgentsView>({ agents: [], adapters: [] });
 export const [attention, setAttention] = createSignal<Attention[]>([]);
 export const [projects, setProjects] = createSignal<Project[]>([]);
+
+// Where the application is in replacing itself. A build with no updater — a
+// headless run, a test — answers too, and says «не поддерживается»: the screen
+// then shows the version and nothing else rather than an empty panel.
+export const [updateState, setUpdateState] = createSignal<UpdateState>({
+  supported: false, enabled: false, currentVersion: "", status: "unconfigured",
+});
 export const [vocabulary, setVocabulary] = createSignal<Vocabulary>({
   triggers: [], actions: [], kinds: [], ruleActions: [],
   outcomeProperty: "", outcomeValues: [], screenKinds: [], projectKinds: [],
@@ -80,12 +87,23 @@ export async function loadAttention() {
 export async function loadProjects() {
   try { setProjects(list(await API.Projects())); } catch (e) { report(e); }
 }
+export async function loadUpdateState() {
+  try { setUpdateState(await API.UpdateState()); } catch (e) { report(e); }
+}
+
+/** updateWaiting is what the sidebar marks: a version found and not installed,
+ *  or one installed and waiting for a restart. Neither is urgent, and both are
+ *  invisible until somebody opens a screen they have no reason to open. */
+export function updateWaiting(): boolean {
+  const s = updateState();
+  return s.supported && (s.status === "available" || s.status === "ready");
+}
 
 /** loadAll re-reads everything. Cheap enough locally, and it cannot go stale. */
 export async function loadAll() {
   await Promise.all([
     loadInbox(), loadInWork(), loadDone(), loadFlows(), loadSources(), loadAgents(), loadAttention(),
-    loadProjects(), loadRibbons(),
+    loadProjects(), loadRibbons(), loadUpdateState(),
   ]);
   try { setVocabulary(await API.Vocabulary()); } catch (e) { report(e); }
 }
@@ -134,6 +152,7 @@ export function subscribe() {
   Events.On("sources", () => { void loadSources(); });
   Events.On("agents", () => { void loadAgents(); });
   Events.On("projects", () => { void loadProjects(); });
+  Events.On("update", () => { void loadUpdateState(); });
 }
 
 export const [stageCards, setStageCards] = createSignal<StageCard[]>([]);
@@ -179,5 +198,5 @@ export function showRibbon(cardID: string) {
 // Which screen is open. A signal rather than a local of the shell, because
 // «Сделай» is one gesture that ends on another screen: taking a card into work
 // and watching it start are the same moment.
-export type Tab = "inbox" | "ribbon" | "work" | "attention" | "flows" | "projects" | "sources" | "agents";
+export type Tab = "inbox" | "ribbon" | "work" | "attention" | "flows" | "projects" | "sources" | "agents" | "updates";
 export const [tab, setTab] = createSignal<Tab>("inbox");

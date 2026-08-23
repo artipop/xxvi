@@ -21,7 +21,12 @@ import (
 
 // App is everything the application is made of.
 type App struct {
-	DataDir   string
+	DataDir string
+	// Version is what this build calls itself. It is stated in package main,
+	// beside the build assets that have to agree with it, and handed here by
+	// the shell — this package has no way to know how it was built.
+	Version string
+
 	Store     *store.Store
 	Engine    *engine.Engine
 	Agents    *acp.Manager
@@ -42,6 +47,9 @@ type App struct {
 	notifier *Notifier
 	// chooser is the native file dialog, set once the window exists.
 	chooser Chooser
+	// updates is how the application replaces itself; nil where there is
+	// nothing to replace — a test, a headless run.
+	updates Updates
 }
 
 // Emitter is how events reach the UI. The Wails application implements it;

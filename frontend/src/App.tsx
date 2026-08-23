@@ -8,6 +8,7 @@ import SourcesView from "./views/sources";
 import ProjectsView from "./views/projects";
 import AttentionView from "./views/attention";
 import RibbonView from "./views/ribbon";
+import UpdatesView from "./views/updates";
 import CardPanel from "./views/card";
 import { openCard, tab, setTab } from "./state";
 import { NAV } from "./nav";
@@ -48,6 +49,9 @@ export default function App(): JSX.Element {
                 <Show when={item.count && item.count()! > 0}>
                   <span class={`count ${item.alert ? "alert" : ""}`}>{item.count!()}</span>
                 </Show>
+                <Show when={item.mark && item.mark()}>
+                  <span class="mark" title="Есть новая версия" />
+                </Show>
               </button>
             </>
           )}
@@ -70,6 +74,7 @@ export default function App(): JSX.Element {
           <Show when={tab() === "projects"}><ProjectsView /></Show>
           <Show when={tab() === "sources"}><SourcesView /></Show>
           <Show when={tab() === "agents"}><AgentsView /></Show>
+          <Show when={tab() === "updates"}><UpdatesView /></Show>
         </div>
 
         {/* The card opens beside what you were looking at rather than instead
