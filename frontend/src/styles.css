@@ -189,17 +189,36 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
 .flowbox__out--event { background: #8b8d94; }
 .flowbox__out--write { background: var(--accent); }
 
+/* The caption of an awaited event. It is an HTML box over the canvas rather
+ * than SVG text, so it is painted, not filled — and the paint is on our own
+ * span rather than on the library's wrapper, because an arrow's ends are
+ * wrapped in that same class: a background there put a panel-coloured square
+ * over the stage the end sits on. */
+.solid-flow__edge-label { background: transparent; font-size: 10px; }
 .flowedge__label {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 10px; color: var(--faint);
-  background: var(--panel); padding: 1px 4px; border-radius: 3px;
+  color: var(--faint); background: var(--panel);
+  padding: 1px 4px; border-radius: 3px;
 }
-.flowedge__cut {
-  border: none; background: none; color: var(--faint);
-  cursor: pointer; font-size: 10px; line-height: 1; padding: 0;
+
+/* The end of an arrow, shown while it is selected: the box is what the pointer
+ * has to land in and draws nothing, the mark inside it is what a person sees —
+ * a ring rather than a disc, because a filled one blots out the very line it is
+ * offering to move. Both sizes are stated in flowCanvas.tsx, since the canvas
+ * draws in flow units and a size has to answer the zoom. */
+.flowedge__anchor { display: flex; align-items: center; justify-content: center; }
+.flowedge__anchorMark {
+  /* Overwritten inline with the same thickness divided by the zoom; this is
+   * what the outline is if that never lands. */
+  --mark-ring: 2px;
+
+  box-sizing: border-box; flex: none;
+
+  /* The mark is what a person sees, the box around it is the control — so the
+   * pointer goes past it to the box. */
+  pointer-events: none; border-radius: 50%; background: transparent;
+  box-shadow: 0 0 0 var(--mark-ring) var(--accent) inset,
+              0 0 0 var(--mark-ring) var(--panel);
 }
-.flowedge__cut:hover { color: var(--warn); }
-.flowedge__anchor { fill: var(--accent); cursor: grab; }
 
 /* The dataflow check: a condition reading a property nothing produces. Not an
  * error — hence the warn colour rather than the error one. */
