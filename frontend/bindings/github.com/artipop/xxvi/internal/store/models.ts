@@ -11,6 +11,13 @@ export interface Session {
     "stageId"?: string;
     "agentName": string;
     "agentKind": string;
+
+    /**
+     * Work is how this run was worked — the stage's mode as it stood when the
+     * card entered (docs/system.md §4.1.1). Recorded rather than looked up: the
+     * ribbon reads it long after the stage may have been edited.
+     */
+    "work"?: string;
     "acpSessionId"?: string;
     "status": SessionStatus;
     "cwd"?: string;

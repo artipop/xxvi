@@ -422,7 +422,9 @@ function StagePanel(props: {
                     const v = e.currentTarget.value;
                     // A final stage is where the card stops: it runs nothing, so
                     // choosing it and choosing an action are one control.
-                    v === "final" ? set({ final: true, action: "none" }) : set({ final: false, action: v });
+                    v === "final"
+                      ? set({ final: true, action: "none", work: "" })
+                      : set({ final: false, action: v, work: v === "agent" ? (stage().work || "terminal") : "" });
                   }}>
             <For each={list(vocabulary().actions)}>
               {(a) => <option value={a}>{a === "agent" ? "работает агент" : "ждёт события"}</option>}
@@ -432,6 +434,24 @@ function StagePanel(props: {
         </label>
 
         <Show when={stage().action === "agent" && !stage().final}>
+          {/* Where the work happens, and it is a question only an agent stage
+              has: a terminal is where a person sits beside the agent and answers
+              it in its own interface, a session is a step nobody watches
+              (docs/system.md §4.1.1). */}
+          <label class="field">
+            <span>Где идёт работа</span>
+            <select value={stage().work || "terminal"}
+                    onChange={(e) => set({ work: e.currentTarget.value })}>
+              <For each={list(vocabulary().works)}>
+                {(w) => <option value={w.kind}>{w.label}</option>}
+              </For>
+            </select>
+            <span class="meta">
+              {stage().work === "session"
+                ? "Агент отчитывается последними словами. Спросить человека может только по протоколу."
+                : "Свой CLI агента в терминале карточки: вопросы он рисует сам, и там же на них отвечают."}
+            </span>
+          </label>
           <label class="field">
             <span>Что сказать агенту на этом шаге</span>
             <textarea value={stage().prompt ?? ""} onInput={(e) => set({ prompt: e.currentTarget.value })} />

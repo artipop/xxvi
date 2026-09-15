@@ -54,6 +54,19 @@ export function AddItem(sourceName: string, title: string, body: string): $Cance
 }
 
 /**
+ * AgentTerminal is where the terminal of one step is watched. It starts
+ * nothing: the CLI was started by the stage and belongs to it, and a screen
+ * that could start one would be a second way of working a step.
+ * 
+ * A step long finished still answers: the socket serves the tail kept on disk
+ * and then says the terminal has ended, which is what a segment scrolled back
+ * to should show (docs/system.md §12.2).
+ */
+export function AgentTerminal(sessionID: string): $CancellablePromise<$models.TerminalHandle> {
+    return $Call.ByID(2753039464, sessionID);
+}
+
+/**
  * Agents is the registry with the adapter check beside it, because "is this
  * agent usable here" is the question a person opens that screen with.
  */

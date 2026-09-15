@@ -120,8 +120,8 @@ export interface ScreenView {
     "waiting"?: string[] | null;
 
     /**
-     * SessionID is set on the screens that belong to an agent's run — its
-     * stream, and later the terminals of the commands it ran.
+     * SessionID is set on the screen that belongs to an agent's run: the
+     * terminal it was worked in, or the stream of a session.
      */
     "sessionId"?: string;
 }

@@ -22,12 +22,21 @@ export default function AgentsView() {
             <div class="row wrap">
               <span class="title">{a.kind}</span>
               <Show when={a.ready} fallback={<span class="tag bad"><span class="dot" />не запустится</span>}>
-                <span class="tag ok"><span class="dot" />{a.viaNpx ? "через npx" : "готов"}</span>
+                <span class="tag ok"><span class="dot" />{a.viaNpx ? "через npx" : "сессией"}</span>
+              </Show>
+              {/* Two questions with two answers: the vendor's ACP adapter and
+                  the vendor's interactive CLI are different programs, and a
+                  machine can have one without the other. */}
+              <Show when={a.terminal} fallback={<span class="tag"><span class="dot" />не в терминале</span>}>
+                <span class="tag ok"><span class="dot" />в терминале</span>
               </Show>
               <div class="spacer" />
               <Show when={a.path}><span class="meta mono">{a.path}</span></Show>
             </div>
             <Show when={a.detail}><div class="body">{a.detail}</div></Show>
+            <Show when={!a.terminal && a.terminalDetail}>
+              <div class="body">{a.terminalDetail}</div>
+            </Show>
           </div>
         )}
       </For>

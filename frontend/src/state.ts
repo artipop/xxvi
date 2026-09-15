@@ -28,7 +28,7 @@ export const [updateState, setUpdateState] = createSignal<UpdateState>({
   supported: false, enabled: false, currentVersion: "", status: "unconfigured",
 });
 export const [vocabulary, setVocabulary] = createSignal<Vocabulary>({
-  triggers: [], actions: [], kinds: [], ruleActions: [],
+  triggers: [], actions: [], works: [], kinds: [], ruleActions: [],
   outcomeProperty: "", outcomeValues: [], screenKinds: [], projectKinds: [],
 });
 

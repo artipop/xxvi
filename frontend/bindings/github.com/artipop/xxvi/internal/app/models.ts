@@ -129,6 +129,12 @@ export interface UpdateState {
 export interface Vocabulary {
     "triggers": model$0.Trigger[] | null;
     "actions": string[] | null;
+
+    /**
+     * Where an agent stage runs — the terminal somebody sits at, or a session
+     * nobody watches (docs/system.md §4.1.1).
+     */
+    "works": ScreenKind[] | null;
     "kinds": string[] | null;
     "ruleActions": string[] | null;
 

@@ -380,6 +380,18 @@ export interface Stage {
     "action": string;
 
     /**
+     * Work says where an agent stage runs: in the card's terminal, where a
+     * person is sitting, or as an ACP session nobody watches (§4.1.1). Empty
+     * means WorkTerminal — a stage that did not say is a stage somebody meant
+     * to watch, and the mode that shows more is the safe default for a flow
+     * written before the field existed.
+     * 
+     * Meaningless without ActionAgent, and refused there: a waiting stage runs
+     * nothing, and nothing has no place to run in.
+     */
+    "work"?: string;
+
+    /**
      * Prompt is what the agent is told about this step, on top of its own
      * prompt and the card's task.
      */
@@ -409,9 +421,11 @@ export interface Stage {
      * than hopeful: the edge that asks about «Вердикт» points at the stage that
      * must produce it.
      * 
-     * The agent delivers them in its closing words, in the shape the brief asks
-     * for (see engine.StageOutputs), and a required one is refused without: the
-     * stage cannot end until the value stands.
+     * A session delivers them in its closing words, in the shape the brief asks
+     * for (see engine.StageOutputs); a stage working in a terminal puts them in
+     * the same call that says it has finished, since a CLI has no closing words
+     * to read. Either way a required one is refused without: the stage cannot
+     * end until the value stands.
      */
     "writes"?: PropertyWrite[] | null;
 
@@ -436,8 +450,8 @@ export interface Stage {
      * on a waiting stage, while a screen is about the person, and the review
      * stage is exactly where the preview has to be open.
      * 
-     * The agent's own screens — its stream, and the terminals of the commands
-     * it ran — are not declared: they exist whenever what they show exists.
+     * The agent's own screen — its terminal, or the stream of a session — is
+     * not declared: it exists whenever what it shows exists.
      */
     "screens"?: Screen[] | null;
 

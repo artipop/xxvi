@@ -38,6 +38,19 @@ export interface AdapterStatus {
      * Detail says what is missing, in the words a person needs to act on.
      */
     "detail"?: string;
+
+    /**
+     * Terminal reports that a stage can be *worked in a terminal* by this kind,
+     * which is a different question from Ready and has a different answer: the
+     * vendor adapter and the vendor's interactive CLI are two programs, and a
+     * machine can have one without the other (docs/system.md §4.1.1).
+     */
+    "terminal": boolean;
+
+    /**
+     * TerminalDetail says why not, or what it will run.
+     */
+    "terminalDetail"?: string;
 }
 
 /**
@@ -52,9 +65,18 @@ export interface Answer {
 }
 
 /**
- * Attention is one thing waiting for a person. There is one kind of it, and it
- * is the protocol asking: an ACP session sent a permission request or an
- * elicitation, and the agent is waiting on the answer with its turn still open.
+ * Attention is one thing waiting for a person. There are two kinds of it, and
+ * which one a row is, is said by whether it carries a question.
+ * 
+ * A **question** is the protocol asking: an ACP session sent a permission
+ * request or an elicitation, and the agent is waiting on the answer with its
+ * turn still open. It has options, and answering it here is what releases the
+ * agent.
+ * 
+ * A **silent terminal** is the other one, and it is not answerable from here on
+ * purpose: the agent asked inside its own interface, where the question was
+ * never ours to carry (docs/system.md §4.1.1). What the row says is «сходи
+ * посмотри», and the answer is typed where it was asked.
  * 
  * It is a separate shape from Question so that the panel and the mark on a card
  * read the same list — one bookkeeping of the fact, not two.

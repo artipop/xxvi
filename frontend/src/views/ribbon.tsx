@@ -5,7 +5,8 @@ import { Events } from "@wailsio/runtime";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
 import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
-import { guard, list, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
+import { attention, guard, list, loadAttention, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
+import { QuestionForm } from "./attention";
 import { NAV } from "../nav";
 
 // The emulator is a large chunk and most screens are not terminals, so it
@@ -519,6 +520,17 @@ function Pane(props: {
 function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
   return (
     <Switch fallback={<div class="screen-note">Неизвестный вид экрана «{props.screen.kind}».</div>}>
+      {/* The agent's own screen, and which one it is was decided when the step
+          ran: a stage worked in a terminal shows that terminal, a session shows
+          the stream it left behind (docs/system.md §12.2). */}
+      <Match when={props.screen.kind === "agentTerminal"}>
+        <Suspense fallback={<div class="screen-note">Терминал агента открывается…</div>}>
+          <TerminalPane
+            open={() => API.AgentTerminal(props.screen.sessionId ?? "")}
+            ended="шаг в этом терминале закончен"
+          />
+        </Suspense>
+      </Match>
       <Match when={props.screen.kind === "agent"}>
         <AgentPane sessionId={props.screen.sessionId ?? ""} />
       </Match>
@@ -530,7 +542,9 @@ function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
       </Match>
       <Match when={props.screen.kind === "terminal"}>
         <Suspense fallback={<div class="screen-note">Терминал открывается…</div>}>
-          <TerminalPane cardId={props.cardId} screenId={props.screen.id} command={props.screen.ref ?? ""} />
+          <TerminalPane
+            open={() => API.OpenTerminal(props.cardId, props.screen.id, props.screen.ref ?? "")}
+          />
         </Suspense>
       </Match>
     </Switch>
@@ -542,6 +556,13 @@ function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
 // The stream is read from the same rows the card's history is made of, and it
 // is asked for again whenever the session says something — the event carries no
 // content, so the screen asks, like every other screen here.
+//
+// This is the screen of a stage worked as a *session* (docs/system.md §12.2). A
+// session has no interface of its own, so this retelling is all there is — which
+// is exactly why it must not be filled with the protocol's own bookkeeping. A
+// tool call is one line that ends up saying how it went, not a line per status
+// with the call's identifier on it: an identifier is the one thing about a tool
+// call that means nothing to anybody reading.
 function AgentPane(props: { sessionId: string }): JSX.Element {
   const [events, setEvents] = createSignal<SessionEvent[]>([]);
   let seq = 0;
@@ -566,19 +587,48 @@ function AgentPane(props: { sessionId: string }): JSX.Element {
     onCleanup(() => { if (typeof off === "function") off(); });
   });
 
+  // The last status of every tool call, so the call's own line carries how it
+  // ended and the updates that said so are not lines of their own.
+  const statuses = createMemo(() => {
+    const last: Record<string, string> = {};
+    for (const e of events()) {
+      if (e.kind !== "tool_call" && e.kind !== "tool_update") continue;
+      try {
+        const data = JSON.parse(e.payload || "{}");
+        if (data.toolCallId && data.status) last[data.toolCallId] = data.status;
+      } catch { /* a row we cannot read says nothing about any call */ }
+    }
+    return last;
+  });
+  const rows = createMemo(() => events().filter((e) => e.kind !== "tool_update"));
+
   return (
     <div class="stream" ref={box}>
-      <Show when={events().length > 0} fallback={<div class="screen-note">Агент ещё ничего не сказал.</div>}>
-        <For each={events()}>{(e) => <StreamLine event={e} />}</For>
+      <Show when={rows().length > 0} fallback={<div class="screen-note">Агент ещё ничего не сказал.</div>}>
+        <For each={rows()}>{(e) => <StreamLine event={e} statuses={statuses()} />}</For>
       </Show>
     </div>
   );
 }
 
-function StreamLine(props: { event: SessionEvent }): JSX.Element {
+// The words the protocol uses, in the words a person reads. A status nobody
+// translated is a status nobody can act on.
+const STATUS: Record<string, string> = {
+  pending: "ждёт", in_progress: "идёт", completed: "готово", failed: "не вышло",
+};
+const DECISION: Record<string, string> = {
+  allow_once: "разрешено", allow_always: "разрешено всегда",
+  reject_once: "отказано", reject_always: "отказано всегда",
+};
+
+function StreamLine(props: { event: SessionEvent; statuses: Record<string, string> }): JSX.Element {
   const data = createMemo<Record<string, any>>(() => {
     try { return JSON.parse(props.event.payload || "{}"); } catch { return {}; }
   });
+  // The question, if it is still open — then it is answered here, in the same
+  // form the attention panel and the card use. All three are one question.
+  const open = createMemo(() => attention().find((a) => a.questionId === data().questionId));
+  const status = createMemo(() => props.statuses[data().toolCallId] || data().status || "");
 
   return (
     <Switch fallback={<p class="stream-tool dim">{props.event.kind}</p>}>
@@ -589,21 +639,35 @@ function StreamLine(props: { event: SessionEvent }): JSX.Element {
         <p class="stream-think">{data().text}</p>
       </Match>
       <Match when={props.event.kind === "tool_call"}>
-        <p class="stream-tool">
-          <span class="tag">{data().status || "вызов"}</span> {data().title || data().toolCallId}
+        <p class={`stream-tool ${status() === "completed" ? "dim" : ""}`}>
+          <span class={`tag ${status() === "failed" ? "warn" : ""}`}>
+            {STATUS[status()] ?? "вызов"}
+          </span>{" "}
+          {data().title || "инструмент"}
         </p>
       </Match>
-      <Match when={props.event.kind === "tool_update"}>
-        <p class="stream-tool dim">{data().toolCallId}: {data().status}</p>
-      </Match>
       <Match when={props.event.kind === "permission"}>
-        <p class="stream-tool">
-          <span class={`tag ${data().decision === "allow_once" ? "ok" : "warn"}`}>доступ</span>{" "}
-          {data().tool}: {data().decision}
+        <p class="stream-tool dim">
+          <span class={`tag ${data().decision?.startsWith("allow") ? "ok" : "warn"}`}>доступ</span>{" "}
+          {data().tool} — {DECISION[data().decision] ?? data().decision}
         </p>
       </Match>
       <Match when={props.event.kind === "question"}>
-        <p class="stream-tool"><span class="tag warn">вопрос</span> {data().text}</p>
+        <Show
+          when={open()}
+          fallback={<p class="stream-tool dim"><span class="tag">вопрос</span> {data().text}</p>}
+        >
+          <div class="stream-tool">
+            <span class="tag warn">вопрос</span>
+            <QuestionForm
+              questionId={open()!.questionId}
+              text={open()!.text ?? data().text ?? ""}
+              options={open()!.options ?? []}
+              freeText={open()!.freeText ?? false}
+              onAnswered={loadAttention}
+            />
+          </div>
+        </Show>
       </Match>
     </Switch>
   );

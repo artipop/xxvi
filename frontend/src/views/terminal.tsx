@@ -1,10 +1,17 @@
 import { createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import { report } from "../state";
 import "@xterm/xterm/css/xterm.css";
 
 // A terminal screen: a real pty on the other end of a socket, and xterm drawing
-// what comes back.
+// what comes back. Two kinds of terminal arrive here and the emulator does not
+// tell them apart — a shell somebody opened on a screen, and the CLI a stage is
+// being worked in — because from this side they are the same thing: bytes out,
+// keystrokes in, and a width to say.
+//
+// Which one it is, is the `open` the caller hands over. A screen's terminal is
+// started by opening it; a stage's terminal was started by the stage and is only
+// connected to, and a caller that could start one would be a second way of
+// working a step.
 //
 // The socket rather than the window's event bus, because this is a byte stream:
 // events reach the page by splicing JavaScript into the webview, and a build log
@@ -19,9 +26,11 @@ import "@xterm/xterm/css/xterm.css";
 // xterm itself is drawing with.
 
 export default function Terminal(props: {
-  cardId: string;
-  screenId: string;
-  command: string;
+  // open connects this pane to a terminal and hands back where its socket is.
+  open: () => Promise<{ url: string }>;
+  // ended is what to say when the process on the other end has gone. A shell
+  // that exited and a step that is over are not the same news.
+  ended?: string;
 }): JSX.Element {
   const [status, setStatus] = createSignal<"opening" | "live" | "closed">("opening");
   const [error, setError] = createSignal("");
@@ -34,7 +43,7 @@ export default function Terminal(props: {
     let socket: WebSocket | null = null;
 
     const start = async () => {
-      const handle = await API.OpenTerminal(props.cardId, props.screenId, props.command);
+      const handle = await props.open();
       if (disposed) return;
 
       const [{ Terminal }, { FitAddon }] = await Promise.all([
@@ -119,7 +128,7 @@ export default function Terminal(props: {
       </Show>
       <div class="terminal-host" ref={host} />
       <Show when={status() === "closed"}>
-        <div class="meta">шелл завершился</div>
+        <div class="meta">{props.ended ?? "шелл завершился"}</div>
       </Show>
     </div>
   );

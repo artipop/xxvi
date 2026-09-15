@@ -3,9 +3,16 @@ import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Attention } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
 import { attention, guard, loadAttention, openCardByID } from "../state";
 
-// Everything an agent is waiting to hear, oldest first. The same question also
-// appears on its own card — they are one question, and answering either one
-// lets the agent go on.
+// Everything waiting for a person, oldest first, and it is two things.
+//
+// A **question** is an ACP session stopped on one: it is answered here, and the
+// same question also appears on its own card — they are one question, and
+// answering either one lets the agent go on.
+//
+// A **silent terminal** is a stage being worked in one whose CLI has drawn
+// nothing for a while. It carries no question because the agent asked inside its
+// own interface, where the question was never ours to carry: the row says where
+// to look, and the answer is typed where it was asked.
 
 export default function AttentionView() {
   return (
@@ -15,7 +22,7 @@ export default function AttentionView() {
         Агент остановился и ждёт человека. Ничего не решается таймером: без ответа
         агент услышит отказ и доработает без того, что просил.
       </p>
-      <Show when={attention().length > 0} fallback={<div class="empty">Никто ничего не спрашивает.</div>}>
+      <Show when={attention().length > 0} fallback={<div class="empty">Никто ничего не ждёт.</div>}>
         <For each={attention()}>{(a) => <Ask a={a} />}</For>
       </Show>
     </>
@@ -31,13 +38,25 @@ function Ask(props: { a: Attention }) {
         <span class="tag warn"><span class="dot" />{props.a.agent}</span>
         <button class="btn quiet" onClick={() => openCardByID(props.a.cardId!)}>Открыть карточку</button>
       </div>
-      <QuestionForm
-        questionId={props.a.questionId}
-        text={props.a.text ?? ""}
-        options={props.a.options ?? []}
-        freeText={props.a.freeText ?? false}
-        onAnswered={loadAttention}
-      />
+      <Show
+        when={props.a.questionId}
+        fallback={
+          <div class="question" style={{ "margin-top": "10px" }}>
+            <div class="ask">{props.a.text}</div>
+            <span class="meta">
+              Отвечать здесь нечего: агент спросил в своём терминале, там же и ответ.
+            </span>
+          </div>
+        }
+      >
+        <QuestionForm
+          questionId={props.a.questionId}
+          text={props.a.text ?? ""}
+          options={props.a.options ?? []}
+          freeText={props.a.freeText ?? false}
+          onAnswered={loadAttention}
+        />
+      </Show>
     </div>
   );
 }
