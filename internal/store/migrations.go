@@ -269,5 +269,14 @@ CREATE TABLE IF NOT EXISTS project (
 	created_at INTEGER NOT NULL
 );
 ALTER TABLE card ADD COLUMN project TEXT NOT NULL DEFAULT '';`,
+
+		// 9. Where an agent stage runs: in the card's terminal or as a session
+		// (docs/system.md §4.1.1). The same word is recorded on the run as well,
+		// and not because it could be read off the stage: the ribbon is a
+		// journal, and a stage whose mode was changed afterwards must not make
+		// last week's step look like something it never was.
+		`
+ALTER TABLE stage ADD COLUMN work TEXT NOT NULL DEFAULT '';
+ALTER TABLE agent_session ADD COLUMN work TEXT NOT NULL DEFAULT '';`,
 	}
 }

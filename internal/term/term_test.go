@@ -165,3 +165,116 @@ func TestTheSocketRefusesAWrongToken(t *testing.T) {
 		t.Fatal("сокет не должен открываться по чужому адресу")
 	}
 }
+
+// ---- the terminal a stage is worked in ----
+
+// Attach runs an argv directly and registers it under the run's own id: the
+// screen of that step addresses the terminal by the session it is.
+func TestAttachRunsTheArgvUnderTheGivenID(t *testing.T) {
+	m := manager(t)
+	s, err := m.Attach("run-1", "card-1", t.TempDir(), []string{"echo", "привет из шага"}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	if s.ID != "run-1" || m.Get("run-1") != s {
+		t.Fatalf("терминал должен зваться идентификатором запуска: %q", s.ID)
+	}
+	history, updates, cancel := s.Subscribe()
+	defer cancel()
+	read(t, updates, history, "привет из шага")
+
+	// Asking twice hands back the same terminal rather than starting a second
+	// one: the ribbon is re-read on every step the agent takes.
+	again, err := m.Attach("run-1", "card-1", t.TempDir(), []string{"echo", "второй"}, nil)
+	if err != nil || again != s {
+		t.Fatalf("второй запрос — тот же терминал: %v", err)
+	}
+}
+
+// A step whose terminal has ended is still a screen of the ribbon, and the
+// ribbon is a journal: what it printed is served from the tail kept on disk.
+func TestFinishedTerminalIsServedFromItsTail(t *testing.T) {
+	m := manager(t)
+	m.KeepIn(t.TempDir())
+
+	s, err := m.Attach("run-2", "card-1", t.TempDir(), []string{"echo", "что было"}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	select {
+	case <-s.Done():
+	case <-time.After(15 * time.Second):
+		t.Fatal("echo должен был закончиться")
+	}
+	// forget runs in a goroutine of its own, so the tail appears a moment after
+	// the process goes.
+	deadline := time.After(5 * time.Second)
+	for m.transcript("run-2") == nil {
+		select {
+		case <-deadline:
+			t.Fatal("хвост закончившегося терминала не сохранился")
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	if !strings.Contains(string(m.transcript("run-2")), "что было") {
+		t.Fatalf("хвост должен нести напечатанное: %q", m.transcript("run-2"))
+	}
+	if m.Get("run-2") != nil {
+		t.Fatal("закончившийся терминал не должен оставаться в реестре")
+	}
+}
+
+// Silence is the only thing a stage in a terminal says about itself without
+// being asked, so it has to be measured from the last thing drawn.
+func TestQuietIsMeasuredFromTheLastOutput(t *testing.T) {
+	m := manager(t)
+	s, err := m.Attach("run-3", "card-1", t.TempDir(), []string{"sleep", "30"}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	defer s.Close()
+	time.Sleep(50 * time.Millisecond)
+	if s.Quiet() < 50*time.Millisecond {
+		t.Fatalf("молчащий процесс молчит: %v", s.Quiet())
+	}
+}
+
+// A screen's shell is started afresh when its screen opens again, so what it
+// printed has no reader: keeping it would be a file per shell, forever.
+func TestScreenShellKeepsNoTail(t *testing.T) {
+	m := manager(t)
+	m.KeepIn(t.TempDir())
+
+	s, err := m.Open("card-1", "screen-1", "echo шелл")
+	if err != nil {
+		t.Fatalf("открыть терминал экрана: %v", err)
+	}
+	select {
+	case <-s.forgotten:
+	case <-time.After(15 * time.Second):
+		t.Fatal("шелл должен был закончиться и уйти из реестра")
+	}
+	if m.transcript(s.ID) != nil {
+		t.Fatal("терминал экрана не оставляет хвоста")
+	}
+}
+
+// A step running when the application closes still leaves its tail: the entry
+// stays in the registry until the tail is on disk, so Close finds it and waits.
+func TestCloseWaitsForTheTail(t *testing.T) {
+	m := manager(t)
+	m.KeepIn(t.TempDir())
+
+	s, err := m.Attach("run-4", "card-1", t.TempDir(), []string{"sh", "-c", "echo шаг идёт; sleep 30"}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	history, updates, cancel := s.Subscribe()
+	read(t, updates, history, "шаг идёт")
+	cancel()
+
+	m.Close()
+	if tail := m.transcript("run-4"); !strings.Contains(string(tail), "шаг идёт") {
+		t.Fatalf("после Close хвост уже должен лежать на диске: %q", tail)
+	}
+}

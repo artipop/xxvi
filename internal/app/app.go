@@ -15,6 +15,7 @@ import (
 	"github.com/artipop/xxvi/internal/acp"
 	"github.com/artipop/xxvi/internal/engine"
 	"github.com/artipop/xxvi/internal/inbox"
+	"github.com/artipop/xxvi/internal/stagemcp"
 	"github.com/artipop/xxvi/internal/store"
 	"github.com/artipop/xxvi/internal/term"
 )
@@ -31,8 +32,11 @@ type App struct {
 	Engine    *engine.Engine
 	Agents    *acp.Manager
 	Terminals *term.Manager
-	Pipeline  *inbox.Pipeline
-	Poller    *inbox.Poller
+	// Tools is the one thing an agent working in a terminal can say back: that
+	// its step is over (docs/system.md §4.1.1).
+	Tools    *stagemcp.Server
+	Pipeline *inbox.Pipeline
+	Poller   *inbox.Poller
 
 	log *slog.Logger
 
@@ -107,12 +111,25 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	// agent works in, so what a person types and what the agent did are one
 	// working copy rather than two.
 	a.Terminals = term.NewManager(a.Agents.WorkDir, log)
+	// The tail of a finished terminal is kept beside the database rather than
+	// in the folder an agent worked in: a file of ours inside somebody's
+	// repository is ours to clean up and theirs to find in `git status`.
+	a.Terminals.KeepIn(filepath.Join(dataDir, "terminals"))
 	if err := a.Terminals.Listen(); err != nil {
 		// A terminal that cannot be opened is a screen that says so. Everything
 		// else in the application works without one, and refusing to start over
 		// it would be the wrong size of failure.
 		log.Warn("терминалы выключены", "почему", err)
 	}
+
+	a.Tools = stagemcp.New(log)
+	if err := a.Tools.Listen(); err != nil {
+		// The same size of failure, one step further along: without this port a
+		// stage cannot be worked in a terminal at all, and the stage that tries
+		// says so on its card instead of the application refusing to open.
+		log.Warn("инструменты агента выключены", "почему", err)
+	}
+	a.Agents.SetTerminals(a.Terminals, a.Tools)
 
 	a.Pipeline = inbox.NewPipeline(st, a, log)
 	a.Poller = inbox.NewPoller(st, a.Pipeline, log)
@@ -135,6 +152,7 @@ func (a *App) Close() error {
 	a.Poller.Stop()
 	a.Agents.Close()
 	a.Terminals.Close()
+	a.Tools.Close()
 	return a.Store.Close()
 }
 

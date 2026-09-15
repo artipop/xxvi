@@ -56,6 +56,21 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 			return Flow{}, fmt.Errorf("неизвестное действие «%s» у стадии «%s» (допустимо: %s)",
 				s.Action, s.Name, strings.Join(Actions, ", "))
 		}
+		// Where the work happens is a question only an agent stage has, and one
+		// it always has: a stage that named no mode is worked in the terminal.
+		switch {
+		case s.Action != ActionAgent:
+			if s.Work != "" {
+				return Flow{}, fmt.Errorf("стадия «%s» ничего не запускает — режиму работы «%s» там негде быть",
+					s.Name, s.Work)
+			}
+		case s.Work == "":
+			s.Work = WorkTerminal
+		case s.Work == WorkTerminal || s.Work == WorkSession:
+		default:
+			return Flow{}, fmt.Errorf("неизвестный режим работы «%s» у стадии «%s» (допустимо: %s)",
+				s.Work, s.Name, strings.Join(Works, ", "))
+		}
 		if s.MaxRunning < 0 {
 			return Flow{}, fmt.Errorf("лимит одновременных сессий стадии «%s» не может быть отрицательным", s.Name)
 		}

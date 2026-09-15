@@ -31,12 +31,16 @@ func (s SessionStatus) Terminal() bool {
 
 // Session is one recorded run of an agent against one card on one stage.
 type Session struct {
-	ID           string        `json:"id"`
-	CardID       string        `json:"cardId"`
-	FlowID       string        `json:"flowId,omitempty"`
-	StageID      string        `json:"stageId,omitempty"`
-	AgentName    string        `json:"agentName"`
-	AgentKind    string        `json:"agentKind"`
+	ID        string `json:"id"`
+	CardID    string `json:"cardId"`
+	FlowID    string `json:"flowId,omitempty"`
+	StageID   string `json:"stageId,omitempty"`
+	AgentName string `json:"agentName"`
+	AgentKind string `json:"agentKind"`
+	// Work is how this run was worked — the stage's mode as it stood when the
+	// card entered (docs/system.md §4.1.1). Recorded rather than looked up: the
+	// ribbon reads it long after the stage may have been edited.
+	Work         string        `json:"work,omitempty"`
 	ACPSessionID string        `json:"acpSessionId,omitempty"`
 	Status       SessionStatus `json:"status"`
 	Cwd          string        `json:"cwd,omitempty"`
@@ -52,6 +56,7 @@ type sessionRow struct {
 	StageID      string        `db:"stage_id"`
 	AgentName    string        `db:"agent_name"`
 	AgentKind    string        `db:"agent_kind"`
+	Work         string        `db:"work"`
 	ACPSessionID string        `db:"acp_session_id"`
 	Status       string        `db:"status"`
 	Cwd          string        `db:"cwd"`
@@ -63,7 +68,7 @@ type sessionRow struct {
 func (r sessionRow) session() Session {
 	return Session{
 		ID: r.ID, CardID: r.CardID, FlowID: r.FlowID, StageID: r.StageID,
-		AgentName: r.AgentName, AgentKind: r.AgentKind, ACPSessionID: r.ACPSessionID,
+		AgentName: r.AgentName, AgentKind: r.AgentKind, Work: r.Work, ACPSessionID: r.ACPSessionID,
 		Status: SessionStatus(r.Status), Cwd: r.Cwd,
 		StartedAt: fromMillis(r.StartedAt), FinishedAt: fromNullMillis(r.FinishedAt),
 		ErrorText: r.ErrorText,
@@ -73,10 +78,10 @@ func (r sessionRow) session() Session {
 // InsertSession records a session as it starts.
 func (s *Store) InsertSession(sess Session) error {
 	_, err := s.db.Exec(`
-		INSERT INTO agent_session (id, card_id, flow_id, stage_id, agent_name, agent_kind, status, cwd, started_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO agent_session (id, card_id, flow_id, stage_id, agent_name, agent_kind, work, status, cwd, started_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sess.ID, sess.CardID, sess.FlowID, sess.StageID, sess.AgentName, sess.AgentKind,
-		string(sess.Status), sess.Cwd, millis(sess.StartedAt))
+		sess.Work, string(sess.Status), sess.Cwd, millis(sess.StartedAt))
 	return err
 }
 

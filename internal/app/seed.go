@@ -72,6 +72,10 @@ func SeedFlows() []model.Flow {
 			Stages: []model.Stage{
 				{
 					ID: "dev-work", Name: "В работе", Action: model.ActionAgent, Crew: []string{"Claude"},
+					// In the terminal, because this is the step somebody sits
+					// at: «спроси» means the agent asks in its own interface and
+					// is answered in the same window (docs/system.md §4.1.1).
+					Work:   model.WorkTerminal,
 					Prompt: "Сделай то, что просит карточка. Если чего-то не хватает — спроси.",
 					// What this stage leaves on the card. Not required: a task
 					// that needed no branch still finished.
@@ -84,6 +88,9 @@ func SeedFlows() []model.Flow {
 				},
 				{
 					ID: "dev-check", Name: "Проверка", Action: model.ActionAgent, Crew: []string{"Claude"},
+					// A session: nobody watches a check, and there is nobody for
+					// it to talk to. Its verdict is read by the fork below.
+					Work: model.WorkSession,
 					Prompt: "Проверь сделанное. Ответь «pass», если всё хорошо, и «fail», если нет — " +
 						"и напиши, что именно не так.",
 					// A verdict the fork below reads, and a required one: the
@@ -151,6 +158,7 @@ func SeedFlows() []model.Flow {
 			Stages: []model.Stage{
 				{
 					ID: "triage", Name: "Разбор", Action: model.ActionAgent, Crew: []string{"Claude"},
+					Work: model.WorkTerminal,
 					Prompt: "Разберись, что нужно сделать, и опиши план. Ничего не меняй. " +
 						"Если выбор между вариантами должен сделать человек, так и напиши.",
 					X: 80, Y: 200,
@@ -158,6 +166,7 @@ func SeedFlows() []model.Flow {
 				{ID: "decide", Name: "Нужно решение", Action: model.ActionNone, X: 360, Y: 320},
 				{
 					ID: "do", Name: "Выполнение", Action: model.ActionAgent, Crew: []string{"Claude"},
+					Work:       model.WorkTerminal,
 					Prompt:     "Сделай то, о чём договорились в комментариях карточки.",
 					MaxRunning: 1,
 					X:          640, Y: 200,

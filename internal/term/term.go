@@ -2,18 +2,28 @@
 // real shell, and the bytes going both ways between it and the emulator in the
 // window.
 //
-// It is a package of its own rather than part of internal/acp because the two
-// terminals a person meets have different owners. An agent's terminal belongs
-// to its session and dies with it; this one belongs to a screen somebody is
-// looking at, and outlives every turn the agent takes.
+// Two kinds of terminal live here, and they differ by owner rather than by
+// machinery. A screen's terminal belongs to the pane somebody is looking at,
+// runs a shell, and outlives every turn an agent takes. A stage's terminal
+// belongs to the run inside it: it is the agent's own CLI (docs/system.md
+// §4.1.1), it is opened by internal/acp with an argv of its own, and it dies
+// when the step does.
+//
+// The pty, the scrollback, the socket and the resize are the same for both,
+// which is why one package holds them. What differs is who starts it and who
+// ends it, and that is expressed by which door was used: Open for a screen,
+// Attach for a run.
 package term
 
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +51,18 @@ type Session struct {
 	subs    map[chan []byte]struct{}
 	cols    int
 	rows    int
+	// spoke is when the process last drew anything. It is what a stage in a
+	// terminal is watched by: its CLI asks a person inside its own interface,
+	// where nothing of ours can see the question, so silence is the only signal
+	// there is (docs/system.md §4.1.1).
+	spoke time.Time
+	// keepTail says the tail outlives the process. Only a run's terminal has
+	// one worth keeping: a screen's shell is started afresh when its screen is
+	// opened again, so its tail would be a file nobody ever reads.
+	keepTail bool
+	// forgotten closes once the registry has let go of a dead terminal and its
+	// tail, if any, is on disk — what Close waits for.
+	forgotten chan struct{}
 
 	done     chan struct{}
 	closeOne sync.Once
@@ -55,6 +77,11 @@ type Manager struct {
 
 	workDir func(cardID string) (string, error)
 	log     *slog.Logger
+	// keep is where the tail of a finished terminal is written, so a segment
+	// whose step ended long ago shows the last thing that stood there rather
+	// than nothing. The pty is gone; the ribbon is a journal, and a journal is
+	// not erased by a process exiting.
+	keep string
 
 	// Where the sockets live: an address the operating system chose and a
 	// secret this run minted.
@@ -112,16 +139,121 @@ func (m *Manager) Open(cardID, screenID, command string) (*Session, error) {
 	// corpse.
 	go func() {
 		<-s.Done()
-		m.mu.Lock()
-		if m.byID[s.ID] == s {
-			delete(m.byID, s.ID)
-		}
-		if m.byScreen[screenID] == s {
-			delete(m.byScreen, screenID)
-		}
-		m.mu.Unlock()
+		m.forget(s.ID, s)
 	}()
 	return s, nil
+}
+
+// KeepIn says where the tail of a finished terminal is written. Called once, at
+// startup, with a folder of the application's own — never one an agent works
+// in: a file of ours inside somebody's repository is ours to clean up and
+// theirs to find in `git status`.
+func (m *Manager) KeepIn(dir string) {
+	m.mu.Lock()
+	m.keep = dir
+	m.mu.Unlock()
+}
+
+// Attach starts the terminal of a run: an argv executed directly, in a folder
+// the caller chose, under an id the caller already knows.
+//
+// Directly rather than through a shell, which is the whole difference from Open.
+// A screen's terminal runs what a person types, and that is shell syntax; this
+// one runs a CLI we assembled ourselves, argument by argument, and putting a
+// shell between us and it would only give a folder name with a space in it a
+// chance to become two arguments.
+//
+// The id is the caller's because the run has one already — the session the
+// stage is being worked in — and a terminal with an identity of its own would
+// mean the ribbon holding a second answer to "which terminal is this step".
+func (m *Manager) Attach(id, cardID, dir string, argv, env []string) (*Session, error) {
+	if id == "" {
+		return nil, fmt.Errorf("терминалу нужен идентификатор")
+	}
+	if len(argv) == 0 {
+		return nil, fmt.Errorf("нечего запускать в терминале")
+	}
+	m.mu.Lock()
+	if s, ok := m.byID[id]; ok && s.Alive() {
+		m.mu.Unlock()
+		return s, nil
+	}
+	m.mu.Unlock()
+
+	s, err := startArgv(dir, argv, env, m.log)
+	if err != nil {
+		return nil, err
+	}
+	s.ID, s.CardID, s.Command = id, cardID, strings.Join(argv, " ")
+	s.keepTail = true
+
+	m.mu.Lock()
+	m.byID[id] = s
+	m.mu.Unlock()
+
+	go func() {
+		<-s.Done()
+		m.forget(id, s)
+	}()
+	return s, nil
+}
+
+// forget takes a dead terminal out of the registry.
+//
+// The tail is written *before* the entry goes, and that order is the point:
+// Close waits only for the terminals it can still find, so a step that ended
+// while the application was closing would otherwise be removed, not waited for,
+// and lose the tail its segment is shown from.
+func (m *Manager) forget(id string, s *Session) {
+	defer close(s.forgotten)
+
+	m.mu.Lock()
+	dir := m.keep
+	m.mu.Unlock()
+	if dir != "" && s.keepTail {
+		m.writeTail(dir, id, s)
+	}
+
+	m.mu.Lock()
+	if m.byID[id] == s {
+		delete(m.byID, id)
+	}
+	if m.byScreen[s.ScreenID] == s {
+		delete(m.byScreen, s.ScreenID)
+	}
+	m.mu.Unlock()
+}
+
+func (m *Manager) writeTail(dir, id string, s *Session) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		m.log.Warn("не удалось сохранить хвост терминала", "terminal", id, "err", err)
+		return
+	}
+	if err := os.WriteFile(transcriptPath(dir, id), s.History(), 0o600); err != nil {
+		m.log.Warn("не удалось сохранить хвост терминала", "terminal", id, "err", err)
+	}
+}
+
+// transcript is what a finished terminal left behind, or nothing when it left
+// nothing and nothing is what should be shown.
+func (m *Manager) transcript(id string) []byte {
+	m.mu.Lock()
+	dir := m.keep
+	m.mu.Unlock()
+	if dir == "" {
+		return nil
+	}
+	data, err := os.ReadFile(transcriptPath(dir, id))
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+// transcriptPath keeps an id from naming a file outside the folder: ids here are
+// generated, but a path built from one is a path built from data.
+func transcriptPath(dir, id string) string {
+	return filepath.Join(dir, url.PathEscape(id)+".term")
 }
 
 // Get finds a live terminal by id.
@@ -195,20 +327,47 @@ func start(dir, command string, log *slog.Logger) (*Session, error) {
 		return nil, fmt.Errorf("запустить %s: %w", shell, err)
 	}
 
+	return newSession(tty, cmd, log), nil
+}
+
+// newSession wires a started process to its readers. Both doors end here: the
+// pumping, the scrollback and the reaping are the same whatever was started.
+func newSession(tty pty.Pty, cmd *pty.Cmd, log *slog.Logger) *Session {
 	s := &Session{
-		ID:   uuid.NewString(),
-		tty:  tty,
-		cmd:  cmd,
-		subs: map[chan []byte]struct{}{},
-		done: make(chan struct{}),
-		log:  log,
+		ID:        uuid.NewString(),
+		tty:       tty,
+		cmd:       cmd,
+		subs:      map[chan []byte]struct{}{},
+		done:      make(chan struct{}),
+		forgotten: make(chan struct{}),
+		log:       log,
+		spoke:     time.Now(),
 	}
 	go s.pump()
 	go func() {
 		_ = cmd.Wait()
 		s.finish()
 	}()
-	return s, nil
+	return s
+}
+
+// startArgv opens a pty and runs one argv in it, with the environment the
+// caller assembled: a stage's CLI is told which folder, which tools and which
+// variables it must not inherit, and none of that survives a trip through a
+// shell's own startup files.
+func startArgv(dir string, argv, env []string, log *slog.Logger) (*Session, error) {
+	tty, err := pty.New()
+	if err != nil {
+		return nil, fmt.Errorf("открыть терминал: %w", err)
+	}
+	cmd := tty.Command(argv[0], argv[1:]...)
+	cmd.Dir = dir
+	cmd.Env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor")
+	if err := cmd.Start(); err != nil {
+		tty.Close()
+		return nil, fmt.Errorf("запустить %s: %w", argv[0], err)
+	}
+	return newSession(tty, cmd, log), nil
 }
 
 func loginShell() string {
@@ -244,6 +403,7 @@ func (s *Session) pump() {
 
 func (s *Session) publish(chunk []byte) {
 	s.mu.Lock()
+	s.spoke = time.Now()
 	s.history = append(s.history, chunk...)
 	if len(s.history) > historyCap {
 		s.history = append([]byte(nil), s.history[len(s.history)-historyCap:]...)
@@ -283,6 +443,22 @@ func (s *Session) Subscribe() (history []byte, updates <-chan []byte, cancel fun
 		}
 		s.mu.Unlock()
 	}
+}
+
+// Quiet is how long the process has drawn nothing. It is the whole of what a
+// stage in a terminal is watched by, and it says nothing about a terminal that
+// has ended: a finished step is not a silent one.
+func (s *Session) Quiet() time.Duration {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return time.Since(s.spoke)
+}
+
+// History is what the terminal has printed so far, copied.
+func (s *Session) History() []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]byte(nil), s.history...)
 }
 
 // Write is a keystroke on its way to the process.
@@ -343,11 +519,11 @@ func (s *Session) finish() {
 	})
 }
 
-// waitBrief gives a closing process a moment to be reaped before the caller
-// moves on. Used when the application is shutting down.
+// waitBrief gives a closing process a moment to be reaped and its tail written
+// before the caller moves on. Used when the application is shutting down.
 func (s *Session) waitBrief() {
 	select {
-	case <-s.done:
-	case <-time.After(500 * time.Millisecond):
+	case <-s.forgotten:
+	case <-time.After(2 * time.Second):
 	}
 }

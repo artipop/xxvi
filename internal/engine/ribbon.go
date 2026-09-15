@@ -32,8 +32,8 @@ type ScreenView struct {
 	// Waiting names the properties that had no value yet. The screen stands
 	// blank and says so rather than opening nothing and staying silent.
 	Waiting []string `json:"waiting,omitempty"`
-	// SessionID is set on the screens that belong to an agent's run — its
-	// stream, and later the terminals of the commands it ran.
+	// SessionID is set on the screen that belongs to an agent's run: the
+	// terminal it was worked in, or the stream of a session.
 	SessionID string `json:"sessionId,omitempty"`
 }
 
@@ -169,11 +169,19 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 
 		// A run belongs to the visit it started during: matching by stage alone
 		// would hang every run of a looping stage on its first visit.
+		// What the agent's own screen is, is what the run was: a terminal shows
+		// the CLI the person and the agent talked in, a session shows the
+		// stream, which is all a session ever had. The run says which — not the
+		// stage, which may have been edited since (docs/system.md §12.2).
 		for _, s := range sessionsIn(sessions, stage.ID, ev.CreatedAt, entryAfter(events, i)) {
+			kind, title := "agent", "Ход агента · "
+			if s.Work == model.WorkTerminal {
+				kind, title = "agentTerminal", "Агент · "
+			}
 			seg.Screens = append(seg.Screens, ScreenView{
-				ID:        screenID(ev.ID, "agent", s.ID),
-				Kind:      "agent",
-				Title:     "Ход агента · " + s.AgentName,
+				ID:        screenID(ev.ID, kind, s.ID),
+				Kind:      kind,
+				Title:     title + s.AgentName,
 				SessionID: s.ID,
 			})
 		}

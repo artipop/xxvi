@@ -547,6 +547,8 @@ func TestStageColumnsAreAddedToADatabaseThatAlreadyHasFlows(t *testing.T) {
 		`ALTER TABLE stage DROP COLUMN screens_json`,
 		`ALTER TABLE card DROP COLUMN project`,
 		`DROP TABLE project`,
+		`ALTER TABLE stage DROP COLUMN work`,
+		`ALTER TABLE agent_session DROP COLUMN work`,
 		`DELETE FROM schema_migration WHERE version >= 6`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {

@@ -38,6 +38,38 @@ type adapter struct {
 	// mode is the session mode to select after session/new, when the agent's
 	// default is not what a card wants.
 	mode string
+
+	// The columns below describe the *interactive* CLI of the same agent — what
+	// a stage working in a terminal runs (docs/system.md §4.1.1). They are
+	// columns of this table rather than a table of their own because the answer
+	// to "how is this agent started" belongs in one place; a kind that leaves
+	// them empty simply cannot be worked in a terminal, and says so on the
+	// stage rather than failing to open a window.
+
+	// cliBin is the interactive binary. For claude and codex it is *not* bin:
+	// bin there is a vendor ACP adapter, a different program with no terminal
+	// UI at all.
+	cliBin string
+	// cliResumeArgs continue the conversation the last CLI left in this folder.
+	// The folder is the card's, so "the last conversation here" is that card's
+	// — which is what makes a second visit to a stage a continuation rather
+	// than a stranger asking the same questions again.
+	cliResumeArgs []string
+	// cliMCPArgs hand the CLI a file of MCP servers. A session gets its servers
+	// over the protocol, where session/new has a field for them; a terminal is
+	// the vendor CLI itself and has to be told in its own spelling. This is how
+	// «шаг готов» reaches the agent, so a kind without it cannot report — and
+	// therefore cannot work a stage.
+	cliMCPArgs func(configPath string) []string
+	// cliPromptArgs put the first message on the CLI's own command line, which
+	// is how a stage hands over its brief. Typing it into the pty instead means
+	// writing to a CLI that is not listening yet — and the thing it might be
+	// showing is «доверяете ли вы файлам в этой папке?», which must not be
+	// answered with a task.
+	//
+	// It carries its own end-of-options marker: the brief is a positional
+	// argument, and everything before it on that line is flags.
+	cliPromptArgs func(prompt string) []string
 }
 
 // adapters is the table of agents we know how to launch. The generic acp kind
@@ -52,8 +84,35 @@ var adapters = map[string]adapter{
 		// The adapter takes no flags at all: it is an ACP agent and nothing else.
 		modelEnv: "ANTHROPIC_MODEL",
 		// Claude Code refuses to start inside another Claude Code session, and
-		// this app may well have been launched from one.
-		dropEnv: []string{"CLAUDECODE"},
+		// this app may well have been launched from one. The rest of the list is
+		// that same launch seen from the other side, and
+		// CLAUDE_CODE_CHILD_SESSION is the one that matters most: it turns
+		// transcript saving off, so a CLI that inherits it leaves no
+		// conversation behind, and the next `--continue` in that folder exits
+		// saying there is nothing to continue.
+		//
+		// Only the markers of the outer session are dropped, never the whole
+		// CLAUDE_CODE_* family: CLAUDE_CODE_USE_BEDROCK and its like are the
+		// person's own configuration and have to be inherited.
+		dropEnv: []string{
+			"CLAUDECODE",
+			"CLAUDE_CODE_CHILD_SESSION",
+			"CLAUDE_CODE_SESSION_ID",
+			"CLAUDE_CODE_ENTRYPOINT",
+			"CLAUDE_CODE_EXECPATH",
+			"CLAUDE_CODE_MESSAGING_SOCKET",
+			"CLAUDE_CODE_MESSAGING_TOKEN",
+		},
+		// The adapter embeds the CLI but is not it: a terminal runs `claude`,
+		// which has to be installed for that and only that.
+		cliBin:        "claude",
+		cliResumeArgs: []string{"--continue"},
+		cliMCPArgs:    func(path string) []string { return []string{"--mcp-config", path} },
+		// `claude -- «…»` opens the TUI with that as the first message, which is
+		// exactly what a stage needs: interactive from the first frame, with the
+		// brief already in it. The `--` is not decoration — `--mcp-config` is
+		// variadic and would otherwise read the brief as a second config file.
+		cliPromptArgs: func(prompt string) []string { return []string{"--", prompt} },
 	},
 	// The Codex adapter drives the codex CLI it depends on, so this kind needs
 	// Node.js too.
@@ -65,8 +124,29 @@ var adapters = map[string]adapter{
 		modelConfig: "model",
 		// It starts read-only, which is not what a card asked for: a session
 		// that may not edit anything would spend its turn saying so.
-		mode: "agent",
+		mode:   "agent",
+		cliBin: "codex",
+		// `codex resume --last` picks up the newest conversation of this folder,
+		// the same rule as claude's --continue.
+		cliResumeArgs: []string{"resume", "--last"},
+		// The CLI takes its servers from ~/.codex/config.toml and from `-c`
+		// overrides, and neither is a file of ours to hand over: the first is
+		// the person's own configuration, which a card must not rewrite, and the
+		// second is a spelling that has changed under us before. Until that is
+		// tried against the CLI itself, codex works a stage as a session and
+		// says so — better than a terminal that opens without the one tool the
+		// stage cannot end without.
+		cliPromptArgs: func(prompt string) []string { return []string{prompt} },
 	},
+}
+
+// cliFor is the interactive CLI of a kind, and whether there is one.
+func cliFor(kind string) (adapter, bool) {
+	a, ok := adapters[kind]
+	if !ok || a.cliBin == "" || a.cliMCPArgs == nil {
+		return adapter{}, false
+	}
+	return a, true
 }
 
 // AdapterStatus is what the UI shows next to a kind.
@@ -89,6 +169,14 @@ type AdapterStatus struct {
 	ViaNPX bool `json:"viaNpx,omitempty"`
 	// Detail says what is missing, in the words a person needs to act on.
 	Detail string `json:"detail,omitempty"`
+
+	// Terminal reports that a stage can be *worked in a terminal* by this kind,
+	// which is a different question from Ready and has a different answer: the
+	// vendor adapter and the vendor's interactive CLI are two programs, and a
+	// machine can have one without the other (docs/system.md §4.1.1).
+	Terminal bool `json:"terminal"`
+	// TerminalDetail says why not, or what it will run.
+	TerminalDetail string `json:"terminalDetail,omitempty"`
 }
 
 // AdapterStatuses reports every kind we know how to launch, in the order the UI
@@ -108,6 +196,7 @@ func AdapterStatuses() []AdapterStatus {
 func adapterStatus(kind string) AdapterStatus {
 	def := adapters[kind]
 	st := AdapterStatus{Kind: kind, Package: def.npmPackage}
+	st.Terminal, st.TerminalDetail = terminalStatus(kind)
 	if bin, err := lookupBin(def.bin); err == nil {
 		st.Path, st.Ready = bin, true
 		return st
@@ -126,6 +215,29 @@ func adapterStatus(kind string) AdapterStatus {
 	st.Detail = fmt.Sprintf("не найден ни %s, ни npx — поставьте Node.js и выполните `npm install -g %s`",
 		def.bin, def.npmPackage)
 	return st
+}
+
+// terminalStatus answers "can a stage be worked in a terminal by this kind, on
+// this machine". Asked in the agents dialog for the same reason the adapter is:
+// the alternative is finding out on a card, after somebody built a flow around
+// a stage that will never open.
+func terminalStatus(kind string) (bool, string) {
+	cli, ok := cliFor(kind)
+	if !ok {
+		return false, "нет своего CLI или способа передать ему инструменты — стадию можно работать только сессией"
+	}
+	bin, err := lookupBin(cli.cliBin)
+	if err != nil {
+		return false, fmt.Sprintf("не найден %s — стадию в терминале запускать нечем", cli.cliBin)
+	}
+	return true, bin
+}
+
+// terminalBin is the interactive CLI as it will actually be run: found on PATH
+// or in the usual install spots, because launchd hands a GUI application a
+// minimal PATH and a CLI installed with Homebrew or npm is invisible in it.
+func terminalBin(cli adapter) (string, error) {
+	return lookupBin(cli.cliBin)
 }
 
 // launch is how one agent process is started, once the table row and the

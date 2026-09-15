@@ -68,7 +68,16 @@ func (m *Manager) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	session := m.Get(rest)
+	// A terminal whose process has ended is still a screen of the ribbon, and
+	// the ribbon is a journal: what it printed is served from the tail kept on
+	// disk, then the socket says the same «exit» a shell that just finished
+	// would have said. A step somebody scrolls back to shows what happened in
+	// it, not an error about a process that was never going to be alive.
 	if session == nil {
+		if tail := m.transcript(rest); tail != nil {
+			m.replay(w, r, tail)
+			return
+		}
 		http.Error(w, "терминал не найден", http.StatusNotFound)
 		return
 	}
@@ -83,6 +92,25 @@ func (m *Manager) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.pipe(conn, session)
+}
+
+// replay hands over a finished terminal and closes: there is nothing to type
+// into and nothing more to wait for.
+func (m *Manager) replay(w http.ResponseWriter, r *http.Request, tail []byte) {
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	if err != nil {
+		return
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	if len(tail) > 0 {
+		if err := write(ctx, conn, websocket.MessageBinary, tail); err != nil {
+			return
+		}
+	}
+	_ = write(ctx, conn, websocket.MessageText, []byte(`{"type":"exit"}`))
 }
 
 // control is the one message that is not raw bytes.

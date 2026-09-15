@@ -24,7 +24,9 @@ import (
 
 	"github.com/artipop/xxvi/internal/engine"
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/stagemcp"
 	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/xxvi/internal/term"
 )
 
 // Outcomes a session reports back to the engine.
@@ -97,6 +99,17 @@ type Manager struct {
 	// whatever holds mu.
 	questionsMu sync.Mutex
 	questions   map[string]*pendingQuestion
+	// quiet is the other thing that waits for a person: a stage in a terminal
+	// whose CLI has drawn nothing for a while (terminal.go). Kept beside the
+	// questions because both are read as one list — one bookkeeping of "what is
+	// waiting", not two.
+	quiet map[string]Attention
+
+	// terms and tools are what a stage worked in a terminal needs: somewhere to
+	// open a pty, and the door the agent reports through. Nil until the
+	// application wires them, and a terminal stage that finds them nil says so.
+	terms *term.Manager
+	tools *stagemcp.Server
 
 	// sem bounds turns actually in flight on this machine.
 	sem     chan struct{}
@@ -115,7 +128,8 @@ func New(st *store.Store, to Reporter, ui Emitter, opts Options, log *slog.Logge
 	return &Manager{
 		store: st, to: to, ui: ui, log: log, opts: opts,
 		active: map[string]*session{}, byCard: map[string]*session{},
-		sem: make(chan struct{}, opts.MaxConcurrent), rootCtx: ctx, stop: cancel,
+		quiet: map[string]Attention{},
+		sem:   make(chan struct{}, opts.MaxConcurrent), rootCtx: ctx, stop: cancel,
 	}
 }
 
@@ -132,9 +146,15 @@ var _ engine.Runner = (*Manager)(nil)
 // under way — the engine holds a lock while it calls this, and the outcome
 // comes back later through Reporter.
 func (m *Manager) Start(job engine.Job) error {
-	launch, err := launchFor(job.Agent)
-	if err != nil {
-		return err
+	// A terminal stage runs the vendor's own CLI and has no ACP adapter to
+	// resolve; asking for one would refuse a card because a program it is never
+	// going to run is not installed.
+	var launch launch
+	if workOf(job.Stage) == model.WorkSession {
+		var err error
+		if launch, err = launchFor(job.Agent); err != nil {
+			return err
+		}
 	}
 	cwd, err := m.workDir(job.Card.ID)
 	if err != nil {
@@ -145,10 +165,11 @@ func (m *Manager) Start(job engine.Job) error {
 		id: uuid.NewString(), card: job.Card, flow: job.Flow, stage: job.Stage,
 		agent: job.Agent, prompt: job.Prompt, cwd: cwd, launch: launch,
 		policy: policyFor(job.Agent, m.opts.Policy), status: store.StatusQueued,
+		work: workOf(job.Stage),
 	}
 	if err := m.store.InsertSession(store.Session{
 		ID: s.id, CardID: s.card.ID, FlowID: s.flow.ID, StageID: s.stage.ID,
-		AgentName: s.agent.Name, AgentKind: s.agent.Kind,
+		AgentName: s.agent.Name, AgentKind: s.agent.Kind, Work: s.work,
 		Status: store.StatusQueued, Cwd: cwd, StartedAt: time.Now().UTC(),
 	}); err != nil {
 		return fmt.Errorf("записать сессию: %w", err)
@@ -161,8 +182,21 @@ func (m *Manager) Start(job engine.Job) error {
 	m.emitSession(s)
 
 	m.wg.Add(1)
-	go m.run(s)
+	if s.work == model.WorkTerminal {
+		go m.runTerminal(s)
+	} else {
+		go m.run(s)
+	}
 	return nil
+}
+
+// workOf is how a stage is worked, with the same default the model applies: a
+// stage that named no mode is one somebody meant to watch.
+func workOf(stage model.Stage) string {
+	if stage.Work == model.WorkSession {
+		return model.WorkSession
+	}
+	return model.WorkTerminal
 }
 
 // Busy is the agents with a live session, keyed the way names are matched.
@@ -571,6 +605,9 @@ type session struct {
 	cwd    string
 	launch launch
 	policy ToolPolicy
+	// work is how this run is worked. Fixed at start, like the policy: a stage
+	// edited mid-run does not change what is already running.
+	work string
 
 	mu         sync.Mutex
 	status     store.SessionStatus
@@ -692,6 +729,9 @@ func (s *session) outcome() (trigger, detail string) {
 	case s.status == store.StatusDone:
 		return model.TriggerSuccess, "агент завершил работу"
 	case s.status == store.StatusFailed:
+		if s.work == model.WorkTerminal {
+			return model.TriggerFailure, "шаг в терминале не прошёл"
+		}
 		return model.TriggerFailure, "сессия агента упала"
 	default:
 		return "", ""

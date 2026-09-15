@@ -172,6 +172,27 @@ func (m *Manager) Questions() []Question {
 	return out
 }
 
+// WaitingFor reports whether anything about a card is waiting for a person: an
+// open question, or a stage's terminal gone silent. It is the card's mark, and
+// it reads the same bookkeeping as the attention list, so the panel and the card
+// cannot disagree about one fact (docs/system.md §7).
+func (m *Manager) WaitingFor(cardID string) bool {
+	if cardID == "" {
+		return false
+	}
+	if m.QuestionForCard(cardID) != nil {
+		return true
+	}
+	m.questionsMu.Lock()
+	defer m.questionsMu.Unlock()
+	for _, a := range m.quiet {
+		if a.CardID == cardID {
+			return true
+		}
+	}
+	return false
+}
+
 // QuestionForCard is a card's own open question, if it has one.
 func (m *Manager) QuestionForCard(cardID string) *Question {
 	if cardID == "" {
@@ -185,9 +206,18 @@ func (m *Manager) QuestionForCard(cardID string) *Question {
 	return nil
 }
 
-// Attention is one thing waiting for a person. There is one kind of it, and it
-// is the protocol asking: an ACP session sent a permission request or an
-// elicitation, and the agent is waiting on the answer with its turn still open.
+// Attention is one thing waiting for a person. There are two kinds of it, and
+// which one a row is, is said by whether it carries a question.
+//
+// A **question** is the protocol asking: an ACP session sent a permission
+// request or an elicitation, and the agent is waiting on the answer with its
+// turn still open. It has options, and answering it here is what releases the
+// agent.
+//
+// A **silent terminal** is the other one, and it is not answerable from here on
+// purpose: the agent asked inside its own interface, where the question was
+// never ours to carry (docs/system.md §4.1.1). What the row says is «сходи
+// посмотри», and the answer is typed where it was asked.
 //
 // It is a separate shape from Question so that the panel and the mark on a card
 // read the same list — one bookkeeping of the fact, not two.
@@ -218,14 +248,61 @@ func (q Question) attention() Attention {
 	}
 }
 
-// Attention lists every question waiting for a person, oldest first.
+// Attention lists everything waiting for a person, oldest first: the one that
+// has been ignored longest is the one worth showing.
 func (m *Manager) Attention() []Attention {
 	questions := m.Questions()
 	out := make([]Attention, 0, len(questions))
 	for _, q := range questions {
 		out = append(out, q.attention())
 	}
+
+	m.questionsMu.Lock()
+	for _, a := range m.quiet {
+		out = append(out, a)
+	}
+	m.questionsMu.Unlock()
+
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Since.Before(out[j].Since) })
 	return out
+}
+
+// raiseQuiet marks a stage in a terminal as waiting for a person. The session
+// is marked too, so the card shows it the same way it shows an agent stopped on
+// a question: from outside, both are a step that has stopped moving.
+func (m *Manager) raiseQuiet(s *session) {
+	a := Attention{
+		Key:       "t:" + s.id,
+		CardID:    s.card.ID,
+		CardTitle: s.card.Title,
+		Agent:     s.agent.Name,
+		Text:      "Терминал агента молчит — посмотрите, не ждёт ли он ответа",
+		Awaiting:  true,
+		Since:     time.Now(),
+	}
+	m.questionsMu.Lock()
+	m.quiet[s.id] = a
+	m.questionsMu.Unlock()
+
+	m.setStatus(s, statusAsking)
+	m.emitAttention(a)
+	m.log.Info("терминал стадии молчит", "session", s.id, "card", s.card.ID)
+}
+
+// clearQuiet takes the mark off — the CLI drew something, or the step ended.
+func (m *Manager) clearQuiet(s *session) {
+	m.questionsMu.Lock()
+	a, had := m.quiet[s.id]
+	delete(m.quiet, s.id)
+	m.questionsMu.Unlock()
+	if !had {
+		return
+	}
+	if s.currentStatus() == statusAsking {
+		m.setStatus(s, statusRunning)
+	}
+	a.Awaiting = false
+	m.emitAttention(a)
 }
 
 func questionComment(q Question) string {

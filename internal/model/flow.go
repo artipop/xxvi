@@ -30,6 +30,36 @@ const (
 // Actions is every accepted action, in the order the editor offers them.
 var Actions = []string{ActionNone, ActionAgent}
 
+// How an agent stage works: where the agent runs and who is looking at it
+// (docs/system.md §4.1.1).
+//
+// The difference is not the way a process is spawned but who the work is shown
+// to. A terminal is where a person and an agent sit at one table: the plan, the
+// questions and the permission prompts are drawn by the vendor's own CLI, and
+// we stop re-implementing somebody else's TUI worse than they did. A session
+// has no interlocutor — a check, a deploy — and its verdict is read by the
+// machine.
+const (
+	// WorkTerminal runs the agent's own interactive CLI in a pty of the card.
+	WorkTerminal = "terminal"
+	// WorkSession runs an ACP session, which nobody watches.
+	WorkSession = "session"
+)
+
+// Works is every accepted work mode, in the order the editor offers them.
+var Works = []string{WorkTerminal, WorkSession}
+
+// WorkLabel names a mode for a person.
+func WorkLabel(work string) string {
+	switch work {
+	case WorkTerminal:
+		return "в терминале"
+	case WorkSession:
+		return "сессией"
+	}
+	return work
+}
+
 // Screen kinds: what a stage puts in front of the person while a card stands on
 // it (docs/system.md §12.2).
 //
@@ -204,6 +234,15 @@ type Stage struct {
 	Name string `json:"name"`
 
 	Action string `json:"action"`
+	// Work says where an agent stage runs: in the card's terminal, where a
+	// person is sitting, or as an ACP session nobody watches (§4.1.1). Empty
+	// means WorkTerminal — a stage that did not say is a stage somebody meant
+	// to watch, and the mode that shows more is the safe default for a flow
+	// written before the field existed.
+	//
+	// Meaningless without ActionAgent, and refused there: a waiting stage runs
+	// nothing, and nothing has no place to run in.
+	Work string `json:"work,omitempty"`
 	// Prompt is what the agent is told about this step, on top of its own
 	// prompt and the card's task.
 	Prompt string `json:"prompt,omitempty"`
@@ -222,9 +261,11 @@ type Stage struct {
 	// than hopeful: the edge that asks about «Вердикт» points at the stage that
 	// must produce it.
 	//
-	// The agent delivers them in its closing words, in the shape the brief asks
-	// for (see engine.StageOutputs), and a required one is refused without: the
-	// stage cannot end until the value stands.
+	// A session delivers them in its closing words, in the shape the brief asks
+	// for (see engine.StageOutputs); a stage working in a terminal puts them in
+	// the same call that says it has finished, since a CLI has no closing words
+	// to read. Either way a required one is refused without: the stage cannot
+	// end until the value stands.
 	Writes []PropertyWrite `json:"writes,omitempty"`
 
 	// Reads are the properties whose values open this stage's brief: what an
@@ -245,8 +286,8 @@ type Stage struct {
 	// on a waiting stage, while a screen is about the person, and the review
 	// stage is exactly where the preview has to be open.
 	//
-	// The agent's own screens — its stream, and the terminals of the commands
-	// it ran — are not declared: they exist whenever what they show exists.
+	// The agent's own screen — its terminal, or the stream of a session — is
+	// not declared: it exists whenever what it shows exists.
 	Screens []Screen `json:"screens,omitempty"`
 
 	// X and Y are where the editor left the stage on its canvas. Absent means

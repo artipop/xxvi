@@ -206,12 +206,12 @@ func TestRibbonOpensOnTheScreensTheExampleDeclares(t *testing.T) {
 	if len(view.Segments) != 1 || !view.Segments[0].Current {
 		t.Fatalf("лента начинается первым же шагом: %+v", view.Segments)
 	}
-	// The stage runs an agent, so the strip carries its stream as well as the
-	// plan the flow declares — the undeclared screen first, because what the
-	// step did reads before what it was told to show.
+	// The stage runs an agent in a terminal, so the strip carries that terminal
+	// as well as the plan the flow declares — the undeclared screen first,
+	// because what the step did reads before what it was told to show.
 	screens := view.Segments[0].Screens
-	if len(screens) != 2 || screens[0].Kind != "agent" || screens[0].SessionID == "" {
-		t.Fatalf("ход агента — первый экран его сегмента: %+v", screens)
+	if len(screens) != 2 || screens[0].Kind != "agentTerminal" || screens[0].SessionID == "" {
+		t.Fatalf("терминал агента — первый экран его сегмента: %+v", screens)
 	}
 	notes := screens[1]
 	if notes.Kind != model.ScreenNotes || notes.Ref != "план.md" {

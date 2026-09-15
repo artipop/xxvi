@@ -47,7 +47,7 @@ func (s *API) InWork() ([]CardSummary, error) {
 		if view, err := s.app.Engine.CardFlowFor(c.ID); err == nil && view != nil {
 			summary.Flow = view
 		}
-		summary.Asking = s.app.Agents.QuestionForCard(c.ID) != nil
+		summary.Asking = s.app.Agents.WaitingFor(c.ID)
 		out = append(out, summary)
 	}
 	return out, nil
@@ -310,6 +310,24 @@ func (s *API) OpenTerminal(cardID, screenID, command string) (TerminalHandle, er
 	return TerminalHandle{ID: session.ID, URL: endpoint + session.ID}, nil
 }
 
+// AgentTerminal is where the terminal of one step is watched. It starts
+// nothing: the CLI was started by the stage and belongs to it, and a screen
+// that could start one would be a second way of working a step.
+//
+// A step long finished still answers: the socket serves the tail kept on disk
+// and then says the terminal has ended, which is what a segment scrolled back
+// to should show (docs/system.md §12.2).
+func (s *API) AgentTerminal(sessionID string) (TerminalHandle, error) {
+	endpoint := s.app.Terminals.Endpoint()
+	if endpoint == "" {
+		return TerminalHandle{}, fmt.Errorf("терминалы выключены: не удалось открыть локальный порт")
+	}
+	if sessionID == "" {
+		return TerminalHandle{}, fmt.Errorf("не сказано, чей терминал")
+	}
+	return TerminalHandle{ID: sessionID, URL: endpoint + sessionID}, nil
+}
+
 // CloseTerminal ends one shell. A person closing a terminal means the process
 // in it, not just the window onto it — the ribbon has no windows to close.
 func (s *API) CloseTerminal(id string) error {
@@ -360,7 +378,7 @@ func (s *API) FlowCards(flowID string) ([]StageCard, error) {
 	for _, c := range cards {
 		out = append(out, StageCard{
 			Card: c, StageID: stageOf[c.ID],
-			Asking: s.app.Agents.QuestionForCard(c.ID) != nil,
+			Asking: s.app.Agents.WaitingFor(c.ID),
 		})
 	}
 	return out, nil
@@ -378,8 +396,11 @@ type StageCard struct {
 type Vocabulary struct {
 	Triggers []model.Trigger `json:"triggers"`
 	Actions  []string        `json:"actions"`
-	Kinds    []string        `json:"kinds"`
-	Rules    []string        `json:"ruleActions"`
+	// Where an agent stage runs — the terminal somebody sits at, or a session
+	// nobody watches (docs/system.md §4.1.1).
+	Works []ScreenKind `json:"works"`
+	Kinds []string     `json:"kinds"`
+	Rules []string     `json:"ruleActions"`
 	// The card's own field for how a stage ended, and the two values it takes.
 	// Sent so the editor can keep it out of what a stage declares — the engine
 	// writes it for every stage — while still offering it to a condition, which
@@ -407,6 +428,7 @@ func (s *API) Vocabulary() Vocabulary {
 	return Vocabulary{
 		Triggers: model.Triggers,
 		Actions:  model.Actions,
+		Works:    works(),
 		Kinds:    model.Kinds,
 		Rules:    model.RuleActions,
 
@@ -421,6 +443,14 @@ func projectKinds() []ScreenKind {
 	out := make([]ScreenKind, 0, len(model.ProjectKinds))
 	for _, k := range model.ProjectKinds {
 		out = append(out, ScreenKind{Kind: k, Label: model.ProjectKindLabel(k)})
+	}
+	return out
+}
+
+func works() []ScreenKind {
+	out := make([]ScreenKind, 0, len(model.Works))
+	for _, w := range model.Works {
+		out = append(out, ScreenKind{Kind: w, Label: model.WorkLabel(w)})
 	}
 	return out
 }

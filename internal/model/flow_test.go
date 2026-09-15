@@ -144,12 +144,16 @@ func TestValidateFlowAcceptsAGoodOne(t *testing.T) {
 
 func TestValidateFlowRefusals(t *testing.T) {
 	for name, mutate := range map[string]func(*Flow){
-		"без имени":                    func(f *Flow) { f.Name = "  " },
-		"без стадий":                   func(f *Flow) { f.Stages = nil },
-		"без входной стадии":           func(f *Flow) { f.EntryStage = "" },
-		"входная стадия отсутствует":   func(f *Flow) { f.EntryStage = "нет-такой" },
-		"две стадии с одним именем":    func(f *Flow) { f.Stages[1].Name = "в работе" },
-		"неизвестное действие":         func(f *Flow) { f.Stages[0].Action = "деплой" },
+		"без имени":                  func(f *Flow) { f.Name = "  " },
+		"без стадий":                 func(f *Flow) { f.Stages = nil },
+		"без входной стадии":         func(f *Flow) { f.EntryStage = "" },
+		"входная стадия отсутствует": func(f *Flow) { f.EntryStage = "нет-такой" },
+		"две стадии с одним именем":  func(f *Flow) { f.Stages[1].Name = "в работе" },
+		"неизвестное действие":       func(f *Flow) { f.Stages[0].Action = "деплой" },
+		"неизвестный режим работы":   func(f *Flow) { f.Stages[0].Work = "по переписке" },
+		"режим работы там, где нечему работать": func(f *Flow) {
+			f.Stages[2].Work = WorkTerminal
+		},
 		"переход в никуда":             func(f *Flow) { f.Edges[0].To = "нет-такой" },
 		"неизвестное событие":          func(f *Flow) { f.Edges[0].On = "полнолуние" },
 		"агент не в реестре":           func(f *Flow) { f.Stages[0].Crew = []string{"Никто"} },
@@ -179,6 +183,31 @@ func TestValidateFlowRefusals(t *testing.T) {
 // A stage that runs an agent must be able to find one. With several registered
 // and no crew there is nothing to choose from, and finding that out at run time
 // costs a card that silently never starts.
+// A stage that named no mode is one somebody meant to watch: the default is the
+// terminal, because it is the mode that shows more, and a flow written before
+// the field existed is a flow whose author expected to see the work.
+func TestAgentStageDefaultsToTheTerminal(t *testing.T) {
+	f := devFlow()
+	f.Stages[0].Work = ""
+	got, err := ValidateFlow(f, agents())
+	if err != nil {
+		t.Fatalf("не принят: %v", err)
+	}
+	if got.Stages[0].Work != WorkTerminal {
+		t.Fatalf("умолчание — терминал, а не %q", got.Stages[0].Work)
+	}
+	// A stage that says «сессией» keeps it: the default fills a silence, it does
+	// not overrule an answer.
+	f.Stages[0].Work = WorkSession
+	got, err = ValidateFlow(f, agents())
+	if err != nil {
+		t.Fatalf("не принят: %v", err)
+	}
+	if got.Stages[0].Work != WorkSession {
+		t.Fatalf("выбранный режим должен сохраняться: %q", got.Stages[0].Work)
+	}
+}
+
 func TestValidateFlowRefusesAgentStageWithNothingToChooseFrom(t *testing.T) {
 	f := devFlow()
 	f.Stages[0].Crew = nil
