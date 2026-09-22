@@ -7,10 +7,16 @@
 package main
 
 import (
+	"context"
 	"embed"
+	"errors"
+	"fmt"
+	"io"
 	"log"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -18,6 +24,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/updater"
 
 	"github.com/artipop/xxvi/internal/app"
+	"github.com/artipop/xxvi/internal/appmcp"
 )
 
 //go:embed all:frontend/dist
@@ -37,6 +44,12 @@ func main() {
 	// swap the bundle. application.New calls this too, but by then we would
 	// have opened SQLite, taken the terminal socket and started agents.
 	updater.HandleHelperMode()
+
+	// Second line, and before anything is opened: this executable is also the
+	// MCP server an outside agent spawns (`xxvi mcp`), and in that mode stdout
+	// belongs to the JSON-RPC stream. It never returns — a window, a database
+	// and a terminal socket are exactly what must not happen here.
+	maybeRunMCP(os.Args[1:])
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
@@ -142,6 +155,36 @@ func main() {
 
 	if err := wails.Run(); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// maybeRunMCP handles `xxvi mcp`: the same executable doubles as the MCP server
+// an agent's session spawns, which keeps this a single application with nothing
+// extra to install.
+//
+// It bridges to the application that is already running rather than opening one
+// of its own: the cards it moves are the cards on the screen, and a second copy
+// of XXVI over the same database would be a second application disagreeing with
+// the first (internal/appmcp).
+func maybeRunMCP(args []string) {
+	if len(args) == 0 || args[0] != "mcp" {
+		return
+	}
+	dataDir, err := app.DefaultDataDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mcp: %v\n", err)
+		os.Exit(1)
+	}
+	// The agent closes stdio to end the session, and that is success.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	err = appmcp.ServeStdio(ctx, dataDir, os.Stdin, os.Stdout)
+	switch {
+	case err == nil, errors.Is(err, context.Canceled), errors.Is(err, io.EOF):
+		os.Exit(0)
+	default:
+		fmt.Fprintf(os.Stderr, "mcp: %v\n", err)
+		os.Exit(1)
 	}
 }
 

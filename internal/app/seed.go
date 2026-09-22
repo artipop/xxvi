@@ -8,8 +8,8 @@ import (
 	"github.com/artipop/xxvi/internal/model"
 )
 
-// What a first run finds: an agent, two sources with something in them, and two
-// flows worth reading as examples.
+// What a first run finds: an agent, two sources with something in them, and
+// three flows worth reading as examples.
 //
 // It runs only on an empty database. Seeding what somebody has already edited
 // would be an application overruling its user, and "restore the examples" is a
@@ -58,10 +58,12 @@ func defaultAgent() model.Agent {
 	}
 }
 
-// SeedFlows are the two example routes. Together they use every trigger this
+// SeedFlows are the example routes. Together they use every trigger this
 // application has, which is what makes them worth reading: «Разработка» is the
 // one where a stage owes the card a value and the next arrow reads it, «Разбор и
-// решение» is the one where the agent chooses the branch with its own words.
+// решение» is the one where the agent chooses the branch with its own words, and
+// «Страница и проверка» is the short one somebody can walk end to end — by hand
+// or through the tools this application offers outside (internal/appmcp).
 func SeedFlows() []model.Flow {
 	return []model.Flow{
 		{
@@ -149,6 +151,70 @@ func SeedFlows() []model.Flow {
 				// task back to the agent that has just failed it is a loop with
 				// nothing new in it. The card carries «Исход» and the reason is
 				// in its comments.
+			},
+		},
+		{
+			// The short one, and the one worth walking to see what a flow is:
+			// something is made, something else checks it, and a person looks
+			// at the result before it counts as done. Every stage here leaves
+			// the next one what it needs by name, so the route works the same
+			// whether the steps are worked by this application's own agents or
+			// reported from outside (internal/appmcp).
+			Name: "Страница и проверка",
+			Description: "Агент делает страницу, проверка выносит вердикт, человек смотрит её в браузере и решает. " +
+				"Короткий маршрут, по которому видно весь путь карточки.",
+			EntryStage: "page-write",
+			Stages: []model.Stage{
+				{
+					ID: "page-write", Name: "Вёрстка", Action: model.ActionAgent, Crew: []string{"Claude"},
+					Work: model.WorkTerminal,
+					Prompt: "Сделай страницу, о которой просит карточка: один файл index.html в рабочей папке, " +
+						"без внешних зависимостей. В «Страница» передай адрес файла — file:///…/index.html.",
+					// Required: the browser screen below opens exactly this
+					// value, and a step that ended without it would leave the
+					// next stage looking at a blank page.
+					Writes:  []model.PropertyWrite{{Property: "Страница", Required: true}},
+					Screens: []model.Screen{{Kind: model.ScreenNotes, Title: "План", Ref: "план.md"}},
+					X:       80, Y: 160,
+				},
+				{
+					ID: "page-review", Name: "Проверка", Action: model.ActionAgent, Crew: []string{"Claude"},
+					Work: model.WorkSession,
+					Prompt: "Проверь страницу по адресу «Страница»: делает ли она то, о чём просит карточка, " +
+						"нет ли битой разметки. В «Вердикт» передай pass или fail, а что не так — напиши текстом.",
+					Reads:   []string{"Страница"},
+					Writes:  []model.PropertyWrite{{Property: "Вердикт", Required: true}},
+					Screens: []model.Screen{{Kind: model.ScreenBrowser, Title: "Страница", Ref: "{Страница}"}},
+					X:       360, Y: 160,
+				},
+				// Nothing runs here: this is where somebody opens the page and
+				// answers for it. The screen is the whole stage.
+				{
+					ID: "page-look", Name: "Смотрим", Action: model.ActionNone,
+					Screens: []model.Screen{{Kind: model.ScreenBrowser, Title: "Страница", Ref: "{Страница}"}},
+					X:       640, Y: 160,
+				},
+				{ID: "page-done", Name: "Готово", Final: true, X: 900, Y: 160},
+			},
+			Edges: []model.Edge{
+				{From: "page-write", To: "page-review", On: model.TriggerSuccess},
+
+				// The check routes the card by the value it was obliged to
+				// write: «fail» sends it back to the stage that made the page.
+				{
+					From: "page-review", To: "page-write", On: model.TriggerSuccess,
+					If: &model.Cond{Property: "Вердикт", Value: "fail"},
+				},
+				{From: "page-review", To: "page-look", On: model.TriggerSuccess},
+
+				{
+					From: "page-look", To: "page-done", On: model.TriggerCardChanged,
+					If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomePassed},
+				},
+				{
+					From: "page-look", To: "page-write", On: model.TriggerCardChanged,
+					If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomeFailed},
+				},
 			},
 		},
 		{

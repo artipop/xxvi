@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/artipop/xxvi/internal/acp"
+	"github.com/artipop/xxvi/internal/appmcp"
 	"github.com/artipop/xxvi/internal/engine"
 	"github.com/artipop/xxvi/internal/inbox"
 	"github.com/artipop/xxvi/internal/stagemcp"
@@ -34,7 +35,10 @@ type App struct {
 	Terminals *term.Manager
 	// Tools is the one thing an agent working in a terminal can say back: that
 	// its step is over (docs/system.md §4.1.1).
-	Tools    *stagemcp.Server
+	Tools *stagemcp.Server
+	// Outside is this application offered to an agent nobody here started: the
+	// same moves a person makes, as MCP tools (docs/system.md §13).
+	Outside  *appmcp.Server
 	Pipeline *inbox.Pipeline
 	Poller   *inbox.Poller
 
@@ -134,6 +138,25 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	a.Pipeline = inbox.NewPipeline(st, a, log)
 	a.Poller = inbox.NewPoller(st, a.Pipeline, log)
 
+	// The application from outside. Opened last of the three listeners because
+	// it hands out everything above it, and left out of the way when it cannot
+	// open: an agent in another window is a second road into this application,
+	// never the only one.
+	a.Outside = appmcp.New(appmcp.Deps{
+		Store: st, Engine: a.Engine, Filer: a.Pipeline, Folders: a.Agents, Emit: a.Emit,
+	}, log)
+	if err := a.Outside.Listen(); err != nil {
+		log.Warn("инструменты приложения выключены", "почему", err)
+	} else if err := appmcp.WriteHandoff(dataDir, a.Outside.URL(), a.Outside.Token()); err == nil {
+		// The address, not the token: a log is a file people paste into issues.
+		log.Info("инструменты приложения открыты", "url", a.Outside.URL())
+	} else {
+		// The port is open and the tools work; what failed is the note saying
+		// where they are. Said out loud, because the symptom without it is
+		// `xxvi mcp` insisting the application is not running.
+		log.Warn("не удалось записать адрес инструментов приложения", "err", err)
+	}
+
 	if err := a.seed(); err != nil {
 		st.Close()
 		return nil, err
@@ -153,6 +176,10 @@ func (a *App) Close() error {
 	a.Agents.Close()
 	a.Terminals.Close()
 	a.Tools.Close()
+	if a.Outside != nil {
+		a.Outside.Close()
+		appmcp.RemoveHandoff(a.DataDir)
+	}
 	return a.Store.Close()
 }
 
