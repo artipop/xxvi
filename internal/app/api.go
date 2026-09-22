@@ -1,15 +1,18 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/artipop/xxvi/internal/acp"
 	"github.com/artipop/xxvi/internal/engine"
+	"github.com/artipop/xxvi/internal/gitdiff"
 	"github.com/artipop/xxvi/internal/inbox"
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/store"
@@ -283,6 +286,28 @@ func (s *API) docPath(cardID, name string) (string, error) {
 		return "", err
 	}
 	return acp.Within(dir, name)
+}
+
+// ---- diff ----
+
+// diffTimeout is how long git is given. A repository big enough to need longer
+// is a repository whose diff nobody was going to read in a pane anyway.
+const diffTimeout = 20 * time.Second
+
+// Diff is what changed in the card's working copy — the screen a review stage
+// stands on (docs/system.md §12.7).
+//
+// Read at the moment it is asked for and kept nowhere. The working copy is the
+// answer here, and a diff remembered anywhere else would be a second answer to
+// the question the person is deciding by.
+func (s *API) Diff(cardID, ref string) (gitdiff.Diff, error) {
+	dir, err := s.app.Agents.WorkDir(cardID)
+	if err != nil {
+		return gitdiff.Diff{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), diffTimeout)
+	defer cancel()
+	return gitdiff.Read(ctx, dir, ref)
 }
 
 // TerminalHandle is what a terminal screen needs to connect: which terminal,

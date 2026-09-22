@@ -114,10 +114,19 @@ func SeedFlows() []model.Flow {
 				// A stage where nothing runs still shows something: this is
 				// where somebody looks at the preview and decides by it, which
 				// is why screens are not tied to an action (docs/system.md §12.4).
+				//
+				// The diff comes first and points at nothing, which is how it
+				// says «what is in the working copy and not in the last commit»
+				// — the agent's work, before anybody committed it. The preview
+				// is beside it: one screen shows what was written, the other
+				// what it does.
 				{
 					ID: "dev-review", Name: "На ревью", Action: model.ActionNone,
-					Screens: []model.Screen{{Kind: model.ScreenBrowser, Title: "Превью", Ref: "{Превью}"}},
-					X:       640, Y: 160,
+					Screens: []model.Screen{
+						{Kind: model.ScreenDiff, Title: "Что изменилось"},
+						{Kind: model.ScreenBrowser, Title: "Превью", Ref: "{Превью}"},
+					},
+					X: 640, Y: 160,
 				},
 				{ID: "dev-done", Name: "Готово", Final: true, X: 900, Y: 160},
 			},

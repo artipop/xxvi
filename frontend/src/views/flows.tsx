@@ -118,16 +118,30 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
     props.onRemoved();
   };
 
-  const addStage = () => {
+  const addStage = (stage?: Partial<Stage>) => {
     const id = `stage-${Math.random().toString(36).slice(2, 9)}`;
     setDraft((f) => {
       const list = f.stages || (f.stages = []);
-      list.push({ id, name: "Новая стадия", action: "none", x: 60 + list.length * 220, y: 140 } as Stage);
+      list.push({
+        id, name: "Новая стадия", action: "none",
+        x: 60 + list.length * 220, y: 140, ...stage,
+      } as Stage);
       if (!f.entryStage) f.entryStage = id;
     });
     setSelected({ kind: "stage", id });
     touch();
   };
+
+  // A review is a stage that runs nothing and shows what is being judged: the
+  // waiting point of §4.1 with the diff screen open on it. It is a button
+  // rather than a kind of stage of its own, because that is all it is — and a
+  // fourth action would have to be explained where two are enough.
+  //
+  // The edges are not drawn here. Where «прошло» and «не прошло» lead is the
+  // one arrow a person draws (docs/system.md §4.4), and guessing it would make
+  // the button a flow of its own.
+  const addReview = () =>
+    addStage({ name: "Ревью", action: "none", screens: [{ kind: "diff", ref: "" } as Screen] });
 
   const cardsOn = (stageID: string) => stageCards().filter((c) => c.stageId === stageID);
 
@@ -200,7 +214,8 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
       </div>
 
       <div class="row" style={{ "margin-bottom": "10px" }}>
-        <button class="btn" onClick={addStage}>+ Стадия</button>
+        <button class="btn" onClick={() => addStage()}>+ Стадия</button>
+        <button class="btn" onClick={addReview} title="Стадия ожидания с диффом: человек смотрит и отвечает">+ Ревью</button>
         <div class="spacer" />
         <Show when={dirty()}><span class="meta">есть несохранённые изменения</span></Show>
         <Show when={draft.id}>
@@ -406,7 +421,10 @@ function StagePanel(props: {
   const removeScreen = (i: number) => setScreens(screens().filter((_, at) => at !== i));
 
   const refHint = (kind: string) =>
-    kind === "notes" ? "план.md" : kind === "terminal" ? "npm run dev — или пусто, шелл в папке карточки" : "{Превью}";
+    kind === "notes" ? "план.md"
+      : kind === "terminal" ? "npm run dev — или пусто, шелл в папке карточки"
+      : kind === "diff" ? "HEAD~1, main...HEAD — или пусто, что не закоммичено"
+      : "{Превью}";
 
   return (
     <Show when={stage()}>

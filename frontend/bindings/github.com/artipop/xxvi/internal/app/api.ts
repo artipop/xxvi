@@ -21,6 +21,9 @@ import * as acp$0 from "../acp/models.js";
 import * as engine$0 from "../engine/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as gitdiff$0 from "../gitdiff/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as model$0 from "../model/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -150,6 +153,18 @@ export function DeleteProject(id: string): $CancellablePromise<void> {
  */
 export function DeleteSource(name: string): $CancellablePromise<void> {
     return $Call.ByID(797133365, name);
+}
+
+/**
+ * Diff is what changed in the card's working copy — the screen a review stage
+ * stands on (docs/system.md §12.7).
+ * 
+ * Read at the moment it is asked for and kept nowhere. The working copy is the
+ * answer here, and a diff remembered anywhere else would be a second answer to
+ * the question the person is deciding by.
+ */
+export function Diff(cardID: string, ref: string): $CancellablePromise<gitdiff$0.Diff> {
+    return $Call.ByID(615019952, cardID, ref);
 }
 
 /**

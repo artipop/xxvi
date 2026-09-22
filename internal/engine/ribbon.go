@@ -57,6 +57,15 @@ type Segment struct {
 	// The segment stays — what happened happened — and says why it is empty.
 	Gone    bool         `json:"gone,omitempty"`
 	Screens []ScreenView `json:"screens,omitempty"`
+	// Marks are the moves a person can make from here, and only the segment
+	// the card stands in has any: a step already over is not waiting for an
+	// answer.
+	//
+	// They are on the strip because the strip is the whole window (docs/system.md
+	// §12.5). A review stage shows what it is asking about — the diff, the
+	// preview — and sending the person to the card screen to answer would mean
+	// leaving the thing they are answering about.
+	Marks []model.Mark `json:"marks,omitempty"`
 }
 
 // RibbonView is one card in work, shown as a strip.
@@ -166,6 +175,9 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 			continue
 		}
 		seg.StageName = stage.Name
+		if seg.Current {
+			seg.Marks = flow.MarksFrom(stage.ID)
+		}
 
 		// A run belongs to the visit it started during: matching by stage alone
 		// would hang every run of a looping stage on its first visit.

@@ -284,3 +284,84 @@ func TestRibbonsAreTheCardsInWork(t *testing.T) {
 		}
 	}
 }
+
+// reviewFlow is a route with a review on it: something is made, and then a
+// stage where nothing runs shows what was made and waits to be answered.
+func reviewFlow() model.Flow {
+	return model.Flow{
+		Name: "С ревью", EntryStage: "work",
+		Stages: []model.Stage{
+			{ID: "work", Name: "В работе", Action: model.ActionAgent, Crew: []string{"Claude"}},
+			{
+				ID: "review", Name: "Ревью", Action: model.ActionNone,
+				Screens: []model.Screen{{Kind: model.ScreenDiff, Title: "Что изменилось"}},
+			},
+			{ID: "done", Name: "Готово", Final: true},
+		},
+		Edges: []model.Edge{
+			{From: "work", To: "review", On: model.TriggerSuccess},
+			{
+				From: "review", To: "done", On: model.TriggerCardChanged,
+				If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomePassed},
+			},
+			{
+				From: "review", To: "work", On: model.TriggerCardChanged,
+				If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomeFailed},
+			},
+		},
+	}
+}
+
+// The strip is the whole window, so the answer a waiting stage is waiting for
+// has to be available on it — beside the diff it is an answer about.
+//
+// Only the segment the card stands in carries them: a step already over is not
+// asking anything, and two segments offering the same two buttons would be two
+// ways to answer one question.
+func TestOnlyTheSegmentACardStandsInCarriesTheAnswers(t *testing.T) {
+	f := setup(t, reviewFlow())
+	card := f.card(t, "Починить форму")
+
+	if err := f.engine.TakeIntoWork(card.ID, f.flow.ID); err != nil {
+		t.Fatalf("взять в работу: %v", err)
+	}
+	f.runner.finish(card.ID, model.TriggerSuccess, "готово")
+	if got := f.stageOf(t, card.ID); got != "review" {
+		t.Fatalf("карточка должна стоять на ревью, получено %q", got)
+	}
+
+	view := ribbonOf(t, f, card.ID)
+	if len(view.Segments) != 2 {
+		t.Fatalf("два шага — два сегмента: %+v", view.Segments)
+	}
+	if len(view.Segments[0].Marks) != 0 {
+		t.Fatalf("законченный шаг ничего не спрашивает: %+v", view.Segments[0].Marks)
+	}
+
+	seg := view.Segments[1]
+	if !seg.Current || len(seg.Screens) != 1 || seg.Screens[0].Kind != model.ScreenDiff {
+		t.Fatalf("ревью показывает дифф: %+v", seg)
+	}
+	if len(seg.Marks) != 2 {
+		t.Fatalf("у ревью два ответа: %+v", seg.Marks)
+	}
+	forward, back := seg.Marks[0], seg.Marks[1]
+	if forward.Value != model.OutcomePassed || forward.Stage != "Готово" || !forward.Forward {
+		t.Fatalf("«прошло» ведёт вперёд, в ту стадию, которую называет: %+v", forward)
+	}
+	if back.Value != model.OutcomeFailed || back.Stage != "В работе" || back.Forward {
+		t.Fatalf("«не прошло» возвращает туда, откуда пришло: %+v", back)
+	}
+
+	// The answer is a person's edit of the card, and it moves the card — which
+	// is what makes the buttons on the strip the same act as the ones on the
+	// card screen rather than a second road to it.
+	f.engine.CardChanged(card.ID, model.OutcomeProperty, model.OutcomePassed)
+	last := ribbonOf(t, f, card.ID)
+	if len(last.Segments) != 3 || last.Segments[2].StageID != "done" {
+		t.Fatalf("отмеченное «прошло» должно увезти карточку в «Готово»: %+v", last.Segments)
+	}
+	if len(last.Segments[1].Marks) != 0 {
+		t.Fatalf("сегмент, который уже не текущий, больше ничего не спрашивает: %+v", last.Segments[1].Marks)
+	}
+}

@@ -14,6 +14,10 @@ import { NAV } from "../nav";
 // arrives only when one is opened.
 const TerminalPane = lazy(() => import("./terminal"));
 
+// The same reasoning for the diff: a card whose stage shows no diff never pays
+// for the viewer.
+const DiffPane = lazy(() => import("./diff"));
+
 // The ribbon is the card's journal of transitions made visible: one segment per
 // entry onto a stage, and the screens of that stage inside it. Nothing here
 // assembles the strip — it is read whole from the backend — so it cannot
@@ -355,6 +359,7 @@ export default function Ribbon(): JSX.Element {
                         <Show when={list(segment.screens).length === 0}>
                           <Pane
                             segment={segment}
+                            cardId={view.cardId}
                             id={emptyID(segment)}
                             title={segment.stageName}
                             first
@@ -495,6 +500,27 @@ function Pane(props: {
           </span>
         </Show>
         <div class="spacer" />
+        {/* The two answers a waiting stage is waiting for, on the strip rather
+            than on the card screen: what they are about is open in this very
+            segment, and the ribbon is the whole window (docs/system.md §12.5).
+            Once per segment — they belong to the step, not to the window onto
+            it — and only while the card is standing there. */}
+        <Show when={props.first}>
+          <For each={list(props.segment.marks)}>
+            {(mark) => (
+              <button
+                class={`btn tiny ${mark.forward ? "primary" : "quiet"}`}
+                title={`Отметить «${mark.value}» — карточка уедет в «${mark.stage}»`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void guard(() => API.MarkOutcome(props.cardId ?? "", mark.value));
+                }}
+              >
+                {mark.forward ? `${mark.stage} →` : `← ${mark.stage}`}
+              </button>
+            )}
+          </For>
+        </Show>
         <Show when={props.screen?.kind === "browser" && waiting().length === 0}>
           <a class="btn quiet tiny" href={props.screen!.ref} target="_blank" rel="noreferrer" title="Открыть снаружи">↗</a>
         </Show>
@@ -549,6 +575,11 @@ function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
       </Match>
       <Match when={props.screen.kind === "browser"}>
         <BrowserPane url={props.screen.ref ?? ""} />
+      </Match>
+      <Match when={props.screen.kind === "diff"}>
+        <Loading fallback={<div class="screen-note">Читаем изменения…</div>}>
+          <DiffPane cardId={props.cardId} rev={props.screen.ref ?? ""} />
+        </Loading>
       </Match>
       <Match when={props.screen.kind === "terminal"}>
         <Loading fallback={<div class="screen-note">Терминал открывается…</div>}>

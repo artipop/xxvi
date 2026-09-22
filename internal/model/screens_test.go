@@ -129,6 +129,7 @@ func TestScreensAreRefusedWhenTheyCouldNotBeShown(t *testing.T) {
 		{"путь к заметкам абсолютный", []Screen{{Kind: ScreenNotes, Ref: "/etc/passwd"}}, "относительным"},
 		{"путь к заметкам уходит вверх", []Screen{{Kind: ScreenNotes, Ref: "../../секрет"}}, "выходит из папки"},
 		{"обход через середину пути", []Screen{{Kind: ScreenNotes, Ref: "docs/../../секрет"}}, "выходит из папки"},
+		{"дифф сравнивает не с ревизией", []Screen{{Kind: ScreenDiff, Ref: "--exec=rm"}}, "не ревизия"},
 		{"два одинаковых экрана", []Screen{
 			{Kind: ScreenBrowser, Ref: "{Превью}"},
 			{Kind: ScreenBrowser, Ref: "{Превью}"},
@@ -147,20 +148,22 @@ func TestScreensAreRefusedWhenTheyCouldNotBeShown(t *testing.T) {
 	}
 }
 
-// A terminal without a command is a shell in the card's working folder, which
-// is a screen worth having — so it is the one kind that may point at nothing.
-func TestATerminalWithoutACommandIsAllowed(t *testing.T) {
+// Two kinds have a useful default and may point at nothing: a terminal without
+// a command is a shell in the card's working folder, and a diff without
+// revisions is what the working copy has and the last commit does not. The rest
+// have nothing to open without a ref.
+func TestScreensWithAUsefulDefaultMayPointAtNothing(t *testing.T) {
 	f := Flow{
 		Name: "Один шаг", EntryStage: "work",
 		Stages: []Stage{{ID: "work", Name: "Работа", Action: ActionAgent,
-			Screens: []Screen{{Kind: ScreenTerminal}}}},
+			Screens: []Screen{{Kind: ScreenTerminal}, {Kind: ScreenDiff}}}},
 	}
 	saved, err := ValidateFlow(f, []Agent{{Name: "Claude", Kind: KindClaude}})
 	if err != nil {
-		t.Fatalf("терминал без команды — это шелл в папке карточки: %v", err)
+		t.Fatalf("терминал без команды и дифф без ревизий — рабочие экраны: %v", err)
 	}
-	if len(saved.Stages[0].Screens) != 1 {
-		t.Fatalf("экран не должен был потеряться: %+v", saved.Stages[0].Screens)
+	if len(saved.Stages[0].Screens) != 2 {
+		t.Fatalf("экраны не должны были потеряться: %+v", saved.Stages[0].Screens)
 	}
 }
 

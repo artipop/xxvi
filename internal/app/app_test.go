@@ -1,12 +1,15 @@
 package app
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
+	"github.com/artipop/xxvi/internal/gitdiff"
 	"github.com/artipop/xxvi/internal/model"
 )
 
@@ -440,3 +443,96 @@ func TestAPickedFolderBecomesTheProjectPath(t *testing.T) {
 type fakeChooser struct{ folder string }
 
 func (f fakeChooser) Folder(string, string) (string, error) { return f.folder, nil }
+
+// The diff screen reads the card's own working folder, which is its project's
+// folder — the same one the agent works in and the terminal opens. That is the
+// whole point of it: what a review looks at is what the agent did, in the place
+// it did it.
+func TestTheDiffScreenReadsTheCardsProject(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git не установлен")
+	}
+	a := open(t)
+	api := NewAPI(a)
+	folder := t.TempDir()
+
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = folder
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "--initial-branch=main")
+	git("config", "user.email", "test@example.com")
+	git("config", "user.name", "Тест")
+	if err := os.WriteFile(filepath.Join(folder, "форма.txt"), []byte("было\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "-A")
+	git("commit", "-m", "начало")
+
+	project, err := api.SaveProject(model.Project{Name: "Сайт", Path: folder})
+	if err != nil {
+		t.Fatalf("завести проект: %v", err)
+	}
+	card, err := api.AddCard("", "Починить форму", "")
+	if err != nil {
+		t.Fatalf("карточка: %v", err)
+	}
+	if _, err := api.SetCardProject(card.ID, project.ID); err != nil {
+		t.Fatalf("назначить проект: %v", err)
+	}
+
+	// Nothing has been done yet, and that is an answer rather than a failure.
+	diff, err := api.Diff(card.ID, "")
+	if err != nil {
+		t.Fatalf("дифф: %v", err)
+	}
+	if len(diff.Files) != 0 {
+		t.Fatalf("в нетронутой копии менять нечего: %+v", diff.Files)
+	}
+
+	// What the agent would have written, written the way the agent writes it:
+	// into the card's working folder.
+	if err := api.WriteDoc(card.ID, "форма.txt", "стало\n"); err != nil {
+		t.Fatalf("правка: %v", err)
+	}
+	if err := api.WriteDoc(card.ID, "план.md", "# план\n"); err != nil {
+		t.Fatalf("новый файл: %v", err)
+	}
+
+	diff, err = api.Diff(card.ID, "")
+	if err != nil {
+		t.Fatalf("дифф: %v", err)
+	}
+	if len(diff.Files) != 2 {
+		t.Fatalf("изменённый файл и новый — оба в ревью: %+v", diff.Files)
+	}
+	seen := map[string]string{}
+	for _, f := range diff.Files {
+		seen[f.Path] = f.Status
+	}
+	if seen["форма.txt"] != gitdiff.StatusModified || seen["план.md"] != gitdiff.StatusAdded {
+		t.Fatalf("дифф должен назвать, что с каждым файлом: %+v", seen)
+	}
+}
+
+// A card working where there is no repository gets a sentence rather than a
+// broken screen: not every card's project is under git, and that is ordinary.
+func TestTheDiffScreenSaysWhenThereIsNoRepository(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git не установлен")
+	}
+	a := open(t)
+	api := NewAPI(a)
+
+	card, err := api.AddCard("", "Починить форму", "")
+	if err != nil {
+		t.Fatalf("карточка: %v", err)
+	}
+	if _, err := api.Diff(card.ID, ""); !errors.Is(err, gitdiff.ErrNoRepo) {
+		t.Fatalf("ошибка должна говорить, чего нет: %v", err)
+	}
+}

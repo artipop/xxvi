@@ -76,10 +76,19 @@ const (
 	ScreenTerminal = "terminal"
 	// ScreenBrowser is an address.
 	ScreenBrowser = "browser"
+	// ScreenDiff is what changed in the card's working copy, read from the git
+	// that is already there. An empty ref is the working copy against the last
+	// commit — the agent's work before anybody committed it — and anything else
+	// is revisions: «HEAD~1», «main...HEAD».
+	//
+	// This is the screen a review stage stands on (docs/system.md §12.7): the
+	// place where the card's two buttons mean something, because what they are
+	// answering is open in front of the person pressing them.
+	ScreenDiff = "diff"
 )
 
 // ScreenKinds is every accepted screen kind, in the order the editor offers them.
-var ScreenKinds = []string{ScreenNotes, ScreenTerminal, ScreenBrowser}
+var ScreenKinds = []string{ScreenNotes, ScreenTerminal, ScreenBrowser, ScreenDiff}
 
 // ScreenKindLabel names a kind for a person. The editor shows these; the flow
 // stores the constant.
@@ -91,6 +100,8 @@ func ScreenKindLabel(kind string) string {
 		return "терминал"
 	case ScreenBrowser:
 		return "браузер"
+	case ScreenDiff:
+		return "дифф"
 	}
 	return kind
 }

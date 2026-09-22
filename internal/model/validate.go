@@ -300,14 +300,20 @@ func normalizeScreens(screens []Screen) ([]Screen, error) {
 		if !isScreenKind(sc.Kind) {
 			return nil, fmt.Errorf("неизвестный вид экрана «%s»", sc.Kind)
 		}
-		// A terminal without a command is a shell in the card's folder, and
-		// that is a screen worth having. The other two point at something, and
-		// without it there is nothing to open.
-		if sc.Ref == "" && sc.Kind != ScreenTerminal {
+		// A terminal without a command is a shell in the card's folder, and a
+		// diff without revisions is what is not committed yet — both are the
+		// screen's useful default rather than an unfinished declaration. The
+		// rest point at something, and without it there is nothing to open.
+		if sc.Ref == "" && sc.Kind != ScreenTerminal && sc.Kind != ScreenDiff {
 			return nil, fmt.Errorf("экран «%s» не говорит, что показывать", ScreenKindLabel(sc.Kind))
 		}
 		if sc.Kind == ScreenNotes {
 			if err := checkNotesPath(sc.Ref); err != nil {
+				return nil, err
+			}
+		}
+		if sc.Kind == ScreenDiff {
+			if err := checkRevisions(sc.Ref); err != nil {
 				return nil, err
 			}
 		}
@@ -355,6 +361,21 @@ func checkNotesPath(ref string) error {
 	clean := path.Clean(slashed)
 	if clean == ".." || strings.HasPrefix(clean, "../") {
 		return fmt.Errorf("путь к заметкам «%s» выходит из папки карточки", ref)
+	}
+	return nil
+}
+
+// checkRevisions keeps a diff screen's ref a question about revisions.
+//
+// A word beginning with a dash is an option, and a screen whose ref could carry
+// one would be a screen that runs a different command than the one it names.
+// Refused here as well as where git is actually run, for the same reason the
+// notes path is: the place to say a flow is wrong is the editor.
+func checkRevisions(ref string) error {
+	for _, rev := range strings.Fields(ref) {
+		if strings.HasPrefix(rev, "-") {
+			return fmt.Errorf("«%s» — это не ревизия: экран «дифф» говорит, что с чем сравнить", rev)
+		}
 	}
 	return nil
 }

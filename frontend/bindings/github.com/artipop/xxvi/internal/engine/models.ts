@@ -156,6 +156,18 @@ export interface Segment {
      */
     "gone"?: boolean;
     "screens"?: ScreenView[] | null;
+
+    /**
+     * Marks are the moves a person can make from here, and only the segment
+     * the card stands in has any: a step already over is not waiting for an
+     * answer.
+     * 
+     * They are on the strip because the strip is the whole window (docs/system.md
+     * §12.5). A review stage shows what it is asking about — the diff, the
+     * preview — and sending the person to the card screen to answer would mean
+     * leaving the thing they are answering about.
+     */
+    "marks"?: model$0.Mark[] | null;
 }
 
 /**
