@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onSettled } from "solid-js";
 import {
   Background,
   BaseEdge,
@@ -475,9 +475,13 @@ const edgeTypes = { lane: LaneEdge };
 
 // The part of the canvas API this component reaches for. `fitView` is optional
 // because the handle is also read where the canvas measures nothing.
+//
+// What a box measured is read off a record rather than asked for: Solid Flow 1.0
+// dropped the imperative getters, because a getter hands back a snapshot and the
+// record is the store the canvas keeps its answers in.
 type FlowHandle = {
   fitView?: (options?: { padding?: number; maxZoom?: number; nodes?: Array<{ id: string }> }) => Promise<boolean> | void;
-  getInternalNode?: (id: string) => { measured?: { width?: number; height?: number } } | undefined;
+  internalNodes?: Record<string, { measured?: { width?: number; height?: number } } | undefined>;
 };
 
 // How the graph sits in the canvas: the whole picture, with a margin small
@@ -497,7 +501,7 @@ const FIT_VIEW = { padding: 0.16, maxZoom: 1 };
 const FIT_FRAMES = 30;
 
 const fitWhenMeasured = (handle: FlowHandle, ids: string[], frame: number) => {
-  const measured = ids.every((id) => (handle.getInternalNode?.(id)?.measured?.width || 0) > 0);
+  const measured = ids.every((id) => (handle.internalNodes?.[id]?.measured?.width || 0) > 0);
   if (!measured && frame < FIT_FRAMES) {
     requestAnimationFrame(() => fitWhenMeasured(handle, ids, frame + 1));
     return;
@@ -506,8 +510,15 @@ const fitWhenMeasured = (handle: FlowHandle, ids: string[], frame: number) => {
 };
 
 // CanvasHook runs inside the canvas' context and hands its API out.
+//
+// The API is read in the body, because that is the only place the canvas'
+// context is in scope; handing it out is a write, which Solid 2 refuses during
+// render, so that half waits for the settle.
 const CanvasHook = (props: { onReady: (flow: FlowHandle) => void }) => {
-  props.onReady(useSolidFlow() as unknown as FlowHandle);
+  const flow = useSolidFlow() as unknown as FlowHandle;
+  onSettled(() => {
+    props.onReady(flow);
+  });
   return null;
 };
 
@@ -698,12 +709,12 @@ export default function FlowCanvas(props: Props) {
   // Stages can always be dragged apart when arrows overlap: the canvas moves
   // them inside these stores. Where the flow is being edited the position is
   // part of it and is saved.
-  const [drawnNodes, setDrawnNodes] = createNodeStore([]) as unknown as [FlowNode[], (nodes: FlowNode[]) => void];
-  const [drawnEdges, setDrawnEdges] = createEdgeStore([]) as unknown as [FlowEdge[], (edges: FlowEdge[]) => void];
+  const [drawnNodes, setDrawnNodes] = createNodeStore([]) as unknown as [FlowNode[], (next: () => FlowNode[]) => void];
+  const [drawnEdges, setDrawnEdges] = createEdgeStore([]) as unknown as [FlowEdge[], (next: () => FlowEdge[]) => void];
 
-  createEffect(() => {
-    setDrawnNodes(graph().drawnNodes);
-    setDrawnEdges(graph().drawnEdges);
+  createEffect(graph, (drawn) => {
+    setDrawnNodes(() => drawn.drawnNodes);
+    setDrawnEdges(() => drawn.drawnEdges);
   });
 
   const onConnect = (connection: Connection) => {
@@ -767,32 +778,38 @@ export default function FlowCanvas(props: Props) {
   // box. So the fit is redone rather than configured once.
   //
   // Keyed on the *set* of stages and never on where they are: a fit in the
-  // middle of a drag would pull the canvas out from under the pointer.
+  // middle of a drag would pull the canvas out from under the pointer. The
+  // handle is in the key because it arrives from inside the canvas and is not
+  // there on the first run.
   const shape = createMemo(() => drawnNodes.map((n) => n.id).join("|"));
   const [paneSize, setPaneSize] = createSignal("");
-  createEffect(() => {
-    shape();
-    paneSize();
-    const ids = stages().map((s) => s.id);
-    const handle = flowHandle();
-    if (handle?.fitView && ids.length > 0) fitWhenMeasured(handle, ids, 0);
-  });
+  createEffect(
+    () => [shape(), paneSize(), stages().map((s) => s.id), flowHandle()] as const,
+    ([, , ids, handle]) => {
+      if (handle?.fitView && ids.length > 0) fitWhenMeasured(handle, ids, 0);
+    },
+  );
 
   // …and when the canvas itself changes size. A window resized leaves the
   // picture where it was: correct for the box it was fitted to and off centre in
   // the new one. Rounded to whole pixels so a sub-pixel reflow is not a re-fit.
-  const watchPane = (pane: HTMLDivElement) => {
-    if (typeof ResizeObserver !== "function") return;
+  //
+  // The pane arrives through a signal rather than a ref callback that observes
+  // it there: a ref runs outside any owner in Solid 2, so a cleanup registered
+  // in one never runs and the observer outlives the canvas.
+  const [pane, setPane] = createSignal<HTMLDivElement>();
+  createEffect(pane, (el) => {
+    if (!el || typeof ResizeObserver !== "function") return undefined;
     const observer = new ResizeObserver(([entry]) => {
       const box = entry.contentRect;
       setPaneSize(`${Math.round(box.width)}x${Math.round(box.height)}`);
     });
-    observer.observe(pane);
-    onCleanup(() => observer.disconnect());
-  };
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
 
   return (
-    <div ref={watchPane} class={`canvas${editable() ? " canvas--editable" : ""}`} data-testid="flow-canvas">
+    <div ref={setPane} class={`canvas${editable() ? " canvas--editable" : ""}`} data-testid="flow-canvas">
       <SolidFlow
         nodes={drawnNodes}
         edges={drawnEdges}

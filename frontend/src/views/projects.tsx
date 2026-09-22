@@ -1,5 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
-import { createStore } from "solid-js/store";
+import { createSignal, createStore, storePath, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Project } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import { guard, list, loadProjects, projects, vocabulary } from "../state";
@@ -90,8 +89,8 @@ function ProjectForm(props: { project: Project; onDone: () => void }) {
     // Empty is a person closing the dialog without choosing, and then what
     // they had stays what they have.
     if (chosen) {
-      setDraft("path", chosen);
-      if (!draft.name.trim()) setDraft("name", basename(chosen));
+      setDraft(storePath("path", chosen));
+      if (!draft.name.trim()) setDraft(storePath("name", basename(chosen)));
       setError("");
     }
   };
@@ -107,11 +106,11 @@ function ProjectForm(props: { project: Project; onDone: () => void }) {
         <label class="field">
           <span>Название</span>
           <input type="text" value={draft.name}
-                 onInput={(e) => setDraft("name", e.currentTarget.value)} />
+                 onInput={(e) => setDraft(storePath("name", e.currentTarget.value))} />
         </label>
         <label class="field">
           <span>Вид</span>
-          <select value={draft.kind} onChange={(e) => setDraft("kind", e.currentTarget.value)}>
+          <select value={draft.kind} onChange={(e) => setDraft(storePath("kind", e.currentTarget.value))}>
             <For each={list(vocabulary().projectKinds)}>
               {(k) => <option value={k.kind}>{k.label}</option>}
             </For>
@@ -123,7 +122,7 @@ function ProjectForm(props: { project: Project; onDone: () => void }) {
         <div class="row">
           <input type="text" placeholder="/Users/…/sources/проект" value={draft.path}
                  style={{ flex: "1" }}
-                 onInput={(e) => setDraft("path", e.currentTarget.value)} />
+                 onInput={(e) => setDraft(storePath("path", e.currentTarget.value))} />
           {/* Typed only when there is no other way: somebody who knows where
               their project is knows it as a place they can point at, not as a
               string they can spell. */}

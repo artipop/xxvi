@@ -1,4 +1,5 @@
-import { onMount, Show, For, type JSX } from "solid-js";
+import { onSettled, Show, For } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import { error, loadAll, setError, subscribe } from "./state";
 import InboxView from "./views/inbox";
 import WorkView from "./views/work";
@@ -14,7 +15,7 @@ import { openCard, tab, setTab } from "./state";
 import { NAV } from "./nav";
 
 export default function App(): JSX.Element {
-  onMount(() => {
+  onSettled(() => {
     void loadAll();
     subscribe();
   });

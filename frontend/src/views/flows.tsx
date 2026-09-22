@@ -1,5 +1,4 @@
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
-import { createStore, produce } from "solid-js/store";
+import { createEffect, createMemo, createSignal, createStore, storePath, For, Show, type StoreSetter } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Edge, Flow, PropertyWrite, Screen, Stage } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import {
@@ -22,8 +21,12 @@ import FlowCanvas, { type Selection, type StageWrite, condLabel, edgeIndexOf } f
 export default function FlowsView() {
   const [selectedID, setSelectedID] = createSignal<string>("");
 
-  createEffect(() => {
-    if (!selectedID() && flows().length > 0) setSelectedID(flows()[0].id);
+  // Keyed on the flows arriving and on nothing else. Reading the selection as
+  // a dependency too — which is what a Solid 1 effect did, because the body was
+  // the dependency list — meant «+ Новый» cleared the selection and the same
+  // effect put the first flow straight back.
+  createEffect(flows, (all) => {
+    if (!selectedID() && all.length > 0) setSelectedID(all[0].id);
   });
 
   const current = () => flows().find((f) => f.id === selectedID());
@@ -75,9 +78,8 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
   // Loading a flow into the draft is a copy, not a reference: the canvas is
   // edited freely and nothing is written until «Сохранить», because the engine
   // checks the whole picture before it takes it.
-  createEffect(() => {
-    const f = props.flow;
-    setDraft(f ? (JSON.parse(JSON.stringify(f)) as Flow) : blankFlow());
+  createEffect(() => props.flow, (f) => {
+    setDraft(() => (f ? (JSON.parse(JSON.stringify(f)) as Flow) : blankFlow()));
     setSelected(null);
     setSaveError("");
     setDirty(false);
@@ -118,11 +120,11 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
 
   const addStage = () => {
     const id = `stage-${Math.random().toString(36).slice(2, 9)}`;
-    setDraft(produce((f) => {
+    setDraft((f) => {
       const list = f.stages || (f.stages = []);
       list.push({ id, name: "Новая стадия", action: "none", x: 60 + list.length * 220, y: 140 } as Stage);
       if (!f.entryStage) f.entryStage = id;
-    }));
+    });
     setSelected({ kind: "stage", id });
     touch();
   };
@@ -188,12 +190,12 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
         <label class="field" style={{ flex: "1", margin: 0 }}>
           <span>Название</span>
           <input type="text" value={draft.name}
-                 onInput={(e) => { setDraft("name", e.currentTarget.value); touch(); }} />
+                 onInput={(e) => { setDraft(storePath("name", e.currentTarget.value)); touch(); }} />
         </label>
         <label class="field" style={{ flex: "2", margin: 0 }}>
           <span>Описание</span>
           <input type="text" value={draft.description ?? ""}
-                 onInput={(e) => { setDraft("description", e.currentTarget.value); touch(); }} />
+                 onInput={(e) => { setDraft(storePath("description", e.currentTarget.value)); touch(); }} />
         </label>
       </div>
 
@@ -243,7 +245,7 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
             selected={selected()}
             onSelect={setSelected}
             onChange={(nextStages, nextEdges) => {
-              setDraft(produce((f) => { f.stages = nextStages; f.edges = nextEdges; }));
+              setDraft((f) => { f.stages = nextStages; f.edges = nextEdges; });
               touch();
             }}
           />
@@ -336,12 +338,12 @@ function upstreamWrites(flow: Flow, from: string): Array<{ property: string; fro
 }
 
 function StagePanel(props: {
-  draft: Flow; setDraft: any; stageID: string; onChange: () => void; onDeleted: () => void;
+  draft: Flow; setDraft: StoreSetter<Flow>; stageID: string; onChange: () => void; onDeleted: () => void;
 }) {
   const index = () => list(props.draft.stages).findIndex((s) => s.id === props.stageID);
   const stage = () => list(props.draft.stages)[index()];
 
-  const set = (patch: Partial<Stage>) => { props.setDraft("stages", index(), patch); props.onChange(); };
+  const set = (patch: Partial<Stage>) => { props.setDraft(storePath("stages", index(), patch)); props.onChange(); };
 
   const toggleCrew = (name: string) => {
     const crew = new Set(list(stage().crew));
@@ -351,11 +353,11 @@ function StagePanel(props: {
 
   const removeStage = () => {
     const id = props.stageID;
-    props.setDraft(produce((f: Flow) => {
+    props.setDraft((f) => {
       f.stages = list(f.stages).filter((s) => s.id !== id);
       f.edges = list(f.edges).filter((e) => e.from !== id && e.to !== id);
       if (f.entryStage === id) f.entryStage = list(f.stages)[0]?.id ?? "";
-    }));
+    });
     props.onChange();
     props.onDeleted();
   };
@@ -575,7 +577,7 @@ function StagePanel(props: {
         <div class="row">
           <button class="btn quiet"
                   disabled={props.draft.entryStage === props.stageID}
-                  onClick={() => { props.setDraft("entryStage", props.stageID); props.onChange(); }}>
+                  onClick={() => { props.setDraft(storePath("entryStage", props.stageID)); props.onChange(); }}>
             {props.draft.entryStage === props.stageID ? "Это входная стадия" : "Сделать входной"}
           </button>
           <div class="spacer" />
@@ -592,17 +594,17 @@ function StagePanel(props: {
  * one already in hand is answered.
  */
 function EdgePanel(props: {
-  draft: Flow; setDraft: any; index: number; onChange: () => void; onDeleted: () => void;
+  draft: Flow; setDraft: StoreSetter<Flow>; index: number; onChange: () => void; onDeleted: () => void;
 }) {
   const edge = () => list(props.draft.edges)[props.index];
   const stages = () => list(props.draft.stages);
   const nameOf = (id: string) => stages().find((s) => s.id === id)?.name ?? id;
 
-  const set = (patch: Partial<Edge>) => { props.setDraft("edges", props.index, patch); props.onChange(); };
+  const set = (patch: Partial<Edge>) => { props.setDraft(storePath("edges", props.index, patch)); props.onChange(); };
 
   const removeEdge = () => {
     const at = props.index;
-    props.setDraft(produce((f: Flow) => { f.edges = list(f.edges).filter((_, i) => i !== at); }));
+    props.setDraft((f) => { f.edges = list(f.edges).filter((_, i) => i !== at); });
     props.onChange();
     props.onDeleted();
   };

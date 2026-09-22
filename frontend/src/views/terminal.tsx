@@ -1,4 +1,5 @@
-import { createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
+import { createSignal, onSettled, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import { report } from "../state";
 import "@xterm/xterm/css/xterm.css";
 
@@ -36,7 +37,10 @@ export default function Terminal(props: {
   const [error, setError] = createSignal("");
   let host: HTMLDivElement | undefined;
 
-  onMount(() => {
+  // Setup and teardown in one block, which is what onSettled is for: the
+  // cleanup is returned rather than registered, and an `async` callback cannot
+  // be one at all — its promise would be read as the cleanup.
+  onSettled(() => {
     let disposed = false;
     let terminal: any = null;
     let observer: ResizeObserver | null = null;
@@ -113,12 +117,12 @@ export default function Terminal(props: {
 
     start().catch((e) => { setError(String(e?.message ?? e)); report(e); });
 
-    onCleanup(() => {
+    return () => {
       disposed = true;
       observer?.disconnect();
       socket?.close();
       terminal?.dispose();
-    });
+    };
   });
 
   return (

@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import solid from "vite-plugin-solid";
+import solid from "@solidjs/vite-plugin";
 import wails from "@wailsio/runtime/plugins/vite";
 
 export default defineConfig({

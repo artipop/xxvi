@@ -10,15 +10,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@dschz/solid-flow": "^0.2.5",
+    "@dschz/solid-flow": "1.0.0-next.19",
+    "@solidjs/web": "2.0.0-rc.1",
     "@wailsio/runtime": "latest",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
-    "solid-js": "^1.9.4"
+    "solid-js": "2.0.0-rc.1"
   },
   "devDependencies": {
-    "typescript": "^5.7.3",
-    "vite": "^6.0.11",
-    "vite-plugin-solid": "^2.11.0"
+    "@solidjs/vite-plugin": "3.0.0-next.31",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6"
   }
 }

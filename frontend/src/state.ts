@@ -1,5 +1,4 @@
-import { createSignal } from "solid-js";
-import { createStore, reconcile } from "solid-js/store";
+import { createSignal, createStore, reconcile } from "solid-js";
 import { Events } from "@wailsio/runtime";
 import * as API from "../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { AgentsView, CardView, StageCard, UpdateState, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
@@ -182,7 +181,11 @@ export const [openRibbon, setOpenRibbon] = createSignal<string>("");
 
 export async function loadRibbons() {
   try {
-    setRibbons(reconcile(list(await API.Ribbons()), { key: "id" }));
+    const next = list(await API.Ribbons());
+    // Applied to the draft rather than handed to the setter as its return
+    // value: `reconcile` walks the draft and answers nothing, so a setter that
+    // kept what it returned would write the whole stack away to `undefined`.
+    setRibbons((draft) => { reconcile(next, "id")(draft); });
   } catch (e) {
     report(e);
   }

@@ -1,6 +1,7 @@
 import {
-  createEffect, createMemo, createSignal, For, lazy, Match, onCleanup, onMount, Show, Suspense, Switch, type JSX,
+  createEffect, createMemo, createSignal, For, lazy, Loading, Match, onSettled, Show, Switch,
 } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import { Events } from "@wailsio/runtime";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
@@ -123,41 +124,48 @@ export default function Ribbon(): JSX.Element {
   // moved. A strip nobody is watching is marked instead — jumping somebody to
   // another job because it finished a step would be the application deciding
   // what they are doing.
-  createEffect(() => {
-    for (const view of ribbons) {
-      const target = view.focusId ?? "";
-      if (!target || flown[view.id] === target) continue;
-      const first = flown[view.id] === undefined;
-      flown[view.id] = target;
-      if (first) continue;
-      if (view.id !== openRibbon()) {
-        setMoved((m) => ({ ...m, [view.id]: true }));
-        continue;
+  //
+  // Keyed on where each strip's current step *is*, and on nothing else: which
+  // strip is open and whether it is pinned are read when a step has actually
+  // moved, not as reasons to look again.
+  createEffect(
+    () => ribbons.map((view) => [view.id, view.focusId ?? ""] as const),
+    (targets) => {
+      for (const [id, target] of targets) {
+        if (!target || flown[id] === target) continue;
+        const first = flown[id] === undefined;
+        flown[id] = target;
+        if (first) continue;
+        if (id !== openRibbon()) {
+          setMoved((m) => ({ ...m, [id]: true }));
+          continue;
+        }
+        if (pinned()) continue;
+        queueMicrotask(() => flyTo(target));
       }
-      if (pinned()) continue;
-      queueMicrotask(() => flyTo(target));
-    }
-  });
+    },
+  );
 
   // With nothing open, open the first one there is: arriving at an empty screen
   // beside a stack of ribbons would be asking a question with one answer.
-  createEffect(() => {
-    const all = ribbons;
-    if (all.length === 0) return;
-    if (!all.some((r) => r.id === openRibbon())) setOpenRibbon(all[0].id);
-  });
+  createEffect(
+    () => ribbons.map((r) => r.id),
+    (ids) => {
+      if (ids.length === 0) return;
+      if (!ids.includes(openRibbon())) setOpenRibbon(ids[0]);
+    },
+  );
 
   // Moving to another job is arriving at it, not carrying the last one's
   // decisions along: whatever was pinned was pinned about a different strip.
-  createEffect(() => {
-    openRibbon();
+  createEffect(openRibbon, () => {
     setPinned(false);
   });
 
   // Who has the keyboard. Focus moving into a preview blurs the window itself,
   // which is the only way to notice it from out here; everything else in the
   // ribbon is an element of this document and says so directly.
-  onMount(() => {
+  onSettled(() => {
     const note = () => {
       const el = document.activeElement as HTMLElement | null;
       const inside = el && /^(IFRAME|TEXTAREA|INPUT)$/.test(el.tagName)
@@ -165,15 +173,17 @@ export default function Ribbon(): JSX.Element {
         : "";
       setCaptured(inside);
     };
+    const later = () => queueMicrotask(note);
     document.addEventListener("focusin", note);
-    document.addEventListener("focusout", () => queueMicrotask(note));
+    document.addEventListener("focusout", later);
     window.addEventListener("blur", note);
     window.addEventListener("focus", note);
-    onCleanup(() => {
+    return () => {
       document.removeEventListener("focusin", note);
+      document.removeEventListener("focusout", later);
       window.removeEventListener("blur", note);
       window.removeEventListener("focus", note);
-    });
+    };
   });
 
   // A wheel with the modifier held moves between jobs; a wheel without it is
@@ -281,9 +291,9 @@ export default function Ribbon(): JSX.Element {
     }
   };
 
-  onMount(() => {
+  onSettled(() => {
     window.addEventListener("keydown", onKeyDown);
-    onCleanup(() => window.removeEventListener("keydown", onKeyDown));
+    return () => window.removeEventListener("keydown", onKeyDown);
   });
 
   // The strip has been left behind: the card is somewhere else and the person
@@ -409,12 +419,12 @@ function Sections(props: { open: boolean; setOpen: (v: boolean) => void }): JSX.
 
   // Clicking anywhere else is an answer too — «not this», and a menu that
   // needs to be dismissed on its own terms is a menu in the way.
-  onMount(() => {
+  onSettled(() => {
     const away = (e: MouseEvent) => {
       if (box && !box.contains(e.target as Node)) props.setOpen(false);
     };
     document.addEventListener("mousedown", away);
-    onCleanup(() => document.removeEventListener("mousedown", away));
+    return () => document.removeEventListener("mousedown", away);
   });
 
   return (
@@ -524,12 +534,12 @@ function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
           ran: a stage worked in a terminal shows that terminal, a session shows
           the stream it left behind (docs/system.md §12.2). */}
       <Match when={props.screen.kind === "agentTerminal"}>
-        <Suspense fallback={<div class="screen-note">Терминал агента открывается…</div>}>
+        <Loading fallback={<div class="screen-note">Терминал агента открывается…</div>}>
           <TerminalPane
             open={() => API.AgentTerminal(props.screen.sessionId ?? "")}
             ended="шаг в этом терминале закончен"
           />
-        </Suspense>
+        </Loading>
       </Match>
       <Match when={props.screen.kind === "agent"}>
         <AgentPane sessionId={props.screen.sessionId ?? ""} />
@@ -541,11 +551,11 @@ function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
         <BrowserPane url={props.screen.ref ?? ""} />
       </Match>
       <Match when={props.screen.kind === "terminal"}>
-        <Suspense fallback={<div class="screen-note">Терминал открывается…</div>}>
+        <Loading fallback={<div class="screen-note">Терминал открывается…</div>}>
           <TerminalPane
             open={() => API.OpenTerminal(props.cardId, props.screen.id, props.screen.ref ?? "")}
           />
-        </Suspense>
+        </Loading>
       </Match>
     </Switch>
   );
@@ -581,10 +591,10 @@ function AgentPane(props: { sessionId: string }): JSX.Element {
     if (following && box) queueMicrotask(() => { box!.scrollTop = box!.scrollHeight; });
   };
 
-  onMount(() => {
+  onSettled(() => {
     void pull();
     const off = Events.On("session", () => { void pull(); });
-    onCleanup(() => { if (typeof off === "function") off(); });
+    return () => { if (typeof off === "function") off(); };
   });
 
   // The last status of every tool call, so the call's own line carries how it
@@ -682,11 +692,15 @@ function NotesPane(props: { cardId: string; path: string }): JSX.Element {
   const [saved, setSaved] = createSignal(true);
   let timer: number | undefined;
 
-  onMount(async () => {
-    const have = await guard(() => API.ReadDoc(props.cardId, props.path));
-    if (have !== undefined) setText(have);
+  // An `async` callback cannot be an onSettled callback at all — its promise
+  // is read as the cleanup — so the read is started here and awaited inside.
+  onSettled(() => {
+    void (async () => {
+      const have = await guard(() => API.ReadDoc(props.cardId, props.path));
+      if (have !== undefined) setText(have);
+    })();
+    return () => { if (timer) clearTimeout(timer); };
   });
-  onCleanup(() => { if (timer) clearTimeout(timer); });
 
   const edit = (value: string) => {
     setText(value);

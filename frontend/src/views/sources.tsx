@@ -1,5 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
-import { createStore, produce } from "solid-js/store";
+import { createSignal, createStore, storePath, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Rule, Source } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import { flows, guard, loadSources, sources, vocabulary } from "../state";
@@ -66,22 +65,22 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
   };
 
   const addRule = () => {
-    setDraft(produce((s: Source) => {
+    setDraft((s) => {
       s.rules = [...(s.rules ?? []), { name: "", then: "card", when: {} } as Rule];
-    }));
+    });
   };
 
-  const setRule = (i: number, patch: Partial<Rule>) => setDraft("rules", i, patch);
+  const setRule = (i: number, patch: Partial<Rule>) => setDraft(storePath("rules", i, patch));
 
-  const removeRule = (i: number) => setDraft(produce((s: Source) => { s.rules!.splice(i, 1); }));
+  const removeRule = (i: number) => setDraft((s) => { s.rules!.splice(i, 1); });
 
   const move = (i: number, by: number) => {
     const j = i + by;
     if (j < 0 || j >= (draft.rules?.length ?? 0)) return;
-    setDraft(produce((s: Source) => {
+    setDraft((s) => {
       const [r] = s.rules!.splice(i, 1);
       s.rules!.splice(j, 0, r);
-    }));
+    });
   };
 
   return (
@@ -90,24 +89,24 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
       <div class="grid2">
         <label class="field">
           <span>Имя</span>
-          <input type="text" value={draft.name} onInput={(e) => setDraft("name", e.currentTarget.value)} />
+          <input type="text" value={draft.name} onInput={(e) => setDraft(storePath("name", e.currentTarget.value))} />
         </label>
         <label class="field">
           <span>Файл с элементами</span>
           <input type="text" value={draft.config?.path ?? ""}
-                 onInput={(e) => setDraft("config", { ...(draft.config ?? {}), path: e.currentTarget.value })} />
+                 onInput={(e) => setDraft(storePath("config", { ...(draft.config ?? {}), path: e.currentTarget.value }))} />
         </label>
       </div>
 
       <div class="row wrap" style={{ "margin-bottom": "10px" }}>
         <label class="row" style={{ gap: "6px" }}>
           <input type="checkbox" checked={draft.enabled} style={{ width: "auto" }}
-                 onChange={(e) => setDraft("enabled", e.currentTarget.checked)} />
+                 onChange={(e) => setDraft(storePath("enabled", e.currentTarget.checked))} />
           <span>включён</span>
         </label>
         <label class="row" style={{ gap: "6px" }}>
           <input type="checkbox" checked={draft.noisy ?? false} style={{ width: "auto" }}
-                 onChange={(e) => setDraft("noisy", e.currentTarget.checked)} />
+                 onChange={(e) => setDraft(storePath("noisy", e.currentTarget.checked))} />
           <span>шумный — несовпавшее отбрасывать</span>
         </label>
       </div>
