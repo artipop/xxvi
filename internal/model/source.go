@@ -52,13 +52,12 @@ func (it Item) WithFallbackID() Item {
 
 // Rule actions.
 const (
-	ActionCard    = "card"    // create a card
-	ActionComment = "comment" // comment on the card this item already has
-	ActionDrop    = "drop"    // deliberately ignore
+	ActionCard = "card" // create a card
+	ActionDrop = "drop" // deliberately ignore
 )
 
 // RuleActions lists every accepted action, in the order the UI offers them.
-var RuleActions = []string{ActionCard, ActionComment, ActionDrop}
+var RuleActions = []string{ActionCard, ActionDrop}
 
 // Match is what a rule looks at. An empty Match matches everything, which is
 // how a catch-all rule is written; every field given must match, so a rule with
@@ -139,16 +138,19 @@ type Source struct {
 	Noisy bool `json:"noisy,omitempty"`
 
 	// Update says what a changed item does to the card it already has.
-	Update string `json:"update,omitempty"` // comment (default) | ignore
+	Update string `json:"update,omitempty"` // update (default) | ignore
 
 	Config          map[string]string `json:"config,omitempty"`
 	IntervalSeconds int               `json:"intervalSeconds,omitempty"`
 	Rules           []Rule            `json:"rules,omitempty"`
 }
 
-// Update modes for a changed item.
+// Update modes for a changed item. The card is brought up to date rather than
+// told about the change in a note: the card is what a person and an agent read
+// the task from, and a note underneath saying it is out of date is a task read
+// wrong until somebody scrolls down.
 const (
-	UpdateComment = "comment"
+	UpdateInPlace = "update"
 	UpdateIgnore  = "ignore"
 )
 
@@ -157,7 +159,7 @@ func (s Source) UpdateMode() string {
 	if strings.EqualFold(strings.TrimSpace(s.Update), UpdateIgnore) {
 		return UpdateIgnore
 	}
-	return UpdateComment
+	return UpdateInPlace
 }
 
 // Decision is what the pipeline concluded about one item: the action to take
@@ -205,9 +207,9 @@ func ValidateSource(s Source) (Source, error) {
 	s.Plugin = strings.TrimSpace(s.Plugin)
 	s.Update = strings.TrimSpace(strings.ToLower(s.Update))
 	switch s.Update {
-	case "", UpdateComment, UpdateIgnore:
+	case "", UpdateInPlace, UpdateIgnore:
 	default:
-		return Source{}, fmt.Errorf("неизвестный режим обновления «%s» (допустимо: %s, %s)", s.Update, UpdateComment, UpdateIgnore)
+		return Source{}, fmt.Errorf("неизвестный режим обновления «%s» (допустимо: %s, %s)", s.Update, UpdateInPlace, UpdateIgnore)
 	}
 	if s.IntervalSeconds < 0 {
 		return Source{}, fmt.Errorf("интервал опроса не может быть отрицательным")
@@ -219,7 +221,7 @@ func ValidateSource(s Source) (Source, error) {
 			r.Then = ActionCard
 		}
 		switch r.Then {
-		case ActionCard, ActionComment, ActionDrop:
+		case ActionCard, ActionDrop:
 		default:
 			return Source{}, fmt.Errorf("правило %d: неизвестное действие «%s» (допустимо: %s)",
 				i+1, r.Then, strings.Join(RuleActions, ", "))

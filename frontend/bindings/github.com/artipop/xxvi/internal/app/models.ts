@@ -38,7 +38,7 @@ export interface CardSummary {
 export interface CardView {
     "card": model$0.Card;
     "flow"?: engine$0.CardFlow | null;
-    "comments": model$0.JournalEntry[] | null;
+    "journal": model$0.JournalEntry[] | null;
     "sessions": store$0.Session[] | null;
     "events": model$0.FlowEvent[] | null;
 

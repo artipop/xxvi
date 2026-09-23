@@ -289,5 +289,14 @@ ALTER TABLE agent_session ADD COLUMN work TEXT NOT NULL DEFAULT '';`,
 ALTER TABLE card_comment ADD COLUMN kind       TEXT    NOT NULL DEFAULT '';
 ALTER TABLE card_comment ADD COLUMN session_id TEXT    NOT NULL DEFAULT '';
 ALTER TABLE card_comment ADD COLUMN event_id   INTEGER NOT NULL DEFAULT 0;`,
+
+		// 11. A changed item no longer comments on its card — it updates it —
+		// and a rule can no longer ask for a comment. Saved sources are moved
+		// off both, or they would fail validation the next time they are saved.
+		// A comment rule never made a card for an item it had not seen, so
+		// dropping is what keeps it from starting to.
+		`
+UPDATE source SET update_mode = 'update' WHERE update_mode = 'comment';
+UPDATE source_rule SET then_action = 'drop' WHERE then_action = 'comment';`,
 	}
 }

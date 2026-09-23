@@ -75,7 +75,7 @@ type CardSummary struct {
 type CardView struct {
 	Card     model.Card           `json:"card"`
 	Flow     *engine.CardFlow     `json:"flow,omitempty"`
-	Comments []model.JournalEntry `json:"comments"`
+	Journal  []model.JournalEntry `json:"journal"`
 	Sessions []store.Session      `json:"sessions"`
 	Events   []model.FlowEvent    `json:"events"`
 	// Question is what the agent is waiting to hear, if it is waiting.
@@ -92,7 +92,7 @@ func (s *API) Card(cardID string) (CardView, error) {
 	if flow, err := s.app.Engine.CardFlowFor(cardID); err == nil {
 		view.Flow = flow
 	}
-	if view.Comments, err = s.app.Store.Journal(cardID); err != nil {
+	if view.Journal, err = s.app.Store.Journal(cardID); err != nil {
 		return CardView{}, err
 	}
 	if view.Sessions, err = s.app.Store.SessionsForCard(cardID); err != nil {
@@ -189,14 +189,6 @@ func (s *API) RemoveFromFlow(cardID string) (CardView, error) {
 // somebody asks about later.
 func (s *API) DropCard(cardID string) error {
 	return s.app.Engine.Drop(cardID)
-}
-
-// AddComment writes a person's note into a card's history.
-func (s *API) AddComment(cardID, text string) (CardView, error) {
-	if _, err := s.app.Store.Record(model.JournalEntry{CardID: cardID, Text: text}); err != nil {
-		return CardView{}, err
-	}
-	return s.Card(cardID)
 }
 
 // Journal is the card's audit: who did what to it and when, oldest first.

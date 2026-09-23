@@ -657,3 +657,38 @@ func TestStageScreensSurviveSaving(t *testing.T) {
 		t.Fatalf("терминал без команды должен пережить сохранение: %+v", screens[1])
 	}
 }
+
+// A source saved while «comment» was still a mode and a rule action has to come
+// out the other side as something that validates, or it can never be saved
+// again.
+func TestCommentModeIsMigratedAway(t *testing.T) {
+	s := open(t)
+	if _, err := s.SaveSource(model.Source{
+		Name: "Почта", Enabled: true,
+		Rules: []model.Rule{{Name: "шум", Then: model.ActionCard}},
+	}); err != nil {
+		t.Fatalf("сохранить источник: %v", err)
+	}
+	for _, stmt := range []string{
+		`UPDATE source SET update_mode = 'comment'`,
+		`UPDATE source_rule SET then_action = 'comment'`,
+		`DELETE FROM schema_migration WHERE version >= 11`,
+	} {
+		if _, err := s.db.Exec(stmt); err != nil {
+			t.Fatalf("вернуть старое (%s): %v", stmt, err)
+		}
+	}
+	if err := s.migrate(); err != nil {
+		t.Fatalf("миграция: %v", err)
+	}
+	src, err := s.Source("Почта")
+	if err != nil {
+		t.Fatalf("прочитать источник: %v", err)
+	}
+	if src.Update != model.UpdateInPlace || src.Rules[0].Then != model.ActionDrop {
+		t.Fatalf("режим — обновить на месте, правило — отбросить: %+v", src)
+	}
+	if _, err := s.SaveSource(src); err != nil {
+		t.Fatalf("источник после миграции сохраняется: %v", err)
+	}
+}

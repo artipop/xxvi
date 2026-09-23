@@ -130,6 +130,7 @@ func (s *Store) CardBySourceItem(source, externalID string) (model.Card, bool, e
 type CardEdit struct {
 	Title    *string
 	Body     *string
+	URL      *string
 	Assignee *string
 	State    *model.CardState
 	// Props are set or overwritten one by one; a property is removed by
@@ -152,6 +153,10 @@ func (s *Store) UpdateCard(id string, edit CardEdit) (model.Card, error) {
 		if edit.Body != nil {
 			set = append(set, "body = ?")
 			args = append(args, *edit.Body)
+		}
+		if edit.URL != nil {
+			set = append(set, "url = ?")
+			args = append(args, strings.TrimSpace(*edit.URL))
 		}
 		if edit.Assignee != nil {
 			set = append(set, "assignee = ?")

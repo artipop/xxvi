@@ -1,6 +1,6 @@
 // Package inbox turns outside events into cards: what a source brought becomes
 // an item, rules decide what to do with it, and the result is a card in the
-// inbox — or a comment on the card that item already has, or nothing.
+// inbox — or the card that item already has, brought up to date, or nothing.
 //
 // It is deliberately separate from the flow engine. Sources have to work with
 // agents switched off: a card from a phone is useful to somebody who has no
@@ -51,7 +51,7 @@ type Outcome string
 
 const (
 	OutcomeCreated   Outcome = "created"   // a new card
-	OutcomeCommented Outcome = "commented" // the item changed and said so on its card
+	OutcomeUpdated   Outcome = "updated"   // the item changed, and so did its card
 	OutcomeUnchanged Outcome = "unchanged" // already seen, nothing new
 	OutcomeDropped   Outcome = "dropped"   // a rule said to ignore it
 )
@@ -88,7 +88,7 @@ func (p *Pipeline) Ingest(sourceName string, items []model.Item) ([]Result, erro
 			p.log.Warn("элемент источника не обработан", "source", src.Name, "item", item.ExternalID, "err", err)
 			continue
 		}
-		if res.Outcome == OutcomeCreated || res.Outcome == OutcomeCommented {
+		if res.Outcome == OutcomeCreated || res.Outcome == OutcomeUpdated {
 			changed = true
 		}
 		out = append(out, res)
@@ -121,20 +121,10 @@ func (p *Pipeline) one(src model.Source, item model.Item) (Result, error) {
 		}
 		res.Outcome = OutcomeDropped
 		return res, nil
-
-	case model.ActionComment:
-		// A rule asking for a comment on an item that has no card has nothing
-		// to comment on. Filing it in the inbox would be a different decision
-		// than the one the rule made, so it does nothing and says so.
-		if !seen {
-			res.Outcome = OutcomeDropped
-			return res, nil
-		}
-		return p.commentOn(src, existing, item, res)
 	}
 
 	if seen {
-		return p.commentOn(src, existing, item, res)
+		return p.update(src, existing, item, res)
 	}
 
 	card, err := p.store.CreateCard(model.Card{
@@ -154,9 +144,10 @@ func (p *Pipeline) one(src model.Source, item model.Item) (Result, error) {
 	return res, nil
 }
 
-// commentOn handles an item that already has a card: unchanged items are
-// silent, and a changed one does what the source's update mode says.
-func (p *Pipeline) commentOn(src model.Source, card model.Card, item model.Item, res Result) (Result, error) {
+// update handles an item that already has a card: unchanged items are silent,
+// and a changed one brings its card up to date unless the source says not to.
+// The journal says it happened; the card is what now says what the item says.
+func (p *Pipeline) update(src model.Source, card model.Card, item model.Item, res Result) (Result, error) {
 	res.CardID = card.ID
 	if card.ItemVersion == item.Version {
 		res.Outcome = OutcomeUnchanged
@@ -169,9 +160,13 @@ func (p *Pipeline) commentOn(src model.Source, card model.Card, item model.Item,
 		res.Outcome = OutcomeUnchanged
 		return res, nil
 	}
-	text := fmt.Sprintf("Источник «%s»: элемент обновился.\n\n%s", src.Name, strings.TrimSpace(item.Body))
+	title, body, url := itemTitle(item), item.Body, item.URL
+	if _, err := p.store.UpdateCard(card.ID, store.CardEdit{Title: &title, Body: &body, URL: &url}); err != nil {
+		return Result{}, err
+	}
 	if _, err := p.store.Record(model.JournalEntry{
-		CardID: card.ID, Kind: model.EntrySource, Author: src.Name, Text: strings.TrimSpace(text),
+		CardID: card.ID, Kind: model.EntrySource, Author: src.Name,
+		Text: fmt.Sprintf("Источник «%s»: элемент изменился, карточка обновлена.", src.Name),
 	}); err != nil {
 		return Result{}, err
 	}
@@ -181,7 +176,7 @@ func (p *Pipeline) commentOn(src model.Source, card model.Card, item model.Item,
 	if err := p.store.SeenItem(src.Name, item.ExternalID, item.Version, card.ID); err != nil {
 		return Result{}, err
 	}
-	res.Outcome = OutcomeCommented
+	res.Outcome = OutcomeUpdated
 	return res, nil
 }
 

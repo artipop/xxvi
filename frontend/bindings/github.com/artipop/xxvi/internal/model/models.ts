@@ -419,7 +419,7 @@ export interface Source {
 
     /**
      * Update says what a changed item does to the card it already has.
-     * comment (default) | ignore
+     * update (default) | ignore
      */
     "update"?: string;
     "config"?: { [_ in string]?: string } | null;

@@ -66,17 +66,23 @@ func TestTheSameItemDoesNotBecomeASecondCard(t *testing.T) {
 	}
 }
 
-func TestChangedItemCommentsOnItsCard(t *testing.T) {
+// A changed item brings its card up to date: the card is what the task is read
+// from, and a note underneath saying it is stale is a task read wrong.
+func TestChangedItemUpdatesItsCard(t *testing.T) {
 	st, p := setup(t, plain())
 	first, _ := p.Ingest("Демо", []model.Item{{ExternalID: "1", Title: "Раз", Version: "v1", Body: "было"}})
-	res, _ := p.Ingest("Демо", []model.Item{{ExternalID: "1", Title: "Раз", Version: "v2", Body: "стало"}})
+	res, _ := p.Ingest("Демо", []model.Item{{ExternalID: "1", Title: "Два", Version: "v2", Body: "стало", URL: "https://example.com/1"}})
 
-	if res[0].Outcome != OutcomeCommented || res[0].CardID != first[0].CardID {
-		t.Fatalf("изменившийся элемент дописывает комментарий своей карточке: %+v", res[0])
+	if res[0].Outcome != OutcomeUpdated || res[0].CardID != first[0].CardID {
+		t.Fatalf("изменившийся элемент обновляет свою карточку: %+v", res[0])
+	}
+	card, _ := st.Card(first[0].CardID)
+	if card.Title != "Два" || card.Body != "стало" || card.URL != "https://example.com/1" {
+		t.Fatalf("карточка говорит то, что теперь говорит элемент: %+v", card)
 	}
 	entries, _ := st.Journal(first[0].CardID)
 	if len(entries) != 1 || entries[0].Author != "Демо" || entries[0].Kind != model.EntrySource {
-		t.Fatalf("запись от источника не сделана: %+v", entries)
+		t.Fatalf("журнал говорит, что источник обновил карточку: %+v", entries)
 	}
 	// And the card now reflects the new state, so a third delivery is silent.
 	again, _ := p.Ingest("Демо", []model.Item{{ExternalID: "1", Version: "v2"}})
@@ -160,23 +166,6 @@ func TestOrdinarySourceFilesWhatMatchedNothing(t *testing.T) {
 	res, _ := p.Ingest("Демо", []model.Item{item("1", "обычное письмо")})
 	if res[0].Outcome != OutcomeCreated {
 		t.Fatalf("несовпавший элемент идёт во входящие: %+v", res[0])
-	}
-}
-
-// A rule asking for a comment on an item that has no card has nothing to
-// comment on, and filing it would be a different decision than the rule made.
-func TestCommentRuleOnAnUnknownItemDoesNothing(t *testing.T) {
-	src := plain()
-	src.Rules = []model.Rule{{Name: "шум", Then: model.ActionComment}}
-	st, p := setup(t, src)
-
-	res, _ := p.Ingest("Демо", []model.Item{item("1", "что-то")})
-	if res[0].Outcome != OutcomeDropped {
-		t.Fatalf("комментировать нечего: %+v", res[0])
-	}
-	cards, _ := st.CardsInState(model.StateInbox)
-	if len(cards) != 0 {
-		t.Fatalf("карточек быть не должно, а их %d", len(cards))
 	}
 }
 

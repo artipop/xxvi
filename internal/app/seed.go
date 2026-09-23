@@ -159,7 +159,7 @@ func SeedFlows() []model.Flow {
 				// failed leaves the card where it stopped, because sending a
 				// task back to the agent that has just failed it is a loop with
 				// nothing new in it. The card carries «Исход» and the reason is
-				// in its comments.
+				// in its journal.
 			},
 		},
 		{
@@ -242,7 +242,7 @@ func SeedFlows() []model.Flow {
 				{
 					ID: "do", Name: "Выполнение", Action: model.ActionAgent, Crew: []string{"Claude"},
 					Work:       model.WorkTerminal,
-					Prompt:     "Сделай то, о чём договорились в комментариях карточки.",
+					Prompt:     "Сделай то, что разобрано на прошлом шаге, с учётом решения человека.",
 					MaxRunning: 1,
 					X:          640, Y: 200,
 				},

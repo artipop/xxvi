@@ -41,13 +41,6 @@ export function AddCard(sourceName: string, title: string, body: string): $Cance
 }
 
 /**
- * AddComment writes a person's note into a card's history.
- */
-export function AddComment(cardID: string, text: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(2030529371, cardID, text);
-}
-
-/**
  * AddItem files an item into a source by hand. It goes through the source's own
  * file rather than straight into a card, so a hand-added item is an item like
  * any other: it meets the same rules and survives the file being read again.

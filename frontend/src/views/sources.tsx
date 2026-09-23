@@ -21,7 +21,7 @@ export default function SourcesView() {
       <div class="row" style={{ "margin-bottom": "10px" }}>
         <div class="spacer" />
         <button class="btn" onClick={() => setEditing({
-          name: "", plugin: "demo", enabled: true, noisy: false, update: "comment",
+          name: "", plugin: "demo", enabled: true, noisy: false, update: "update",
           intervalSeconds: 30, config: {}, rules: [],
         } as Source)}>+ Источник</button>
       </div>
@@ -180,7 +180,6 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
 function ruleLabel(action: string): string {
   switch (action) {
     case "card": return "завести карточку";
-    case "comment": return "дописать комментарий";
     case "drop": return "отбросить";
     default: return action;
   }
