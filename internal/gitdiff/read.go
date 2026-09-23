@@ -29,8 +29,10 @@ const (
 // is an ordinary card, and the diff screen says so and stays.
 var ErrNoRepo = errors.New("в рабочей папке карточки нет git-репозитория")
 
-// ErrNoGit is git missing from the machine.
-var ErrNoGit = errors.New("git не найден на этой машине")
+// ErrNoGit is git missing from the machine. The sentence says why installing it
+// is the whole fix: the screen has no comparison of its own to fall back on,
+// and that is a decision rather than a gap — see docs/system.md §12.7.
+var ErrNoGit = errors.New("git не найден на этой машине: дифф не сравнивает файлы сам, он показывает то, что скажет git")
 
 // Diff is everything one diff screen shows.
 type Diff struct {

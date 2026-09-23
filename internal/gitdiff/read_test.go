@@ -208,3 +208,13 @@ func TestReadFindsRepositoryAbove(t *testing.T) {
 		t.Fatalf("файлы: %+v", diff.Files)
 	}
 }
+
+// Without git there is nothing to show and nothing to guess with: the screen
+// says so in one sentence and stays, exactly as it does for a folder that is
+// not a repository.
+func TestReadWithoutGitSaysSo(t *testing.T) {
+	t.Setenv("PATH", "")
+	if _, err := Read(context.Background(), t.TempDir(), ""); !errors.Is(err, ErrNoGit) {
+		t.Fatalf("ошибка: %v, ждали ErrNoGit", err)
+	}
+}
