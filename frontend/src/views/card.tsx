@@ -1,6 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import { agents, applyCard, closeCard, guard, list, openCard, projects } from "../state";
+import { agents, applyCard, closeCard, guard, list, openCard, projects, showRibbon } from "../state";
 import { QuestionForm } from "./attention";
 
 // One card, in full: where it stands, what it is waiting for, what has been
@@ -20,6 +21,11 @@ export default function CardPanel() {
         <div class="row">
           <h3 style={{ margin: 0 }}>{card().source || "Своя карточка"}</h3>
           <div class="spacer" />
+          {/* Any card that has been anywhere has a strip, finished or not —
+              and a finished one is where its results are. */}
+          <Show when={list(view().events).length > 0}>
+            <button class="btn quiet" onClick={() => showRibbon(card().id)}>Лента →</button>
+          </Show>
           <button class="btn quiet" onClick={closeCard}>Закрыть</button>
         </div>
 
@@ -109,23 +115,7 @@ export default function CardPanel() {
       <Place />
       <Assignee />
 
-      <div class="panel">
-        <h3>История</h3>
-        <NewComment />
-        <div class="comments">
-          <For each={[...list(view().comments)].reverse()}>
-            {(c) => (
-              <div class="comment">
-                <div class="who">{c.author || "система"} · {when(c.createdAt)}</div>
-                <div class="text">{c.text}</div>
-              </div>
-            )}
-          </For>
-        </div>
-        <Show when={list(view().comments).length === 0}>
-          <div class="empty">Пока ничего не происходило.</div>
-        </Show>
-      </div>
+      <History />
     </div>
   );
 }
@@ -255,6 +245,92 @@ function isAgent(name: string): boolean {
   return list(agents().agents).some((a) => a.name.toLowerCase() === name.toLowerCase());
 }
 
+/**
+ * History is the card's journal, read top to bottom: what happened, in the
+ * order it happened, ending with the box for a note of one's own.
+ *
+ * Two weights, because the journal holds two kinds of thing. A line — the card
+ * went to another stage, a terminal was opened, a short note — is set as one
+ * line. A line with a body — what an agent reported at the end of a step, what
+ * it asked — is what somebody opens the card to read, and gets room of its own.
+ * Set at one weight, the three lines that say «moved» bury the one paragraph
+ * that says what was done.
+ *
+ * By shape rather than by who wrote it: the engine and a person's note are both
+ * authorless, and telling them apart by phrasing would break on the next
+ * sentence somebody rewords.
+ */
+function History() {
+  const view = () => openCard()!;
+  const entries = () => list(view().comments).map((c) => ({ ...c, ...entry(c.text) }));
+
+  return (
+    <div class="panel">
+      <h3>История</h3>
+      <Show when={entries().length > 0} fallback={<div class="empty">Пока ничего не происходило.</div>}>
+        <ol class="journal">
+          <For each={entries()}>
+            {(e) => (
+              <Show
+                when={e.body}
+                fallback={
+                  <li class="journal-move">
+                    <span class="text">{inline(e.lead)}</span>
+                    <span class="when">{when(e.createdAt)}</span>
+                  </li>
+                }
+              >
+                <li class="journal-note">
+                  <div class="who">
+                    <span>{e.author || "заметка"}</span>
+                    <span class="when">{when(e.createdAt)}</span>
+                  </div>
+                  <div class="lead">{inline(e.lead)}</div>
+                  <Show when={e.body}><div class="text">{inline(e.body)}</div></Show>
+                  <Show when={e.folder}><div class="meta mono">{e.folder}</div></Show>
+                </li>
+              </Show>
+            )}
+          </For>
+        </ol>
+      </Show>
+      <NewComment />
+    </div>
+  );
+}
+
+/**
+ * entry reads one journal line into what it is set as. The lines are written
+ * for a person, so this only takes apart what is repeated on every one of them:
+ * the flow's name, which the card screen already names, and the working folder,
+ * which is the same on every report of a card.
+ */
+function entry(text: string): { lead: string; body: string; folder: string } {
+  let rest = text.trim();
+  let folder = "";
+  const tail = rest.match(/\n*Рабочая папка: `([^`]*)`\s*$/);
+  if (tail) {
+    folder = tail[1];
+    rest = rest.slice(0, tail.index).trim();
+  }
+  const cut = rest.indexOf("\n\n");
+  let lead = cut < 0 ? rest : rest.slice(0, cut).trim();
+  const body = cut < 0 ? "" : rest.slice(cut + 2).trim();
+  // «Флоу «X»: карточка переведена…» — which flow is the card screen's to say.
+  const flowed = lead.match(/^Флоу «[^»]*»(?:: |, )(.*)$/s);
+  if (flowed) lead = flowed[1].charAt(0).toUpperCase() + flowed[1].slice(1);
+  return { lead, body, folder };
+}
+
+/** inline sets `code` in the text as code; everything else stays as written. */
+function inline(text: string): JSX.Element {
+  return text.split(/(`[^`\n]+`)/).map((part) =>
+    part.length > 2 && part.startsWith("`") && part.endsWith("`")
+      ? <code>{part.slice(1, -1)}</code>
+      : part,
+  ) as unknown as JSX.Element;
+}
+
 function NewComment() {
   const view = () => openCard()!;
   const [text, setText] = createSignal("");
@@ -266,7 +342,7 @@ function NewComment() {
   };
 
   return (
-    <div class="row" style={{ "margin-bottom": "8px" }}>
+    <div class="row" style={{ "margin-top": "10px" }}>
       <input type="text" placeholder="Заметка" value={text()}
              onInput={(e) => setText(e.currentTarget.value)}
              onKeyDown={(e) => { if (e.key === "Enter") void send(); }} />

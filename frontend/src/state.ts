@@ -179,9 +179,37 @@ export const [ribbons, setRibbons] = createStore<RibbonView[]>([]);
 // but where in the stack they are looking.
 export const [openRibbon, setOpenRibbon] = createSignal<string>("");
 
+// A closed card's strip, held in the stack while somebody is looking at it. The
+// journal outlives the flow — the tails of its terminals are kept on disk for
+// exactly this — and a card that has finished is the one whose results people
+// come to look at. Only one, and only on request: the stack is the work in
+// progress, and a finished job is visited, not kept.
+//
+// It is also how a strip does not vanish from under the person watching it: a
+// card that finishes while it is open becomes this rather than disappearing.
+export const [closedRibbon, setClosedRibbon] = createSignal<string>("");
+
+/** workRibbons is the stack minus a closed card being visited — what counts. */
+export const workRibbons = () => ribbons.filter((r) => r.id !== closedRibbon());
+
 export async function loadRibbons() {
   try {
     const next = list(await API.Ribbons());
+    const looking = tab() === "ribbon";
+    const watching = openRibbon();
+    if (looking && watching && !next.some((r) => r.id === watching) && ribbons.some((r) => r.id === watching)) {
+      setClosedRibbon(watching);
+    }
+    // Visited, not kept: once the person has gone elsewhere, the stack is the
+    // work in progress again.
+    if (!looking) setClosedRibbon("");
+    const kept = closedRibbon();
+    if (kept && !next.some((r) => r.id === kept)) {
+      next.push(await API.Ribbon(kept));
+    } else if (kept) {
+      // Put back on a flow: it is a ribbon like any other again.
+      setClosedRibbon("");
+    }
     // Applied to the draft rather than handed to the setter as its return
     // value: `reconcile` walks the draft and answers nothing, so a setter that
     // kept what it returned would write the whole stack away to `undefined`.
@@ -193,6 +221,12 @@ export async function loadRibbons() {
 
 /** showRibbon opens one card's strip, which is what «Сделай» ends in. */
 export function showRibbon(cardID: string) {
+  if (!ribbons.some((r) => r.id === cardID) || cardID === closedRibbon()) {
+    // Not in the stack: a card already closed, or one that is about to arrive
+    // there. The next read tells which — kept only if the flow has no ribbon
+    // of it.
+    setClosedRibbon(inWork().some((r) => r.card.id === cardID) ? "" : cardID);
+  }
   setTab("ribbon");
   setOpenRibbon(cardID);
   void loadRibbons();

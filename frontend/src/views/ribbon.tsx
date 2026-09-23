@@ -6,7 +6,7 @@ import { Events } from "@wailsio/runtime";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
 import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
-import { attention, guard, list, loadAttention, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
+import { attention, closedRibbon, guard, list, loadAttention, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
 import { QuestionForm } from "./attention";
 import { NAV } from "../nav";
 
@@ -156,7 +156,22 @@ export default function Ribbon(): JSX.Element {
     () => ribbons.map((r) => r.id),
     (ids) => {
       if (ids.length === 0) return;
-      if (!ids.includes(openRibbon())) setOpenRibbon(ids[0]);
+      // A closed card asked for is on its way into the stack, not missing
+      // from it: the next read brings it.
+      if (!ids.includes(openRibbon()) && openRibbon() !== closedRibbon()) setOpenRibbon(ids[0]);
+    },
+  );
+
+  // Asked for from outside — «Сделай», «Лента →» on a closed card — a strip is
+  // opened by name, and the stack has to be standing on it. Keyed on where it
+  // is in the stack as well, because the one asked for may arrive a read later.
+  createEffect(
+    () => ribbons.findIndex((r) => r.id === openRibbon()),
+    (at) => {
+      if (at < 0 || !stack || stack.clientHeight === 0) return;
+      if (Math.round(stack.scrollTop / stack.clientHeight) !== at) {
+        queueMicrotask(() => stack?.scrollTo({ top: at * stack.clientHeight }));
+      }
     },
   );
 
@@ -317,6 +332,11 @@ export default function Ribbon(): JSX.Element {
           {current()?.title}
           <Show when={current()?.stageName}>
             <span class="ribbon-stage"> · {current()!.stageName}</span>
+          </Show>
+          {/* A finished job visited for its results: nothing on it moves any
+              more, and the bar says so rather than leaving a stage name off. */}
+          <Show when={current() && current()!.id === closedRibbon()}>
+            <span class="ribbon-stage"> · закрыта</span>
           </Show>
         </span>
         <div class="spacer" />

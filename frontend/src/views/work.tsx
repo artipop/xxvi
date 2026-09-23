@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { CardSummary } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
-import { done, guard, inWork, list, loadDone, loadInWork, openCardByID } from "../state";
+import { done, guard, inWork, list, loadDone, loadInWork, openCardByID, showRibbon } from "../state";
 
 // What is moving right now. Every row answers the same question the card screen
 // answers in full: where it stands, and what it is waiting for.
@@ -25,6 +25,12 @@ export default function WorkView() {
                 <span class="title">{card.title}</span>
                 <div class="spacer" />
                 <span class="tag ok"><span class="dot" />готово</span>
+                {/* What the steps left behind — terminals, diffs, notes — is on
+                    the strip, not on the card: the card says that it finished,
+                    the strip shows what was done. */}
+                <button class="btn quiet tiny" onClick={(e) => { e.stopPropagation(); showRibbon(card.id); }}>
+                  Лента →
+                </button>
               </div>
             </div>
           )}

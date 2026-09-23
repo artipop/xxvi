@@ -1,4 +1,4 @@
-import { attention, inbox, inWork, list, ribbons, updateWaiting, type Tab } from "./state";
+import { attention, inbox, inWork, list, updateWaiting, workRibbons, type Tab } from "./state";
 
 // The sections, named once. The sidebar shows them down the left of every other
 // screen; the ribbon, which has no sidebar, shows the same list under a chevron.
@@ -20,7 +20,7 @@ export type NavItem = {
 
 export const NAV: NavItem[] = [
   { tab: "inbox", label: "Входящие", count: () => inbox().reduce((n, g) => n + list(g.cards).length, 0) },
-  { tab: "ribbon", label: "Лента", count: () => ribbons.length },
+  { tab: "ribbon", label: "Лента", count: () => workRibbons().length },
   { tab: "work", label: "В работе", count: () => inWork().length },
   { tab: "attention", label: "Требуют внимания", count: () => attention().length, alert: true },
   { tab: "flows", label: "Флоу", apart: true },
