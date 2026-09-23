@@ -1,6 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Attention } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
+import type { CardView } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
 import { attention, guard, loadAttention, openCardByID } from "../state";
 
 // Everything waiting for a person, oldest first, and it is two things.
@@ -13,14 +14,19 @@ import { attention, guard, loadAttention, openCardByID } from "../state";
 // nothing for a while. It carries no question because the agent asked inside its
 // own interface, where the question was never ours to carry: the row says where
 // to look, and the answer is typed where it was asked.
+//
+// A **working tree** is a closed card's separate copy of its repository, still
+// on disk. Removing it is asked rather than done: somebody may still want to
+// look in it, and it may hold what nobody committed.
 
 export default function AttentionView() {
   return (
     <>
       <h1>Требуют внимания</h1>
       <p class="lede">
-        Агент остановился и ждёт человека. Ничего не решается таймером: без ответа
-        агент услышит отказ и доработает без того, что просил.
+        Агент остановился и ждёт человека, или закрытая задача оставила рабочее
+        дерево. Ничего не решается таймером: без ответа агент услышит отказ и
+        доработает без того, что просил.
       </p>
       <Show when={attention().length > 0} fallback={<div class="empty">Никто ничего не ждёт.</div>}>
         <For each={attention()}>{(a) => <Ask a={a} />}</For>
@@ -35,9 +41,12 @@ function Ask(props: { a: Attention }) {
       <div class="row">
         <span class="title">{props.a.cardTitle || "Карточка"}</span>
         <div class="spacer" />
-        <span class="tag warn"><span class="dot" />{props.a.agent}</span>
+        <Show when={props.a.agent}>
+          <span class="tag warn"><span class="dot" />{props.a.agent}</span>
+        </Show>
         <button class="btn quiet" onClick={() => openCardByID(props.a.cardId!)}>Открыть карточку</button>
       </div>
+      <Show when={!props.a.worktree} fallback={<WorktreeForm a={props.a} />}>
       <Show
         when={props.a.questionId}
         fallback={
@@ -57,6 +66,35 @@ function Ask(props: { a: Attention }) {
           onAnswered={loadAttention}
         />
       </Show>
+      </Show>
+    </div>
+  );
+}
+
+/** WorktreeForm answers a closed card's working tree: remove it or keep it.
+ *  Shown in the attention list and on the card itself — one question. */
+export function WorktreeForm(props: { a: Attention; onAnswered?: (v: CardView | undefined) => void }) {
+  const [busy, setBusy] = createSignal(false);
+  const run = async (call: () => Promise<CardView>) => {
+    setBusy(true);
+    const view = await guard(call);
+    setBusy(false);
+    await loadAttention();
+    props.onAnswered?.(view);
+  };
+  return (
+    <div class="question" style={{ "margin-top": "10px" }}>
+      <div class="ask">{props.a.text}</div>
+      <div class="options">
+        <button class={`btn ${props.a.dirty ? "danger" : "primary"}`} disabled={busy()}
+                onClick={() => run(() => API.RemoveCardWorktree(props.a.cardId!, props.a.dirty ?? false))}>
+          {props.a.dirty ? "Удалить вместе с изменениями" : "Удалить дерево"}
+        </button>
+        <button class="btn" disabled={busy()}
+                onClick={() => run(() => API.KeepCardWorktree(props.a.cardId!))}>
+          Оставить
+        </button>
+      </div>
     </div>
   );
 }

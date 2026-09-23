@@ -275,3 +275,94 @@ func shortID(id string) string {
 	}
 	return id
 }
+
+// ---- a closed card's tree ----
+
+// worktreeAttention is a question per closed card whose separate working tree
+// is still on disk: remove it, or keep it. Asked rather than done, because the
+// tree is where a person may still want to look, and it may hold what nobody
+// committed. Read off the cards every time rather than raised once, so it
+// survives a restart and goes away by itself when the card is reopened.
+func (m *Manager) worktreeAttention() []Attention {
+	cards, err := m.store.ClosedWithWorktree()
+	if err != nil {
+		m.log.Warn("не удалось прочитать закрытые карточки с рабочими деревьями", "err", err)
+		return nil
+	}
+	var out []Attention
+	for _, c := range cards {
+		if info, err := os.Stat(c.Worktree); err != nil || !info.IsDir() {
+			// Removed by hand: nothing to ask about, and the card should
+			// stop pointing at it. The branch stays.
+			if err := m.store.SetCardWorkspace(c.ID, c.Branch, c.Base, ""); err != nil {
+				m.log.Warn("не удалось забыть пропавшее рабочее дерево", "card", c.ID, "err", err)
+			}
+			continue
+		}
+		status, _ := git(c.Worktree, "status", "--porcelain")
+		text := fmt.Sprintf("Задача закрыта, а её рабочее дерево осталось: %s. Удалить его? Ветка %s останется.", c.Worktree, c.Branch)
+		if status != "" {
+			text = fmt.Sprintf("Задача закрыта, а её рабочее дерево осталось: %s. В нём есть незакоммиченные изменения — при удалении они пропадут. Ветка %s останется.", c.Worktree, c.Branch)
+		}
+		out = append(out, Attention{
+			Key: "w:" + c.ID, CardID: c.ID, CardTitle: c.Title, Text: text,
+			Worktree: c.Worktree, Branch: c.Branch, Dirty: status != "",
+			Awaiting: true, Since: c.UpdatedAt,
+		})
+	}
+	return out
+}
+
+// RemoveWorktree removes a closed card's working tree and keeps its branch:
+// the committed work is on the branch, and reopening the card puts a tree back
+// on it. Uncommitted changes are thrown away only when discard says the person
+// was told about them — a tree that got dirty after the question was read is
+// refused rather than cleaned.
+func (m *Manager) RemoveWorktree(cardID string, discard bool) error {
+	claimMu.Lock()
+	defer claimMu.Unlock()
+
+	card, err := m.store.Card(cardID)
+	if err != nil {
+		return err
+	}
+	if card.Worktree == "" {
+		return nil
+	}
+	if card.State != model.StateDone && card.State != model.StateDropped {
+		return fmt.Errorf("задача ещё в работе — её рабочее дерево не удаляется")
+	}
+	project, err := m.store.Project(card.Project)
+	if err != nil {
+		return fmt.Errorf("проект карточки не найден в реестре: %w", err)
+	}
+	if info, err := os.Stat(card.Worktree); err == nil && info.IsDir() {
+		args := []string{"worktree", "remove", card.Worktree}
+		if discard {
+			args = []string{"worktree", "remove", "--force", card.Worktree}
+		}
+		if _, err := git(project.Path, args...); err != nil {
+			if !discard && strings.Contains(err.Error(), "modified or untracked") {
+				return fmt.Errorf("в рабочем дереве появились незакоммиченные изменения — посмотрите на них ещё раз")
+			}
+			return fmt.Errorf("не удалось удалить рабочее дерево: %w", err)
+		}
+	}
+	_, _ = git(project.Path, "worktree", "prune")
+	if err := m.store.SetCardWorkspace(card.ID, card.Branch, card.Base, ""); err != nil {
+		return err
+	}
+	m.note(card.ID, fmt.Sprintf("Рабочее дерево `%s` удалено, ветка `%s` осталась.", card.Worktree, card.Branch))
+	m.emitAttention(Attention{Key: "w:" + card.ID, CardID: card.ID})
+	return nil
+}
+
+// KeepWorktree is the other answer: the tree stays, and nobody asks again
+// until the card is closed with a new one.
+func (m *Manager) KeepWorktree(cardID string) error {
+	if err := m.store.KeepWorktree(cardID); err != nil {
+		return err
+	}
+	m.emitAttention(Attention{Key: "w:" + cardID, CardID: cardID})
+	return nil
+}

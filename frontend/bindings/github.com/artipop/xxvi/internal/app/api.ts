@@ -78,7 +78,8 @@ export function Answer(questionID: string, answer: acp$0.Answer): $CancellablePr
 }
 
 /**
- * Attention is every question an agent is waiting on, oldest first.
+ * Attention is everything waiting for a person, oldest first: an agent's
+ * question, a silent terminal, a closed card's working tree.
  */
 export function Attention(): $CancellablePromise<acp$0.Attention[] | null> {
     return $Call.ByID(978520023);
@@ -235,6 +236,14 @@ export function Journal(cardID: string): $CancellablePromise<model$0.JournalEntr
 }
 
 /**
+ * KeepCardWorktree answers «оставить»: the tree stays, and is not asked about
+ * again.
+ */
+export function KeepCardWorktree(cardID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(3848316773, cardID);
+}
+
+/**
  * MarkOutcome is a person answering for a stage that runs nothing: «прошло» or
  * «не прошло», put on the card so the flow sees it and moves.
  * 
@@ -305,6 +314,15 @@ export function Projects(): $CancellablePromise<model$0.Project[] | null> {
  */
 export function ReadDoc(cardID: string, name: string): $CancellablePromise<string> {
     return $Call.ByID(3010567507, cardID, name);
+}
+
+/**
+ * RemoveCardWorktree answers «удалить» to a closed card's working tree: the tree
+ * goes, the branch stays. Discard is the person having been told the tree holds
+ * uncommitted changes and removing it anyway.
+ */
+export function RemoveCardWorktree(cardID: string, discard: boolean): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(860297316, cardID, discard);
 }
 
 /**

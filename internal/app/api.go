@@ -709,6 +709,26 @@ func (s *API) SetCardWorkMode(cardID, mode string) (CardView, error) {
 	return s.Card(cardID)
 }
 
+// RemoveCardWorktree answers «удалить» to a closed card's working tree: the tree
+// goes, the branch stays. Discard is the person having been told the tree holds
+// uncommitted changes and removing it anyway.
+func (s *API) RemoveCardWorktree(cardID string, discard bool) (CardView, error) {
+	if err := s.app.Agents.RemoveWorktree(cardID, discard); err != nil {
+		return CardView{}, err
+	}
+	s.app.Emit(engine.EventCard, map[string]any{"cardId": cardID})
+	return s.Card(cardID)
+}
+
+// KeepCardWorktree answers «оставить»: the tree stays, and is not asked about
+// again.
+func (s *API) KeepCardWorktree(cardID string) (CardView, error) {
+	if err := s.app.Agents.KeepWorktree(cardID); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(cardID)
+}
+
 // checkWorkMode refuses a mode the project cannot have: an unknown one, or a
 // branch of its own where there is no repository to make it in.
 func (s *API) checkWorkMode(projectID, mode string) error {
@@ -780,7 +800,8 @@ func (s *API) DeleteAgent(name string) error {
 
 // ---- what is waiting for a person ----
 
-// Attention is every question an agent is waiting on, oldest first.
+// Attention is everything waiting for a person, oldest first: an agent's
+// question, a silent terminal, a closed card's working tree.
 func (s *API) Attention() []acp.Attention { return s.app.Agents.Attention() }
 
 // Answer delivers a person's answer to an agent's question.

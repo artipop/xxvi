@@ -30,6 +30,7 @@ type cardRow struct {
 	Branch      string `db:"branch"`
 	BaseRef     string `db:"base_ref"`
 	Worktree    string `db:"worktree"`
+	KeepTree    bool   `db:"keep_worktree"`
 	CreatedAt   int64  `db:"created_at"`
 	UpdatedAt   int64  `db:"updated_at"`
 }

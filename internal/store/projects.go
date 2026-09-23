@@ -122,7 +122,8 @@ func (s *Store) SetCardWorkMode(cardID, mode string) error {
 // SetCardWorkspace records what the card's work mode came to: its branch, what
 // that was cut from, and the working tree when there is one.
 func (s *Store) SetCardWorkspace(cardID, branch, base, worktree string) error {
-	_, err := s.db.Exec(`UPDATE card SET branch = ?, base_ref = ?, worktree = ?, updated_at = ? WHERE id = ?`,
+	// A tree made again is a new question when the card closes again.
+	_, err := s.db.Exec(`UPDATE card SET branch = ?, base_ref = ?, worktree = ?, keep_worktree = 0, updated_at = ? WHERE id = ?`,
 		branch, base, worktree, millis(time.Now()), cardID)
 	return err
 }
@@ -148,4 +149,29 @@ func (s *Store) FolderHolder(projectID, exceptCard string) (model.Card, bool, er
 		return model.Card{}, false, err
 	}
 	return r.card(), true, nil
+}
+
+// ClosedWithWorktree is every card that is done or dropped and still has a
+// working tree nobody has decided about: what is asked of a person, whether to
+// remove it.
+func (s *Store) ClosedWithWorktree() ([]model.Card, error) {
+	var rows []cardRow
+	if err := s.db.Select(&rows, `
+		SELECT * FROM card
+		WHERE worktree != '' AND keep_worktree = 0 AND state IN (?, ?)
+		ORDER BY updated_at`,
+		string(model.StateDone), string(model.StateDropped)); err != nil {
+		return nil, err
+	}
+	out := make([]model.Card, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.card())
+	}
+	return out, nil
+}
+
+// KeepWorktree records that a person chose to keep a closed card's tree.
+func (s *Store) KeepWorktree(cardID string) error {
+	_, err := s.db.Exec(`UPDATE card SET keep_worktree = 1 WHERE id = ?`, cardID)
+	return err
 }

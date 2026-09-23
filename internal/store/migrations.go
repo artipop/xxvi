@@ -325,5 +325,11 @@ ALTER TABLE card ADD COLUMN work_mode TEXT NOT NULL DEFAULT '';
 ALTER TABLE card ADD COLUMN branch    TEXT NOT NULL DEFAULT '';
 ALTER TABLE card ADD COLUMN base_ref  TEXT NOT NULL DEFAULT '';
 ALTER TABLE card ADD COLUMN worktree  TEXT NOT NULL DEFAULT '';`,
+
+		// 14. A closed card's working tree is removed only when a person says
+		// so, and «оставить» is an answer too: remembered, or the question
+		// would come back every time the list is read.
+		`
+ALTER TABLE card ADD COLUMN keep_worktree INTEGER NOT NULL DEFAULT 0;`,
 	}
 }

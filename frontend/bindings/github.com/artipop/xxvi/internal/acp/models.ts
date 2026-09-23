@@ -98,6 +98,15 @@ export interface Attention {
      */
     "awaiting": boolean;
     "since"?: string;
+
+    /**
+     * Worktree is set on the third kind: a closed card's separate working
+     * tree, and whether to remove it (workspace.go). Branch is what stays
+     * either way; Dirty says removing it loses uncommitted changes.
+     */
+    "worktree"?: string;
+    "branch"?: string;
+    "dirty"?: boolean;
 }
 
 /**

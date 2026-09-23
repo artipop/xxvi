@@ -583,6 +583,7 @@ func TestStageColumnsAreAddedToADatabaseThatAlreadyHasFlows(t *testing.T) {
 		`ALTER TABLE card DROP COLUMN branch`,
 		`ALTER TABLE card DROP COLUMN base_ref`,
 		`ALTER TABLE card DROP COLUMN worktree`,
+		`ALTER TABLE card DROP COLUMN keep_worktree`,
 		`DELETE FROM schema_migration WHERE version >= 6`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -680,6 +681,7 @@ func TestCommentModeIsMigratedAway(t *testing.T) {
 		`ALTER TABLE card DROP COLUMN branch`,
 		`ALTER TABLE card DROP COLUMN base_ref`,
 		`ALTER TABLE card DROP COLUMN worktree`,
+		`ALTER TABLE card DROP COLUMN keep_worktree`,
 		`DELETE FROM schema_migration WHERE version >= 11`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -729,6 +731,7 @@ func TestDemoSourcesAreMigratedAway(t *testing.T) {
 		`ALTER TABLE card DROP COLUMN branch`,
 		`ALTER TABLE card DROP COLUMN base_ref`,
 		`ALTER TABLE card DROP COLUMN worktree`,
+		`ALTER TABLE card DROP COLUMN keep_worktree`,
 		`DELETE FROM schema_migration WHERE version >= 12`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {

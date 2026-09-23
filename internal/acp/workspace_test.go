@@ -174,3 +174,82 @@ func TestBranchIsNamedAfterTheTitle(t *testing.T) {
 		}
 	}
 }
+
+// A closed card's tree is asked about, not removed: «оставить» is remembered,
+// «удалить» keeps the branch, and uncommitted work goes only when the person
+// was told about it.
+func TestClosedCardsTreeIsRemovedOnlyWhenAsked(t *testing.T) {
+	m, st := newWorkspaceManager(t)
+	repo := newRepo(t)
+	p := projectAt(t, st, repo)
+	a := cardIn(t, st, "Первая", p, model.WorkModeWorktree)
+	b := cardIn(t, st, "Вторая", p, model.WorkModeWorktree)
+	dirA, _ := m.WorkDir(a.ID)
+	dirB, _ := m.WorkDir(b.ID)
+
+	asked := func() map[string]Attention {
+		out := map[string]Attention{}
+		for _, at := range m.Attention() {
+			if at.Worktree != "" {
+				out[at.CardID] = at
+			}
+		}
+		return out
+	}
+	if len(asked()) != 0 {
+		t.Fatal("пока задачи в работе, об их деревьях не спрашивают")
+	}
+	if err := m.RemoveWorktree(a.ID, true); err == nil {
+		t.Fatal("дерево задачи в работе не удаляется")
+	}
+
+	done, dropped := model.StateDone, model.StateDropped
+	st.UpdateCard(a.ID, store.CardEdit{State: &done})
+	st.UpdateCard(b.ID, store.CardEdit{State: &dropped})
+	if err := os.WriteFile(filepath.Join(dirA, "f.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := asked()
+	if len(got) != 2 || !got[a.ID].Dirty || got[b.ID].Dirty {
+		t.Fatalf("спрашивают о двух, и про незакоммиченное говорят: %+v", got)
+	}
+
+	// Not told about the changes — refused, and the tree is there.
+	if err := m.RemoveWorktree(a.ID, false); err == nil {
+		t.Fatal("незакоммиченное без предупреждения не выбрасывают")
+	}
+	if _, err := os.Stat(dirA); err != nil {
+		t.Fatal("дерево на месте после отказа")
+	}
+	if err := m.RemoveWorktree(a.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(dirA); !os.IsNotExist(err) {
+		t.Fatal("дерево удалено")
+	}
+	a, _ = st.Card(a.ID)
+	if a.Worktree != "" || !branchExists(repo, a.Branch) {
+		t.Fatalf("ветка остаётся, карточка на дерево больше не указывает: %+v", a)
+	}
+
+	if err := m.KeepWorktree(b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(asked()) != 0 {
+		t.Fatalf("«оставить» — тоже ответ: %+v", asked())
+	}
+	if _, err := os.Stat(dirB); err != nil {
+		t.Fatal("оставленное дерево на месте")
+	}
+
+	// Reopened, the removed card gets its tree back on the same branch.
+	flow := model.StateFlow
+	st.UpdateCard(a.ID, store.CardEdit{State: &flow})
+	back, err := m.WorkDir(a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if head, _ := git(back, "rev-parse", "--abbrev-ref", "HEAD"); head != a.Branch {
+		t.Fatalf("вернувшееся дерево на ветке карточки, а не на %q", head)
+	}
+}

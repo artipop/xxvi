@@ -153,8 +153,10 @@ export function subscribe() {
   // that moved is a segment that was added, and a session that said something
   // is a screen that has more to show.
   const refreshRibbon = () => { void loadRibbons(); };
+  // A card that closed may leave a working tree to ask about.
   Events.On("card", () => {
     void loadInbox(); void loadInWork(); void loadDone(); void refreshCard(); refreshRibbon();
+    void loadAttention();
   });
   Events.On("inbox", () => { void loadInbox(); });
   Events.On("session", () => { void loadInWork(); void refreshCard(); refreshRibbon(); });

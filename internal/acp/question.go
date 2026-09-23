@@ -241,6 +241,13 @@ type Attention struct {
 	// carries true.
 	Awaiting bool      `json:"awaiting"`
 	Since    time.Time `json:"since,omitempty"`
+
+	// Worktree is set on the third kind: a closed card's separate working
+	// tree, and whether to remove it (workspace.go). Branch is what stays
+	// either way; Dirty says removing it loses uncommitted changes.
+	Worktree string `json:"worktree,omitempty"`
+	Branch   string `json:"branch,omitempty"`
+	Dirty    bool   `json:"dirty,omitempty"`
 }
 
 // attention describes an open question the way the UI wants it. The key is the
@@ -268,6 +275,8 @@ func (m *Manager) Attention() []Attention {
 		out = append(out, a)
 	}
 	m.questionsMu.Unlock()
+
+	out = append(out, m.worktreeAttention()...)
 
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Since.Before(out[j].Since) })
 	return out

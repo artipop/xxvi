@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import { agents, applyCard, closeCard, guard, list, openCard, projects, showRibbon, WORK_MODES } from "../state";
-import { QuestionForm } from "./attention";
+import { agents, applyCard, attention, closeCard, guard, list, openCard, projects, showRibbon, WORK_MODES } from "../state";
+import { QuestionForm, WorktreeForm } from "./attention";
 import { JournalList } from "./journal";
 
 // One card, in full: where it stands, what it is waiting for, and who works it.
@@ -227,6 +227,9 @@ function WorkMode() {
   const view = () => openCard()!;
   const set = async (mode: string) =>
     applyCard(await guard(() => API.SetCardWorkMode(view().card.id, mode)));
+  // A closed card's tree is asked about here too: it is the same question as
+  // the one in the attention list, answered by the same form.
+  const asked = () => attention().find((a) => a.cardId === view().card.id && a.worktree);
 
   return (
     <div style={{ "margin-top": "10px" }}>
@@ -235,6 +238,9 @@ function WorkMode() {
           {view().card.worktree ? "Отдельное рабочее дерево" : "Ветка в этой же папке"}:{" "}
           <code>{view().card.branch}</code>
           {view().card.base ? <> от <code>{view().card.base}</code></> : null}
+          <Show when={asked()}>
+            <WorktreeForm a={asked()!} onAnswered={applyCard} />
+          </Show>
         </div>
       }>
         <select value={view().card.workMode ?? ""} onChange={(e) => set(e.currentTarget.value)}
