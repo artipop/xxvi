@@ -4,6 +4,10 @@ import { attention, inbox, inWork, list, updateWaiting, workRibbons, type Tab } 
 // screen; the ribbon, which has no sidebar, shows the same list under a chevron.
 // Two places, one list — a section that exists in one menu and not the other is
 // a section somebody cannot find.
+//
+// «Источники» is not here on purpose: there is no real source yet, only demo
+// ones, and a section whose one use is a demo is a section that misleads. The
+// screen stays in the code and comes back with the first real source.
 
 export type NavItem = {
   tab: Tab;
@@ -25,7 +29,6 @@ export const NAV: NavItem[] = [
   { tab: "attention", label: "Требуют внимания", count: () => attention().length, alert: true },
   { tab: "flows", label: "Флоу", apart: true },
   { tab: "projects", label: "Проекты" },
-  { tab: "sources", label: "Источники" },
   { tab: "agents", label: "Агенты" },
   { tab: "updates", label: "Обновление", mark: updateWaiting },
 ];

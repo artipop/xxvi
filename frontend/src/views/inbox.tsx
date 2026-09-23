@@ -28,14 +28,14 @@ export default function InboxView() {
         </button>
       </div>
       <p class="lede">
-        Задачи от источников и свои. Ничего не происходит, пока карточку не взяли в работу.
+        Задачи, которые ещё не взяли в работу. Ничего не происходит, пока карточку не взяли.
       </p>
 
       <Show when={own()}>
         <AddOwn onDone={() => setOwn(false)} />
       </Show>
       <Show when={inbox().length > 0} fallback={
-        <div class="empty">Пусто. Источники ничего не принесли, своих задач тоже нет.</div>
+        <div class="empty">Пусто. Заведите задачу кнопкой «Своя задача».</div>
       }>
         <For each={inbox()}>{(group) => <Group group={group} />}</For>
       </Show>

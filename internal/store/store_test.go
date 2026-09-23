@@ -692,3 +692,47 @@ func TestCommentModeIsMigratedAway(t *testing.T) {
 		t.Fatalf("источник после миграции сохраняется: %v", err)
 	}
 }
+
+// The demo sources go with what they filed, except for a card that has been on
+// a flow: that is somebody's work, whoever brought it.
+func TestDemoSourcesAreMigratedAway(t *testing.T) {
+	s := open(t)
+	claude(t, s)
+	flow, _ := s.SaveFlow(devFlow())
+	for _, src := range []model.Source{
+		{Name: "Задачи", Plugin: "demo", Enabled: true},
+		{Name: "Телефон", Plugin: "demo", Enabled: true},
+		{Name: "Почта", Plugin: "demo", Enabled: true},
+	} {
+		if _, err := s.SaveSource(src); err != nil {
+			t.Fatalf("источник: %v", err)
+		}
+	}
+	idle, _ := s.CreateCard(model.Card{Source: "Задачи", ExternalID: "seed-1", Title: "Лежит"})
+	s.SeenItem("Задачи", "seed-1", "1", idle.ID)
+	worked, _ := s.CreateCard(model.Card{Source: "Задачи", ExternalID: "seed-2", Title: "Ездила"})
+	s.EnterStage(worked.ID, flow.ID, "work")
+	s.AppendFlowEvent(model.FlowEvent{CardID: worked.ID, FlowID: flow.ID, ToStage: "work"})
+	s.LeaveFlow(worked.ID, model.StateInbox)
+	mine, _ := s.CreateCard(model.Card{Source: "Почта", ExternalID: "1", Title: "Своё"})
+
+	if _, err := s.db.Exec(`DELETE FROM schema_migration WHERE version >= 12`); err != nil {
+		t.Fatalf("откатить версию: %v", err)
+	}
+	if err := s.migrate(); err != nil {
+		t.Fatalf("миграция: %v", err)
+	}
+
+	sources, _ := s.Sources()
+	if len(sources) != 1 || sources[0].Name != "Почта" {
+		t.Fatalf("остаётся только не демонстрационный источник: %+v", sources)
+	}
+	if _, err := s.Card(idle.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("карточка демо-источника, никуда не ездившая, удалена: %v", err)
+	}
+	for _, id := range []string{worked.ID, mine.ID} {
+		if _, err := s.Card(id); err != nil {
+			t.Fatalf("карточка %s остаётся: %v", id, err)
+		}
+	}
+}

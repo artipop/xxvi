@@ -46,10 +46,6 @@ func TestFirstRunCreatesUsableExamples(t *testing.T) {
 	if len(agents) != 1 {
 		t.Fatalf("ожидался один зарегистрированный агент, получено %d", len(agents))
 	}
-	sources, _ := a.Store.Sources()
-	if len(sources) != 2 {
-		t.Fatalf("ожидалось два источника, получено %d", len(sources))
-	}
 }
 
 // Between them the examples have to use every trigger, or they are not examples
@@ -95,69 +91,17 @@ func TestSeedingHappensOnceOnly(t *testing.T) {
 	}
 }
 
-// The application opens showing what it is rather than an empty screen: the
-// seeded items are read on the first poll and land in the inbox, grouped by
-// what brought them.
-func TestSeededItemsReachTheInbox(t *testing.T) {
+// A first run brings no sources: the only ones there were are demos, and an
+// inbox filled by a demo is an inbox of tasks nobody set.
+func TestFirstRunHasNoSources(t *testing.T) {
 	a := open(t)
 	sources, _ := a.Store.Sources()
-	for _, src := range sources {
-		if err := a.Poller.Poll(src); err != nil {
-			t.Fatalf("прочитать источник «%s»: %v", src.Name, err)
-		}
-	}
-
-	groups, err := NewAPI(a).Inbox()
-	if err != nil {
-		t.Fatalf("входящие: %v", err)
-	}
-	if len(groups) != 2 {
-		t.Fatalf("ожидались две группы по источникам, получено %d", len(groups))
-	}
-	total := 0
-	for _, g := range groups {
-		total += len(g.Cards)
-	}
-	// Five items are seeded and one of them matches no rule on the noisy
-	// source, which is exactly what «шумный» is there to demonstrate.
-	if total != 4 {
-		t.Fatalf("ожидалось четыре карточки, получено %d", total)
-	}
-}
-
-// A rule's suggestion prefills the «В работу» dialog, so it has to name a flow
-// that actually exists — a suggestion pointing nowhere is worse than none.
-func TestSuggestedFlowsExist(t *testing.T) {
-	a := open(t)
-	sources, _ := a.Store.Sources()
-	for _, src := range sources {
-		for _, rule := range src.Rules {
-			if rule.SuggestFlow == "" {
-				continue
-			}
-			if _, err := a.Store.FlowByName(rule.SuggestFlow); err != nil {
-				t.Fatalf("правило «%s» источника «%s» предлагает несуществующий флоу «%s»",
-					rule.Name, src.Name, rule.SuggestFlow)
-			}
-		}
-	}
-}
-
-// Reading the same file twice must not double the inbox — the demo source is
-// polled on a timer, so this is the ordinary case, not an edge one.
-func TestPollingTwiceBringsNothingNew(t *testing.T) {
-	a := open(t)
-	sources, _ := a.Store.Sources()
-	for i := 0; i < 2; i++ {
-		for _, src := range sources {
-			if err := a.Poller.Poll(src); err != nil {
-				t.Fatalf("прочитать: %v", err)
-			}
-		}
+	if len(sources) != 0 {
+		t.Fatalf("источников на первом запуске нет: %+v", sources)
 	}
 	cards, _ := a.Store.CardsInState(model.StateInbox)
-	if len(cards) != 4 {
-		t.Fatalf("повторное чтение не должно ничего добавлять, карточек %d", len(cards))
+	if len(cards) != 0 {
+		t.Fatalf("входящие на первом запуске пусты, а карточек %d", len(cards))
 	}
 }
 

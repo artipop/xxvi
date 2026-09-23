@@ -2,14 +2,13 @@ package app
 
 import (
 	"fmt"
-	"path/filepath"
 
-	"github.com/artipop/xxvi/internal/inbox"
 	"github.com/artipop/xxvi/internal/model"
 )
 
-// What a first run finds: an agent, two sources with something in them, and
-// three flows worth reading as examples.
+// What a first run finds: an agent and three flows worth reading as examples.
+// No sources: the only ones there were are demos, and an inbox filled by a
+// demo is an inbox of tasks nobody set.
 //
 // It runs only on an empty database. Seeding what somebody has already edited
 // would be an application overruling its user, and "restore the examples" is a
@@ -31,17 +30,6 @@ func (a *App) seed() error {
 		if _, err := a.Store.SaveFlow(flow); err != nil {
 			return fmt.Errorf("создать флоу «%s»: %w", flow.Name, err)
 		}
-	}
-	for _, src := range a.seedSources() {
-		if _, err := a.Store.SaveSource(src); err != nil {
-			return fmt.Errorf("создать источник «%s»: %w", src.Name, err)
-		}
-	}
-	if err := a.seedItems(); err != nil {
-		// Examples are a convenience: an application that will not start
-		// because it could not write a sample file is worse than one with an
-		// empty inbox.
-		a.log.Warn("не удалось записать примеры элементов", "err", err)
 	}
 	return nil
 }
@@ -275,98 +263,4 @@ func SeedFlows() []model.Flow {
 			},
 		},
 	}
-}
-
-// seedSources are two sources rather than one, because the inbox groups by
-// source and a single group shows nothing about that. They also differ in the
-// one way sources differ most: what happens to an item no rule matched.
-func (a *App) seedSources() []model.Source {
-	return []model.Source{
-		{
-			Name: "Задачи", Plugin: inbox.PluginDemo, Enabled: true, IntervalSeconds: 30,
-			Config: map[string]string{inbox.ConfigPath: a.demoPath("tasks")},
-			Rules: []model.Rule{
-				{
-					Name: "срочные",
-					When: model.Match{Title: "срочно|упал|сломал"},
-					Then: model.ActionCard,
-					// A suggestion, not an action: it prefills the «В работу»
-					// dialog and starts nothing (docs/system.md §8).
-					SuggestFlow: "Разработка",
-					Props:       map[string]string{"Приоритет": "срочный"},
-				},
-				{
-					Name:        "остальное",
-					Then:        model.ActionCard,
-					SuggestFlow: "Разбор и решение",
-				},
-			},
-		},
-		{
-			// Noisy: a stream of notifications is mostly noise, so here a rule
-			// is a subscription and everything else is dropped.
-			Name: "Телефон", Plugin: inbox.PluginDemo, Enabled: true, Noisy: true, IntervalSeconds: 30,
-			Config: map[string]string{inbox.ConfigPath: a.demoPath("phone")},
-			Rules: []model.Rule{
-				{
-					Name:  "доставка",
-					When:  model.Match{Title: "доставк|курьер|посылк"},
-					Then:  model.ActionCard,
-					Props: map[string]string{"Ссылка": "{{.URL}}"},
-				},
-			},
-		},
-	}
-}
-
-func (a *App) demoPath(name string) string {
-	return filepath.Join(a.DataDir, "sources", name, inbox.DemoFile)
-}
-
-// seedItems puts something in the inbox on a first run, so the application
-// opens showing what it is rather than an empty screen with a tour.
-func (a *App) seedItems() error {
-	items := map[string][]model.Item{
-		"tasks": {
-			{
-				ExternalID: "seed-1", Version: "1",
-				Title: "Срочно: не открывается страница отчётов",
-				Body:  "После вчерашнего обновления отчёты отдают пустую страницу. Смотрели двое, причину не нашли.",
-			},
-			{
-				ExternalID: "seed-2", Version: "1",
-				Title: "Переписать импорт справочников",
-				Body:  "Импорт написан давно и падает на больших файлах. Нужно решить, переписывать целиком или чинить точечно.",
-			},
-			{
-				ExternalID: "seed-3", Version: "1",
-				Title: "Добавить фильтр по дате в список задач",
-				Body:  "Просили несколько раз. Ничего сложного, но руки не доходят.",
-			},
-		},
-		"phone": {
-			{
-				ExternalID: "seed-4", Version: "1",
-				Title: "Доставка приедет завтра с 10 до 14",
-				Body:  "Курьер позвонит за час.",
-				URL:   "https://example.org/delivery/4",
-			},
-			{
-				// Matches no rule on a noisy source, so it is deliberately
-				// dropped — which is the thing worth seeing about «шумный».
-				ExternalID: "seed-5", Version: "1",
-				Title: "Ваша подписка продлена",
-				Body:  "Спасибо, что остаётесь с нами.",
-			},
-		},
-	}
-	for name, list := range items {
-		path := a.demoPath(name)
-		for _, item := range list {
-			if err := inbox.AppendItem(path, item); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }

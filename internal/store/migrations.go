@@ -298,5 +298,21 @@ ALTER TABLE card_comment ADD COLUMN event_id   INTEGER NOT NULL DEFAULT 0;`,
 		`
 UPDATE source SET update_mode = 'update' WHERE update_mode = 'comment';
 UPDATE source_rule SET then_action = 'drop' WHERE then_action = 'comment';`,
+
+		// 12. The demo sources a first run used to create go, with the cards
+		// they filed that nobody took anywhere. A card that has been on a flow
+		// is somebody's work and stays, whoever brought it. Only the demo
+		// plugin under the names the seed gave: a source somebody set up
+		// themselves under one of those names is theirs.
+		`
+DELETE FROM card
+WHERE state = 'inbox'
+  AND source IN (SELECT name FROM source WHERE plugin = 'demo' AND name IN ('Задачи', 'Телефон'))
+  AND id NOT IN (SELECT card_id FROM flow_event);
+DELETE FROM source_item
+WHERE source IN (SELECT name FROM source WHERE plugin = 'demo' AND name IN ('Задачи', 'Телефон'));
+DELETE FROM source_rule
+WHERE source IN (SELECT name FROM source WHERE plugin = 'demo' AND name IN ('Задачи', 'Телефон'));
+DELETE FROM source WHERE plugin = 'demo' AND name IN ('Задачи', 'Телефон');`,
 	}
 }
