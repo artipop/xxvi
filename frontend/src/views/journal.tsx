@@ -14,7 +14,9 @@ const KIND: Record<string, string> = {
   props: "свойства", source: "источник",
 };
 
-export function JournalList(props: { cardId: string }): JSX.Element {
+// JournalOf is the journal of a card nothing else on screen has read — the
+// ribbon's, which carries no journal of its own.
+export function JournalOf(props: { cardId: string }): JSX.Element {
   const [entries, setEntries] = createSignal<JournalEntry[]>([]);
 
   const pull = async () => {
@@ -30,10 +32,14 @@ export function JournalList(props: { cardId: string }): JSX.Element {
     return () => offs.forEach((off) => { if (typeof off === "function") off(); });
   });
 
+  return <JournalList entries={entries()} />;
+}
+
+export function JournalList(props: { entries: JournalEntry[] }): JSX.Element {
   return (
-    <Show when={entries().length > 0} fallback={<div class="empty">Пока ничего не происходило.</div>}>
+    <Show when={props.entries.length > 0} fallback={<div class="empty">Пока ничего не происходило.</div>}>
       <ol class="journal-list">
-        <For each={entries()}>
+        <For each={props.entries}>
           {(e) => (
             <li>
               <div class="journal-head">

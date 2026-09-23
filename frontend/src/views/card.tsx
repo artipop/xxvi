@@ -2,6 +2,7 @@ import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import { agents, applyCard, closeCard, guard, list, openCard, projects, showRibbon } from "../state";
 import { QuestionForm } from "./attention";
+import { JournalList } from "./journal";
 
 // One card, in full: where it stands, what it is waiting for, and who works it.
 // What happened to it along the way is the ribbon's to show; the journal is the
@@ -113,6 +114,7 @@ export default function CardPanel() {
       <Props />
       <Place />
       <Assignee />
+      <Journal />
     </div>
   );
 }
@@ -240,4 +242,21 @@ function Assignee() {
 
 function isAgent(name: string): boolean {
   return list(agents().agents).some((a) => a.name.toLowerCase() === name.toLowerCase());
+}
+
+// Folded, and last: it is found when somebody goes looking, and nothing on the
+// card depends on reading it.
+function Journal() {
+  const view = () => openCard()!;
+  const [open, setOpen] = createSignal(false);
+  return (
+    <div class="panel">
+      <button class="fold" onClick={() => setOpen(!open())}>
+        Журнал <span class={`caret ${open() ? "open" : ""}`}>›</span>
+      </button>
+      <Show when={open()}>
+        <JournalList entries={list(view().journal)} />
+      </Show>
+    </div>
+  );
 }

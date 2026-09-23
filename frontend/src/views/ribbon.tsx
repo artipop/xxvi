@@ -8,7 +8,7 @@ import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/
 import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
 import { attention, closedRibbon, guard, list, loadAttention, loadRibbons, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
 import { QuestionForm } from "./attention";
-import { JournalList } from "./journal";
+import { JournalOf } from "./journal";
 import { NAV } from "../nav";
 
 // The emulator is a large chunk and most screens are not terminals, so it
@@ -440,7 +440,7 @@ export default function Ribbon(): JSX.Element {
                   <div class="spacer" />
                   <button class="btn quiet tiny" onClick={() => setJournal(false)} title="J или Esc">Закрыть</button>
                 </header>
-                <JournalList cardId={cardId} />
+                <JournalOf cardId={cardId} />
               </aside>
             )}
           </For>
