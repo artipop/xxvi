@@ -480,3 +480,38 @@ func TestTheDiffScreenSaysWhenThereIsNoRepository(t *testing.T) {
 		t.Fatalf("ошибка должна говорить, чего нет: %v", err)
 	}
 }
+
+// A task typed into the ribbon goes straight to work: one call, and the card is
+// on its flow with the agent and the place it was given.
+func TestStartTaskGoesStraightToWork(t *testing.T) {
+	a := open(t)
+	api := NewAPI(a)
+	dev := mustFlow(t, a, "Разработка")
+	proj, err := api.SaveProject(model.Project{Name: "Тут", Kind: model.ProjectFolder, Path: t.TempDir()})
+	if err != nil {
+		t.Fatalf("проект: %v", err)
+	}
+
+	view, err := api.StartTask("Починить форму входа\n\nПадает на пустом пароле.", proj.ID, "Claude", dev.ID)
+	if err != nil {
+		t.Fatalf("начать задачу: %v", err)
+	}
+	c := view.Card
+	if c.State != model.StateFlow || c.Title != "Починить форму входа" || c.Project != proj.ID || c.Assignee != "Claude" {
+		t.Fatalf("карточка сразу в работе, с проектом и агентом: %+v", c)
+	}
+	if c.Body != "Починить форму входа\n\nПадает на пустом пароле." {
+		t.Fatalf("агенту уходит весь текст: %q", c.Body)
+	}
+
+	// A refusal comes before anything exists.
+	if _, err := api.StartTask("Ещё одна", "нет-такого", "Claude", dev.ID); err == nil {
+		t.Fatal("несуществующий проект — отказ")
+	}
+	if _, err := api.StartTask("   ", "", "Claude", dev.ID); err == nil {
+		t.Fatal("пустая задача — отказ")
+	}
+	if cards, _ := a.Store.CardsInState(model.StateInbox); len(cards) != 0 {
+		t.Fatalf("отказ не оставляет карточек во входящих: %+v", cards)
+	}
+}

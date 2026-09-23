@@ -435,6 +435,20 @@ export function Sources(): $CancellablePromise<model$0.Source[] | null> {
 }
 
 /**
+ * StartTask is a task typed straight into the ribbon: it becomes a card and is
+ * taken into work in one call, with nothing in between. Made here rather than
+ * as three calls from the screen, so that a refusal — no such project, no
+ * such flow — comes before anything exists, and a bad choice does not leave a
+ * stray card in the inbox for somebody to find later.
+ * 
+ * The first line is the title, as it is in a commit: what fits in a list. The
+ * whole text is the body, because that is what the agent is handed.
+ */
+export function StartTask(text: string, projectID: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(289388112, text, projectID, agent, flowID);
+}
+
+/**
  * TakeIntoWork puts an inbox card onto a flow. This is the one way a card
  * starts moving, and it is a person's decision.
  */

@@ -546,6 +546,53 @@ func (s *API) AddCard(sourceName, title, body string) (model.Card, error) {
 	return card, nil
 }
 
+// StartTask is a task typed straight into the ribbon: it becomes a card and is
+// taken into work in one call, with nothing in between. Made here rather than
+// as three calls from the screen, so that a refusal — no such project, no
+// such flow — comes before anything exists, and a bad choice does not leave a
+// stray card in the inbox for somebody to find later.
+//
+// The first line is the title, as it is in a commit: what fits in a list. The
+// whole text is the body, because that is what the agent is handed.
+func (s *API) StartTask(text, projectID, agent, flowID string) (CardView, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return CardView{}, fmt.Errorf("задача пустая — напишите, что сделать")
+	}
+	if projectID != "" {
+		if _, err := s.app.Store.Project(projectID); err != nil {
+			return CardView{}, err
+		}
+	}
+	if _, err := s.app.Store.Flow(flowID); err != nil {
+		return CardView{}, err
+	}
+	title, body := taskTitle(text), ""
+	if title != text {
+		body = text
+	}
+	card, err := s.app.Store.CreateCard(model.Card{
+		Title: title, Body: body, State: model.StateInbox,
+		Assignee: strings.TrimSpace(agent), Project: projectID,
+	})
+	if err != nil {
+		return CardView{}, err
+	}
+	if err := s.app.Engine.TakeIntoWork(card.ID, flowID); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(card.ID)
+}
+
+func taskTitle(text string) string {
+	line, _, _ := strings.Cut(text, "\n")
+	line = strings.TrimSpace(line)
+	if r := []rune(line); len(r) > 80 {
+		line = strings.TrimSpace(string(r[:80])) + "…"
+	}
+	return line
+}
+
 // ---- projects ----
 
 // Projects is the registry of places work happens.

@@ -9,6 +9,7 @@ import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/intern
 import { attention, closedRibbon, guard, list, loadAttention, loadRibbons, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
 import { QuestionForm } from "./attention";
 import { JournalOf } from "./journal";
+import { Compose } from "./compose";
 import { NAV } from "../nav";
 
 // The emulator is a large chunk and most screens are not terminals, so it
@@ -86,6 +87,7 @@ export default function Ribbon(): JSX.Element {
 
   const [menu, setMenu] = createSignal(false);
   const [journal, setJournal] = createSignal(false);
+  const [composing, setComposing] = createSignal(false);
   // Which pane has taken the keyboard: a preview or a note that a person
   // clicked into. Worth saying out loud, because from inside a preview the
   // ribbon cannot hear a key at all — the page has it — and a person pressing
@@ -305,11 +307,15 @@ export default function Ribbon(): JSX.Element {
         e.preventDefault();
         resize((at) => (at === WIDTHS.length - 1 ? DEFAULT_WIDTH : WIDTHS.length - 1));
         break;
+      case "n": case "N": case "т": case "Т":
+        if (ribbons.length > 0) { e.preventDefault(); setComposing(true); }
+        break;
       case "j": case "J": case "о": case "О":
         e.preventDefault(); setJournal(!journal()); break;
       case "Escape":
         e.preventDefault();
         if (menu()) setMenu(false);
+        else if (composing()) setComposing(false);
         else if (journal()) setJournal(false);
         else setTab("inbox");
         break;
@@ -346,6 +352,10 @@ export default function Ribbon(): JSX.Element {
           </Show>
         </span>
         <div class="spacer" />
+        <Show when={ribbons.length > 0}>
+          <button class="btn quiet tiny" style={{ "--wails-draggable": "no-drag" }}
+                  onClick={() => setComposing(!composing())} title="Новая задача (N)">+ Задача</button>
+        </Show>
         <Show when={current()}>
           <CardMenu
             cardId={current()!.cardId}
@@ -371,9 +381,9 @@ export default function Ribbon(): JSX.Element {
         when={ribbons.length > 0}
         fallback={
           <div class="ribbon-blank">
-            Ни одна карточка не в работе.
-            <br />Нажмите «Сделай» во входящих — и здесь появится её лента.
-            <br /><span class="meta">Esc — назад во входящие</span>
+            <h2>Новая задача</h2>
+            <Compose />
+            <div class="meta">Или «Сделай» во входящих. Esc — назад во входящие.</div>
           </div>
         }
       >
@@ -428,6 +438,12 @@ export default function Ribbon(): JSX.Element {
             )}
           </For>
         </div>
+
+        <Show when={composing()}>
+          <div class="ribbon-compose">
+            <Compose onDone={() => setComposing(false)} />
+          </div>
+        </Show>
 
         {/* Keyed on the card, so moving to another job shows that job's
             journal rather than the last one's. */}
