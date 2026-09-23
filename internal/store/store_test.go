@@ -306,6 +306,33 @@ func TestLeaveFlowClearsThePlaceAndTheQueue(t *testing.T) {
 	}
 }
 
+// An entry is placed by the transition it was written in, not by its time: a
+// step's report is written in the same millisecond as the transition after it.
+func TestJournalEntryKnowsItsTransition(t *testing.T) {
+	s := open(t)
+	card, _ := s.CreateCard(model.Card{Title: "Т"})
+
+	before, _ := s.Record(model.JournalEntry{CardID: card.ID, Kind: model.EntryProblem, Text: "до флоу"})
+	s.AppendFlowEvent(model.FlowEvent{CardID: card.ID, FlowID: "f", ToStage: "a"})
+	s.Record(model.JournalEntry{CardID: card.ID, Kind: model.EntryReport, SessionID: "s1", Author: "claude", Text: "итог"})
+	s.AppendFlowEvent(model.FlowEvent{CardID: card.ID, FlowID: "f", FromStage: "a", ToStage: "b"})
+	if _, err := s.Record(model.JournalEntry{CardID: card.ID, Text: "   "}); err != nil {
+		t.Fatalf("пустая запись: %v", err)
+	}
+
+	events, _ := s.FlowEvents(card.ID)
+	got, _ := s.Journal(card.ID)
+	if len(got) != 2 {
+		t.Fatalf("пустая запись не пишется, ожидалось 2, получено %+v", got)
+	}
+	if got[0].ID != before.ID || got[0].EventID != 0 {
+		t.Fatalf("запись до первого перехода ни к чему не привязана: %+v", got[0])
+	}
+	if r := got[1]; r.EventID != events[0].ID || r.Kind != model.EntryReport || r.SessionID != "s1" || r.Author != "claude" {
+		t.Fatalf("отчёт принадлежит первому переходу и своей сессии: %+v", r)
+	}
+}
+
 func TestQueueIsFIFOPerStage(t *testing.T) {
 	s := open(t)
 	claude(t, s)
@@ -549,6 +576,9 @@ func TestStageColumnsAreAddedToADatabaseThatAlreadyHasFlows(t *testing.T) {
 		`DROP TABLE project`,
 		`ALTER TABLE stage DROP COLUMN work`,
 		`ALTER TABLE agent_session DROP COLUMN work`,
+		`ALTER TABLE card_comment DROP COLUMN kind`,
+		`ALTER TABLE card_comment DROP COLUMN session_id`,
+		`ALTER TABLE card_comment DROP COLUMN event_id`,
 		`DELETE FROM schema_migration WHERE version >= 6`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {

@@ -170,7 +170,9 @@ func (p *Pipeline) commentOn(src model.Source, card model.Card, item model.Item,
 		return res, nil
 	}
 	text := fmt.Sprintf("Источник «%s»: элемент обновился.\n\n%s", src.Name, strings.TrimSpace(item.Body))
-	if _, err := p.store.AddComment(card.ID, src.Name, strings.TrimSpace(text)); err != nil {
+	if _, err := p.store.Record(model.JournalEntry{
+		CardID: card.ID, Kind: model.EntrySource, Author: src.Name, Text: strings.TrimSpace(text),
+	}); err != nil {
 		return Result{}, err
 	}
 	if err := p.store.SetItemVersion(card.ID, item.Version); err != nil {

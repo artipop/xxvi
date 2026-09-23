@@ -246,12 +246,12 @@ func (m *Manager) run(s *session) {
 		m.finish(s, store.StatusCancelled, "приложение завершается")
 		return
 	}
-	m.comment(s, fmt.Sprintf("Агент %s начал работу в папке `%s`.", s.agent.Name, s.cwd))
+	m.record(s, model.EntryMove, fmt.Sprintf("Агент %s начал работу в папке `%s`.", s.agent.Name, s.cwd))
 
 	conn, acpSessionID, cleanup, err := m.connect(s)
 	if err != nil {
 		m.finish(s, store.StatusFailed, err.Error())
-		m.comment(s, fmt.Sprintf("Сессия агента не запустилась: %s", truncate(err.Error(), 1500)))
+		m.record(s, model.EntryProblem, fmt.Sprintf("Сессия агента не запустилась: %s", truncate(err.Error(), 1500)))
 		return
 	}
 	defer cleanup()
@@ -264,13 +264,13 @@ func (m *Manager) run(s *session) {
 		m.finish(s, store.StatusCancelled, "приложение завершается")
 	case s.wasCancelled():
 		m.finish(s, store.StatusCancelled, "сессия отменена")
-		m.comment(s, "Сессия агента отменена.")
+		m.record(s, model.EntryProblem, "Сессия агента отменена.")
 	case err != nil:
 		m.finish(s, store.StatusFailed, err.Error())
-		m.comment(s, fmt.Sprintf("Сессия агента завершилась с ошибкой: %s", truncate(err.Error(), 1500)))
+		m.record(s, model.EntryProblem, fmt.Sprintf("Сессия агента завершилась с ошибкой: %s", truncate(err.Error(), 1500)))
 	default:
 		m.finish(s, store.StatusDone, "")
-		m.comment(s, doneComment(s, final))
+		m.record(s, model.EntryReport, doneReport(final))
 	}
 }
 
@@ -497,9 +497,11 @@ func (m *Manager) setStatus(s *session, status store.SessionStatus) {
 	m.emitSession(s)
 }
 
-func (m *Manager) comment(s *session, text string) {
-	if _, err := m.store.AddComment(s.card.ID, s.agent.Name, text); err != nil {
-		m.log.Warn("не удалось записать комментарий", "card", s.card.ID, "err", err)
+func (m *Manager) record(s *session, kind model.EntryKind, text string) {
+	if _, err := m.store.Record(model.JournalEntry{
+		CardID: s.card.ID, Kind: kind, Author: s.agent.Name, SessionID: s.id, Text: text,
+	}); err != nil {
+		m.log.Warn("не удалось записать в журнал карточки", "card", s.card.ID, "err", err)
 	}
 }
 
@@ -573,15 +575,14 @@ func policyFor(a model.Agent, fallback ToolPolicy) ToolPolicy {
 	return fallback
 }
 
-func doneComment(s *session, final string) string {
-	var b strings.Builder
-	b.WriteString("Агент завершил работу.\n\n")
+// doneReport is the agent's closing words as they are. What they are and who
+// said them is on the entry itself, and the working folder is on the entry that
+// opened the step; the ribbon sets this under the agent's screen as it stands.
+func doneReport(final string) string {
 	if t := strings.TrimSpace(final); t != "" {
-		b.WriteString(truncate(t, 4000))
-		b.WriteString("\n\n")
+		return truncate(t, 4000)
 	}
-	fmt.Fprintf(&b, "Рабочая папка: `%s`", s.cwd)
-	return b.String()
+	return "Агент завершил работу и ничего не сказал."
 }
 
 func truncate(s string, n int) string {

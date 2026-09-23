@@ -64,8 +64,8 @@ func TestLiveCardGoesThroughAFlow(t *testing.T) {
 			t.Fatalf("положение: %v", err)
 		}
 		if ok && st.StageID == "live-review" {
-			comments, _ := a.Store.Comments(card.ID)
-			for _, c := range comments {
+			entries, _ := a.Store.Journal(card.ID)
+			for _, c := range entries {
 				t.Logf("[%s] %s", c.Author, c.Text)
 			}
 			return
@@ -73,9 +73,9 @@ func TestLiveCardGoesThroughAFlow(t *testing.T) {
 		time.Sleep(2 * time.Second)
 	}
 
-	// Failing, say why: the comments are where the session wrote what happened.
-	comments, _ := a.Store.Comments(card.ID)
-	for _, c := range comments {
+	// Failing, say why: the journal is where the session wrote what happened.
+	entries, _ := a.Store.Journal(card.ID)
+	for _, c := range entries {
 		t.Logf("[%s] %s", c.Author, c.Text)
 	}
 	t.Fatal("карточка не доехала до второй стадии за отведённое время")

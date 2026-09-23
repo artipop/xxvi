@@ -125,7 +125,7 @@ func (s *Store) CardBySourceItem(source, externalID string) (model.Card, bool, e
 // knows the assignee does not have to send the title back with it.
 //
 // The card's own text is not here on purpose for the description a person
-// wrote: an agent that has something to say about a card says it in a comment,
+// wrote: an agent that has something to say about a card says it in the journal,
 // where the rest of its history already is.
 type CardEdit struct {
 	Title    *string
@@ -187,40 +187,51 @@ func (s *Store) SetItemVersion(cardID, version string) error {
 	return err
 }
 
-// ---- comments ----
+// ---- the journal ----
 
-// AddComment appends a line to a card's history. Author is an agent's name, a
-// source's name, or empty for the application itself.
-func (s *Store) AddComment(cardID, author, text string) (model.Comment, error) {
-	if strings.TrimSpace(text) == "" {
-		return model.Comment{}, nil
+// Record appends an entry to a card's journal. Author is an agent's name, a
+// source's name, or empty for the application itself. The transition the card
+// stands in is looked up here rather than passed in: every writer would have to
+// ask for it, and one that forgot would put its entry nowhere.
+func (s *Store) Record(e model.JournalEntry) (model.JournalEntry, error) {
+	if strings.TrimSpace(e.Text) == "" {
+		return model.JournalEntry{}, nil
 	}
 	now := time.Now().UTC()
-	res, err := s.db.Exec(`INSERT INTO card_comment (card_id, author, text, created_at) VALUES (?, ?, ?, ?)`,
-		cardID, author, text, millis(now))
+	res, err := s.db.Exec(`
+		INSERT INTO card_comment (card_id, author, text, kind, session_id, event_id, created_at)
+		VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(id), 0) FROM flow_event WHERE card_id = ?), ?)`,
+		e.CardID, e.Author, e.Text, string(e.Kind), e.SessionID, e.CardID, millis(now))
 	if err != nil {
-		return model.Comment{}, fmt.Errorf("записать комментарий: %w", err)
+		return model.JournalEntry{}, fmt.Errorf("записать в журнал карточки: %w", err)
 	}
-	id, _ := res.LastInsertId()
-	return model.Comment{ID: id, CardID: cardID, Author: author, Text: text, CreatedAt: now}, nil
+	e.ID, _ = res.LastInsertId()
+	e.CreatedAt = now
+	return e, nil
 }
 
-// Comments is a card's history, oldest first.
-func (s *Store) Comments(cardID string) ([]model.Comment, error) {
+// Journal is a card's journal, oldest first.
+func (s *Store) Journal(cardID string) ([]model.JournalEntry, error) {
 	var rows []struct {
 		ID        int64  `db:"id"`
 		CardID    string `db:"card_id"`
 		Author    string `db:"author"`
 		Text      string `db:"text"`
+		Kind      string `db:"kind"`
+		SessionID string `db:"session_id"`
+		EventID   int64  `db:"event_id"`
 		CreatedAt int64  `db:"created_at"`
 	}
-	if err := s.db.Select(&rows, `SELECT * FROM card_comment WHERE card_id = ? ORDER BY id`, cardID); err != nil {
+	if err := s.db.Select(&rows, `
+		SELECT id, card_id, author, text, kind, session_id, event_id, created_at
+		FROM card_comment WHERE card_id = ? ORDER BY id`, cardID); err != nil {
 		return nil, err
 	}
-	out := make([]model.Comment, 0, len(rows))
+	out := make([]model.JournalEntry, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, model.Comment{
-			ID: r.ID, CardID: r.CardID, Author: r.Author, Text: r.Text, CreatedAt: fromMillis(r.CreatedAt),
+		out = append(out, model.JournalEntry{
+			ID: r.ID, CardID: r.CardID, Kind: model.EntryKind(r.Kind), Author: r.Author, Text: r.Text,
+			SessionID: r.SessionID, EventID: r.EventID, CreatedAt: fromMillis(r.CreatedAt),
 		})
 	}
 	return out, nil

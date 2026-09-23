@@ -73,11 +73,11 @@ type CardSummary struct {
 
 // CardView is the whole card screen in one answer.
 type CardView struct {
-	Card     model.Card        `json:"card"`
-	Flow     *engine.CardFlow  `json:"flow,omitempty"`
-	Comments []model.Comment   `json:"comments"`
-	Sessions []store.Session   `json:"sessions"`
-	Events   []model.FlowEvent `json:"events"`
+	Card     model.Card           `json:"card"`
+	Flow     *engine.CardFlow     `json:"flow,omitempty"`
+	Comments []model.JournalEntry `json:"comments"`
+	Sessions []store.Session      `json:"sessions"`
+	Events   []model.FlowEvent    `json:"events"`
 	// Question is what the agent is waiting to hear, if it is waiting.
 	Question *acp.Question `json:"question,omitempty"`
 }
@@ -92,7 +92,7 @@ func (s *API) Card(cardID string) (CardView, error) {
 	if flow, err := s.app.Engine.CardFlowFor(cardID); err == nil {
 		view.Flow = flow
 	}
-	if view.Comments, err = s.app.Store.Comments(cardID); err != nil {
+	if view.Comments, err = s.app.Store.Journal(cardID); err != nil {
 		return CardView{}, err
 	}
 	if view.Sessions, err = s.app.Store.SessionsForCard(cardID); err != nil {
@@ -198,7 +198,7 @@ func (s *API) DropCard(cardID string) error {
 
 // AddComment writes a person's note into a card's history.
 func (s *API) AddComment(cardID, text string) (CardView, error) {
-	if _, err := s.app.Store.AddComment(cardID, "", text); err != nil {
+	if _, err := s.app.Store.Record(model.JournalEntry{CardID: cardID, Text: text}); err != nil {
 		return CardView{}, err
 	}
 	return s.Card(cardID)

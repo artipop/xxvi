@@ -67,17 +67,55 @@ type Card struct {
 // Prop reads a property case-insensitively.
 func (c Card) Prop(name string) string { return PropValue(c.Props, name) }
 
-// Comment is one line of a card's history: what a session said, what a flow
-// decided, what a person answered.
-type Comment struct {
-	ID     int64  `json:"id"`
-	CardID string `json:"cardId"`
+// JournalEntry is one line of a card's journal: who did what to it, and when.
+// The journal is an audit — written always, read when somebody goes looking —
+// and what a person watches the work by is the ribbon (docs/system.md §12).
+// The table is still card_comment: a migration step is never edited.
+type JournalEntry struct {
+	ID     int64     `json:"id"`
+	CardID string    `json:"cardId"`
+	Kind   EntryKind `json:"kind"`
 	// Author is who spoke: an agent's name, a source's name, or empty for the
 	// application itself.
-	Author    string    `json:"author,omitempty"`
-	Text      string    `json:"text"`
+	Author string `json:"author,omitempty"`
+	Text   string `json:"text"`
+	// SessionID is the agent run the entry was written for, when there was
+	// one. It ties a step's report and its failure to their own screen: a
+	// report is written the moment before the card moves on, in the same
+	// millisecond as the next transition, and by time it would land on the
+	// wrong segment.
+	SessionID string `json:"sessionId,omitempty"`
+	// EventID is the transition the card stood in when the entry was written —
+	// the segment it belongs to, for the entries no run is behind. Zero on the
+	// entries written before it was recorded.
+	EventID   int64     `json:"eventId,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 }
+
+// EntryKind is what a journal entry is. A closed set: the ribbon picks what it
+// shows by it, and a kind it does not know is a kind it silently drops. Empty
+// on the entries written before kinds were recorded: those are journal only.
+type EntryKind string
+
+const (
+	// EntryMove: the card entered a stage, finished its flow, left it, or an
+	// agent opened its terminal. Journal only — on the ribbon these are the
+	// segments themselves.
+	EntryMove EntryKind = "move"
+	// EntryProblem: why the card stands, or why a step broke. A plaque on its
+	// segment.
+	EntryProblem EntryKind = "problem"
+	// EntryReport: what an agent said its step came to. Under its screen.
+	EntryReport EntryKind = "report"
+	// EntryAsk: an agent's question and the answer to it. Journal only — on
+	// the ribbon they are part of the agent's stream.
+	EntryAsk EntryKind = "ask"
+	// EntryProps: a stage put values on the card. Journal only — the values
+	// are on the card.
+	EntryProps EntryKind = "props"
+	// EntrySource: the source the card came from changed its item.
+	EntrySource EntryKind = "source"
+)
 
 // FlowState is where a card stands on its route.
 type FlowState struct {

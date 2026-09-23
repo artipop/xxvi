@@ -118,23 +118,6 @@ export enum CardState {
 };
 
 /**
- * Comment is one line of a card's history: what a session said, what a flow
- * decided, what a person answered.
- */
-export interface Comment {
-    "id": number;
-    "cardId": string;
-
-    /**
-     * Author is who spoke: an agent's name, a source's name, or empty for the
-     * application itself.
-     */
-    "author"?: string;
-    "text": string;
-    "createdAt": string;
-}
-
-/**
  * Cond is what a conditional transition asks about, in exactly one of two
  * forms. Both are questions about the card, not scripts.
  */
@@ -169,6 +152,53 @@ export interface Edge {
      */
     "if"?: Cond | null;
 }
+
+/**
+ * EntryKind is what a journal entry is. A closed set: the ribbon picks what it
+ * shows by it, and a kind it does not know is a kind it silently drops. Empty
+ * on the entries written before kinds were recorded: those are journal only.
+ */
+export enum EntryKind {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    /**
+     * EntryMove: the card entered a stage, finished its flow, left it, or an
+     * agent opened its terminal. Journal only — on the ribbon these are the
+     * segments themselves.
+     */
+    EntryMove = "move",
+
+    /**
+     * EntryProblem: why the card stands, or why a step broke. A plaque on its
+     * segment.
+     */
+    EntryProblem = "problem",
+
+    /**
+     * EntryReport: what an agent said its step came to. Under its screen.
+     */
+    EntryReport = "report",
+
+    /**
+     * EntryAsk: an agent's question and the answer to it. Journal only — on
+     * the ribbon they are part of the agent's stream.
+     */
+    EntryAsk = "ask",
+
+    /**
+     * EntryProps: a stage put values on the card. Journal only — the values
+     * are on the card.
+     */
+    EntryProps = "props",
+
+    /**
+     * EntrySource: the source the card came from changed its item.
+     */
+    EntrySource = "source",
+};
 
 /**
  * Flow is one named route.
@@ -209,6 +239,42 @@ export interface FlowEvent {
 export interface InboxGroup {
     "source": string;
     "cards": Card[] | null;
+}
+
+/**
+ * JournalEntry is one line of a card's journal: who did what to it, and when.
+ * The journal is an audit — written always, read when somebody goes looking —
+ * and what a person watches the work by is the ribbon (docs/system.md §12).
+ * The table is still card_comment: a migration step is never edited.
+ */
+export interface JournalEntry {
+    "id": number;
+    "cardId": string;
+    "kind": EntryKind;
+
+    /**
+     * Author is who spoke: an agent's name, a source's name, or empty for the
+     * application itself.
+     */
+    "author"?: string;
+    "text": string;
+
+    /**
+     * SessionID is the agent run the entry was written for, when there was
+     * one. It ties a step's report and its failure to their own screen: a
+     * report is written the moment before the card moves on, in the same
+     * millisecond as the next transition, and by time it would land on the
+     * wrong segment.
+     */
+    "sessionId"?: string;
+
+    /**
+     * EventID is the transition the card stood in when the entry was written —
+     * the segment it belongs to, for the entries no run is behind. Zero on the
+     * entries written before it was recorded.
+     */
+    "eventId"?: number;
+    "createdAt": string;
 }
 
 /**

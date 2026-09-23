@@ -74,9 +74,9 @@ func TestChangedItemCommentsOnItsCard(t *testing.T) {
 	if res[0].Outcome != OutcomeCommented || res[0].CardID != first[0].CardID {
 		t.Fatalf("изменившийся элемент дописывает комментарий своей карточке: %+v", res[0])
 	}
-	comments, _ := st.Comments(first[0].CardID)
-	if len(comments) != 1 || comments[0].Author != "Демо" {
-		t.Fatalf("комментарий от источника не записан: %+v", comments)
+	entries, _ := st.Journal(first[0].CardID)
+	if len(entries) != 1 || entries[0].Author != "Демо" || entries[0].Kind != model.EntrySource {
+		t.Fatalf("запись от источника не сделана: %+v", entries)
 	}
 	// And the card now reflects the new state, so a third delivery is silent.
 	again, _ := p.Ingest("Демо", []model.Item{{ExternalID: "1", Version: "v2"}})
@@ -95,9 +95,9 @@ func TestUpdateModeIgnoreStaysSilent(t *testing.T) {
 	if res[0].Outcome != OutcomeUnchanged {
 		t.Fatalf("режим ignore ничего не пишет: %+v", res[0])
 	}
-	comments, _ := st.Comments(first[0].CardID)
-	if len(comments) != 0 {
-		t.Fatalf("комментариев быть не должно: %+v", comments)
+	entries, _ := st.Journal(first[0].CardID)
+	if len(entries) != 0 {
+		t.Fatalf("записей быть не должно: %+v", entries)
 	}
 }
 

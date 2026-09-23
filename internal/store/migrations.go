@@ -278,5 +278,16 @@ ALTER TABLE card ADD COLUMN project TEXT NOT NULL DEFAULT '';`,
 		`
 ALTER TABLE stage ADD COLUMN work TEXT NOT NULL DEFAULT '';
 ALTER TABLE agent_session ADD COLUMN work TEXT NOT NULL DEFAULT '';`,
+
+		// 10. The comments became the card's journal, and an entry says what
+		// it is and where it belongs: the ribbon shows a step's report and the
+		// reason a card stands on their own segment, and leaves the rest to the
+		// journal. Time cannot place them — a report is written in the same
+		// millisecond as the transition after it — so the entry carries the run
+		// it was written for and the transition the card stood in.
+		`
+ALTER TABLE card_comment ADD COLUMN kind       TEXT    NOT NULL DEFAULT '';
+ALTER TABLE card_comment ADD COLUMN session_id TEXT    NOT NULL DEFAULT '';
+ALTER TABLE card_comment ADD COLUMN event_id   INTEGER NOT NULL DEFAULT 0;`,
 	}
 }

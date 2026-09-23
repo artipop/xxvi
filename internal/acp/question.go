@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/artipop/xxvi/internal/model"
 )
 
 // A question is an agent asking the person whose card it is working, and
@@ -107,9 +109,9 @@ func (m *Manager) ask(ctx context.Context, s *session, q Question) Answer {
 	s.event(m, "question", map[string]any{
 		"questionId": q.ID, "kind": string(q.Kind), "text": q.Text, "tool": q.Tool,
 	})
-	// The card is the durable record of everything a session does, and a
+	// The journal is the durable record of everything a session does, and a
 	// question is the one thing in it that was addressed to a person.
-	m.comment(s, questionComment(q))
+	m.record(s, model.EntryAsk, questionEntry(q))
 	m.setStatus(s, statusAsking)
 	m.emitAttention(q.attention())
 	m.log.Info("агент спрашивает", "session", s.id, "card", q.CardID, "kind", q.Kind, "tool", q.Tool)
@@ -136,7 +138,7 @@ func (m *Manager) ask(ctx context.Context, s *session, q Question) Answer {
 	s.event(m, "answer", map[string]any{
 		"questionId": q.ID, "optionId": answer.OptionID, "declined": answer.Declined,
 	})
-	m.comment(s, answerComment(q, answer))
+	m.record(s, model.EntryAsk, answerEntry(q, answer))
 	return answer
 }
 
@@ -305,7 +307,7 @@ func (m *Manager) clearQuiet(s *session) {
 	m.emitAttention(a)
 }
 
-func questionComment(q Question) string {
+func questionEntry(q Question) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Агент %s спрашивает:\n\n%s", q.Agent, q.Text)
 	for _, opt := range q.Options {
@@ -317,7 +319,7 @@ func questionComment(q Question) string {
 	return b.String()
 }
 
-func answerComment(q Question, ans Answer) string {
+func answerEntry(q Question, ans Answer) string {
 	switch {
 	case ans.Declined || ans.empty():
 		return fmt.Sprintf("Вопрос агента %s остался без ответа — работа продолжена без него.", q.Agent)

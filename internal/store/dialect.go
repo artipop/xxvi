@@ -16,7 +16,7 @@ type Dialect interface {
 	// DSN builds a connection string for a database at path.
 	DSN(path string) string
 	// AutoIncrementPK is the primary key clause for a table whose rows are only
-	// ever appended and read back in order: comments, flow events.
+	// ever appended and read back in order: the journal, flow events.
 	AutoIncrementPK() string
 	// Setup is what has to run on every fresh connection before anything else.
 	Setup() []string

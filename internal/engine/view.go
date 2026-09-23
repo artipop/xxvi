@@ -8,7 +8,7 @@ import (
 
 // What a card can say about itself: which flow it is on, where along it it
 // stands, and what it is waiting for. The card shows this instead of making
-// somebody read the comments backwards to work out why it has not moved.
+// somebody read the journal backwards to work out why it has not moved.
 
 // CardStage is one stage of the flow as the card sees it.
 type CardStage struct {
@@ -48,7 +48,7 @@ func (e *Engine) CardFlowFor(cardID string) (*CardFlow, error) {
 	}
 	flow, err := e.store.Flow(st.FlowID)
 	if err != nil {
-		return nil, nil // the flow was deleted; the card says so in its comments
+		return nil, nil // the flow was deleted; the card says so in its journal
 	}
 
 	out := &CardFlow{FlowID: flow.ID, FlowName: flow.Name, StageID: st.StageID, Since: st.EnteredAt}

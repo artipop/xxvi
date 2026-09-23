@@ -169,7 +169,7 @@ func (m *Manager) runTerminal(s *session) {
 		cancel()
 	}
 	m.setStatus(s, store.StatusRunning)
-	m.comment(s, fmt.Sprintf("Агент %s открыл терминал в папке `%s`.", s.agent.Name, s.cwd))
+	m.record(s, model.EntryMove, fmt.Sprintf("Агент %s открыл терминал в папке `%s`.", s.agent.Name, s.cwd))
 
 	if !promptTaken {
 		go deliverPrompt(m, s, sess)
@@ -191,17 +191,17 @@ func (m *Manager) runTerminal(s *session) {
 		m.finish(s, store.StatusCancelled, "приложение завершается")
 	case s.wasCancelled():
 		m.finish(s, store.StatusCancelled, "шаг отменён")
-		m.comment(s, "Терминал агента закрыт: шаг отменён.")
+		m.record(s, model.EntryProblem, "Терминал агента закрыт: шаг отменён.")
 	case closedByPerson(err, time.Since(opened)):
 		// Somebody ended the conversation. That is an intervention, not an
 		// outcome: the card stays, and where it goes next is theirs to say.
 		s.markCancelled()
 		m.finish(s, store.StatusCancelled, "терминал закрыт без отчёта")
-		m.comment(s, "Терминал агента закрыли, а шаг так и не отчитался. "+
+		m.record(s, model.EntryProblem, "Терминал агента закрыли, а шаг так и не отчитался. "+
 			"Карточка стоит на стадии — куда ей дальше, решает человек.")
 	case err != nil:
 		m.finish(s, store.StatusFailed, err.Error())
-		m.comment(s, fmt.Sprintf("Шаг в терминале не закончился: %s", truncate(err.Error(), 1500)))
+		m.record(s, model.EntryProblem, fmt.Sprintf("Шаг в терминале не закончился: %s", truncate(err.Error(), 1500)))
 	default:
 		// The report is handed to the engine in the shape a session's closing
 		// words would have had: the summary, then one «Свойство: значение» line
@@ -213,7 +213,7 @@ func (m *Manager) runTerminal(s *session) {
 			status = store.StatusFailed
 		}
 		m.finish(s, status, "")
-		m.comment(s, terminalComment(s, report))
+		m.record(s, model.EntryReport, terminalReport(report))
 	}
 }
 
@@ -271,7 +271,7 @@ func (m *Manager) watchTerminal(
 // for a person who has nothing to look at.
 func (m *Manager) failTerminal(s *session, why string) {
 	m.finish(s, store.StatusFailed, why)
-	m.comment(s, "Терминал агента не открылся: "+why)
+	m.record(s, model.EntryProblem, "Терминал агента не открылся: "+why)
 }
 
 // workedBefore reports whether this card has already had a run on this stage,
@@ -437,17 +437,16 @@ func reportText(writes []model.PropertyWrite, r stagemcp.Report) string {
 	return strings.TrimSpace(b.String())
 }
 
-func terminalComment(s *session, r stagemcp.Report) string {
-	var b strings.Builder
-	if r.OK {
-		b.WriteString("Агент закончил шаг в терминале.\n\n")
-	} else {
-		b.WriteString("Агент сказал, что шаг не прошёл.\n\n")
+func terminalReport(r stagemcp.Report) string {
+	summary := truncate(strings.TrimSpace(r.Summary), 4000)
+	switch {
+	case r.OK && summary == "":
+		return "Агент закончил шаг и ничего о нём не сказал."
+	case r.OK:
+		return summary
+	case summary == "":
+		return "Агент сказал, что шаг не прошёл."
+	default:
+		return "Шаг не прошёл.\n\n" + summary
 	}
-	if summary := strings.TrimSpace(r.Summary); summary != "" {
-		b.WriteString(truncate(summary, 4000))
-		b.WriteString("\n\n")
-	}
-	fmt.Fprintf(&b, "Рабочая папка: `%s`", s.cwd)
-	return b.String()
 }

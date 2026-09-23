@@ -52,7 +52,7 @@ type Emitter interface {
 }
 
 // UI event names. Two: a card changed, and something is waiting for a person.
-// What a session *says* is not among them — that is the card's comments.
+// What a session *says* is not among them — that is the card's journal and the session's stream.
 const (
 	EventCard      = "card"
 	EventAttention = "attention"
@@ -139,7 +139,7 @@ func (e *Engine) MoveTo(cardID, stageID string) error {
 }
 
 // RemoveFromFlow takes a card off its flow and back into the inbox. Nothing is
-// undone — the comments stay, and so does the journal.
+// undone — the journal and the flow events stay.
 func (e *Engine) RemoveFromFlow(cardID string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -148,7 +148,7 @@ func (e *Engine) RemoveFromFlow(cardID string) error {
 	if err := e.store.LeaveFlow(cardID, model.StateInbox); err != nil {
 		return err
 	}
-	e.comment(cardID, "Карточка снята с флоу и вернулась во входящие.")
+	e.record(cardID, model.EntryMove, "Карточка снята с флоу и вернулась во входящие.")
 	e.emitCard(cardID)
 	return nil
 }
@@ -214,18 +214,18 @@ func (e *Engine) advanceLocked(cardID, on, detail, agentText string) (leftStage 
 	}
 	stage, ok := flow.Stage(st.StageID)
 	if !ok {
-		e.comment(cardID, fmt.Sprintf("Флоу «%s»: стадия исчезла из маршрута — карточка осталась на месте.", flow.Name))
+		e.record(cardID, model.EntryProblem, fmt.Sprintf("Флоу «%s»: стадия исчезла из маршрута — карточка осталась на месте.", flow.Name))
 		return ""
 	}
 	// How the stage ended goes onto the card before anything is decided by it:
-	// an edge may branch on it, and the comment below is something a person
+	// an edge may branch on it, and the journal entry below is something a person
 	// will read. Every stage produces one, so nothing has to declare it.
 	e.writeOutcome(cardID, on)
 
 	if !flow.HasEdge(stage.ID, on) {
 		// A missing edge for an outcome is worth saying out loud: the flow
 		// stops here and somebody has to know why.
-		e.comment(cardID, fmt.Sprintf(
+		e.record(cardID, model.EntryProblem, fmt.Sprintf(
 			"Флоу «%s»: у стадии «%s» нет перехода по событию «%s» — карточка осталась на месте.",
 			flow.Name, stage.Name, model.TriggerLabel(on)))
 		return stage.ID
@@ -242,7 +242,7 @@ func (e *Engine) advanceLocked(cardID, on, detail, agentText string) (leftStage 
 	if !ok {
 		// Edges exist for this event, but no condition held and there is no
 		// fallback. That is a decision the flow made, and worth recording.
-		e.comment(cardID, fmt.Sprintf(
+		e.record(cardID, model.EntryProblem, fmt.Sprintf(
 			"Флоу «%s»: событие «%s» пришло, но ни одно условие стадии «%s» не выполнено — карточка осталась на месте.",
 			flow.Name, model.TriggerLabel(on), stage.Name))
 		return stage.ID
@@ -287,7 +287,7 @@ func (e *Engine) enterStage(card model.Card, flow model.Flow, stage model.Stage,
 
 	if err := e.store.EnterStage(card.ID, flow.ID, stage.ID); err != nil {
 		e.log.Error("не удалось записать положение карточки", "card", card.ID, "err", err)
-		e.comment(card.ID, fmt.Sprintf("Флоу «%s»: не удалось перевести карточку в «%s»: %v", flow.Name, stage.Name, err))
+		e.record(card.ID, model.EntryProblem, fmt.Sprintf("Флоу «%s»: не удалось перевести карточку в «%s»: %v", flow.Name, stage.Name, err))
 		return
 	}
 	from := ""
@@ -299,7 +299,7 @@ func (e *Engine) enterStage(card model.Card, flow model.Flow, stage model.Stage,
 	}); err != nil {
 		e.log.Error("не удалось записать событие флоу", "card", card.ID, "err", err)
 	}
-	e.comment(card.ID, fmt.Sprintf("Флоу «%s»: карточка переведена в «%s» — %s.", flow.Name, stage.Name, detail))
+	e.record(card.ID, model.EntryMove, fmt.Sprintf("Флоу «%s»: карточка переведена в «%s» — %s.", flow.Name, stage.Name, detail))
 	e.log.Info("карточка встала на стадию", "card", card.ID, "flow", flow.Name, "stage", stage.Name, "on", on)
 	e.emitCard(card.ID)
 
@@ -316,7 +316,7 @@ func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
 			e.log.Error("не удалось закрыть карточку", "card", card.ID, "err", err)
 			return
 		}
-		e.comment(card.ID, fmt.Sprintf("Флоу «%s» пройден до конца. Карточка закрыта.", flow.Name))
+		e.record(card.ID, model.EntryMove, fmt.Sprintf("Флоу «%s» пройден до конца. Карточка закрыта.", flow.Name))
 		e.emitCard(card.ID)
 		return
 	}
@@ -324,7 +324,7 @@ func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
 		return // the card stands and waits for an event
 	}
 	if e.runner == nil {
-		e.comment(card.ID, "Запускать агентов сейчас нечем — стадия ничего не сделала.")
+		e.record(card.ID, model.EntryProblem, "Запускать агентов сейчас нечем — стадия ничего не сделала.")
 		return
 	}
 
@@ -350,7 +350,7 @@ func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
 	case errors.As(err, &taken):
 		// Not a failed step — the work is being done, only not by us — so the
 		// card waits where it stands rather than taking a failure edge.
-		e.comment(card.ID, fmt.Sprintf(
+		e.record(card.ID, model.EntryProblem, fmt.Sprintf(
 			"Агент не запускался: %v. Карточка ждёт, пока её отпустят или назначат агента.", err))
 		return
 	default:
@@ -381,7 +381,7 @@ func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
 // sit with no explanation and no way on.
 func (e *Engine) failStage(card model.Card, flow model.Flow, stage model.Stage, cause error) {
 	e.log.Warn("стадия не запустилась", "card", card.ID, "stage", stage.Name, "err", cause)
-	e.comment(card.ID, fmt.Sprintf("Флоу «%s», стадия «%s»: шаг не запущен: %v", flow.Name, stage.Name, cause))
+	e.record(card.ID, model.EntryProblem, fmt.Sprintf("Флоу «%s», стадия «%s»: шаг не запущен: %v", flow.Name, stage.Name, cause))
 	e.advanceLocked(card.ID, model.TriggerFailure, "шаг не удалось запустить", "")
 }
 
@@ -409,9 +409,9 @@ func (e *Engine) harvestWritesLocked(cardID, outcome, detail, agentText string) 
 	if len(delivered) > 0 {
 		if _, err := e.store.UpdateCard(cardID, store.CardEdit{Props: delivered}); err != nil {
 			e.log.Warn("не удалось записать выходы стадии", "card", cardID, "stage", stage.Name, "err", err)
-			e.comment(cardID, fmt.Sprintf("Не удалось записать результат стадии «%s» на карточку: %v", stage.Name, err))
+			e.record(cardID, model.EntryProblem, fmt.Sprintf("Не удалось записать результат стадии «%s» на карточку: %v", stage.Name, err))
 		} else {
-			e.comment(cardID, fmt.Sprintf("Стадия «%s» записала на карточку: %s.", stage.Name, describeWrites(stage.Writes, delivered)))
+			e.record(cardID, model.EntryProps, fmt.Sprintf("Стадия «%s» записала на карточку: %s.", stage.Name, describeWrites(stage.Writes, delivered)))
 		}
 	}
 
@@ -425,7 +425,7 @@ func (e *Engine) harvestWritesLocked(cardID, outcome, detail, agentText string) 
 	if len(missing) == 0 {
 		return outcome, detail
 	}
-	e.comment(cardID, fmt.Sprintf(
+	e.record(cardID, model.EntryProblem, fmt.Sprintf(
 		"Стадия «%s» обязана записать %s — этого в ответе агента нет, шаг считается неудачным.",
 		stage.Name, quoteAll(missing)))
 	return model.TriggerFailure, fmt.Sprintf("не записано обязательное: %s", strings.Join(missing, ", "))
@@ -489,7 +489,7 @@ func (e *Engine) enqueue(card model.Card, flow model.Flow, stage model.Stage) {
 	}
 	e.log.Info("карточка ждёт места на стадии", "card", card.ID, "stage", stage.Name, "fresh", fresh)
 	if fresh {
-		e.comment(card.ID, fmt.Sprintf(
+		e.record(card.ID, model.EntryProblem, fmt.Sprintf(
 			"Стадия «%s» занята — шаг начнётся, как только освободится место.", stage.Name))
 		e.emitCard(card.ID)
 	}
@@ -548,9 +548,9 @@ func (e *Engine) cancel(cardID, reason string) {
 	}
 }
 
-func (e *Engine) comment(cardID, text string) {
-	if _, err := e.store.AddComment(cardID, "", text); err != nil {
-		e.log.Warn("не удалось записать комментарий", "card", cardID, "err", err)
+func (e *Engine) record(cardID string, kind model.EntryKind, text string) {
+	if _, err := e.store.Record(model.JournalEntry{CardID: cardID, Kind: kind, Text: text}); err != nil {
+		e.log.Warn("не удалось записать в журнал карточки", "card", cardID, "err", err)
 	}
 }
 

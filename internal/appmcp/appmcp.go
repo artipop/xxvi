@@ -437,7 +437,7 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 		return errorf("%v", err), nil, nil
 	}
 	if summary := strings.TrimSpace(in.Summary); summary != "" {
-		if _, err := s.deps.Store.AddComment(card.ID, "", summary); err != nil {
+		if _, err := s.deps.Store.Record(model.JournalEntry{CardID: card.ID, Kind: model.EntryReport, Text: summary}); err != nil {
 			s.log.Warn("не удалось записать итог шага", "card", card.ID, "err", err)
 		}
 	}
@@ -504,7 +504,7 @@ func (s *Server) moved(card model.Card, flow model.Flow, from model.Stage) strin
 	if outcome := fresh.Props[model.OutcomeProperty]; outcome != "" {
 		fmt.Fprintf(&b, " Исход: %s.", outcome)
 	}
-	if last := s.lastComments(card.ID, 2); last != "" {
+	if last := s.lastEntries(card.ID, 2); last != "" {
 		b.WriteString("\n\n")
 		b.WriteString(last)
 	}
@@ -553,8 +553,8 @@ func (s *Server) describeCard(card model.Card) string {
 			fmt.Fprintf(&b, "  Ждёт: %s\n", strings.Join(place.WaitingFor, "; "))
 		}
 	}
-	if last := s.lastComments(card.ID, 5); last != "" {
-		b.WriteString("\nПоследнее в истории:\n")
+	if last := s.lastEntries(card.ID, 5); last != "" {
+		b.WriteString("\nПоследнее в журнале:\n")
 		b.WriteString(last)
 	}
 	return b.String()
@@ -734,17 +734,17 @@ func (s *Server) putProps(cardID string, props map[string]string) error {
 	return err
 }
 
-func (s *Server) lastComments(cardID string, n int) string {
-	comments, err := s.deps.Store.Comments(cardID)
-	if err != nil || len(comments) == 0 {
+func (s *Server) lastEntries(cardID string, n int) string {
+	entries, err := s.deps.Store.Journal(cardID)
+	if err != nil || len(entries) == 0 {
 		return ""
 	}
-	if len(comments) > n {
-		comments = comments[len(comments)-n:]
+	if len(entries) > n {
+		entries = entries[len(entries)-n:]
 	}
 	var b strings.Builder
-	for _, c := range comments {
-		fmt.Fprintf(&b, "- %s\n", strings.TrimSpace(c.Text))
+	for _, e := range entries {
+		fmt.Fprintf(&b, "- %s\n", strings.TrimSpace(e.Text))
 	}
 	return b.String()
 }

@@ -269,20 +269,20 @@ func TestRejectionSendsTheCardBackToTheAgent(t *testing.T) {
 }
 
 // Setting an unrelated property must not wake a waiting stage — and must not
-// leave a "nothing matched" comment either.
+// leave a "nothing matched" entry either.
 func TestUnrelatedPropertyDoesNotWakeTheStage(t *testing.T) {
 	f := setup(t, devFlow())
 	card := f.card(t, "Т")
 	f.engine.TakeIntoWork(card.ID, f.flow.ID)
 	f.runner.finish(card.ID, model.TriggerSuccess, "")
 
-	before, _ := f.store.Comments(card.ID)
+	before, _ := f.store.Journal(card.ID)
 	f.engine.CardChanged(card.ID, "Приоритет", "срочно")
 
 	if got := f.stageOf(t, card.ID); got != "review" {
 		t.Fatalf("карточка не должна была двинуться, получено %q", got)
 	}
-	after, _ := f.store.Comments(card.ID)
+	after, _ := f.store.Journal(card.ID)
 	if len(after) != len(before) {
 		t.Fatalf("постороннее изменение не адресовано стадии и не должно ничего писать: %q", after[len(after)-1].Text)
 	}
@@ -302,7 +302,7 @@ func TestUnmatchedAnswerIsExplained(t *testing.T) {
 	if got := f.stageOf(t, card.ID); got != "review" {
 		t.Fatalf("карточка должна остаться на месте, получено %q", got)
 	}
-	if !lastCommentContains(t, f, "ни одно условие") {
+	if !lastEntryIs(t, f, model.EntryProblem, "ни одно условие") {
 		t.Fatal("карточка должна сказать, почему она не поехала")
 	}
 }
@@ -319,7 +319,7 @@ func TestMissingEdgeIsExplained(t *testing.T) {
 	if got := f.stageOf(t, card.ID); got != "work" {
 		t.Fatalf("без ребра карточка остаётся на месте, получено %q", got)
 	}
-	if !lastCommentContains(t, f, "нет перехода") {
+	if !lastEntryIs(t, f, model.EntryProblem, "нет перехода") {
 		t.Fatal("карточка должна сказать, что перехода нет")
 	}
 }
@@ -474,7 +474,7 @@ func TestCardTakenByAPersonDoesNotStartAnAgent(t *testing.T) {
 	if got := f.stageOf(t, card.ID); got != "work" {
 		t.Fatalf("карточка должна остаться на своей стадии, получено %q", got)
 	}
-	if !lastCommentContains(t, f, "Артём") {
+	if !lastEntryIs(t, f, model.EntryProblem, "Артём") {
 		t.Fatal("карточка должна сказать, кто её взял")
 	}
 }
@@ -505,7 +505,7 @@ func TestAStageThatCannotStartTakesTheFailureBranch(t *testing.T) {
 	if f.stateOf(t, card.ID) != model.StateDone {
 		t.Fatal("карточка должна была уехать по ветке отказа в финальную стадию")
 	}
-	if !anyCommentContains(t, f, card.ID, "шаг не запущен") {
+	if !anyEntryIs(t, f, card.ID, model.EntryProblem, "шаг не запущен") {
 		t.Fatal("карточка должна сказать, что шаг не запустился")
 	}
 }
@@ -612,20 +612,24 @@ type startError struct{}
 
 func (*startError) Error() string { return "адаптер агента не найден" }
 
-func lastCommentContains(t *testing.T, f fixture, want string) bool {
+// lastEntryIs checks both what the journal says and what it takes it for: the
+// ribbon picks what to show by the kind, so a problem recorded as a move is a
+// card that stands with no word on its segment.
+func lastEntryIs(t *testing.T, f fixture, kind model.EntryKind, want string) bool {
 	t.Helper()
-	comments, _ := f.store.Comments(lastCardID(t, f))
-	if len(comments) == 0 {
+	entries, _ := f.store.Journal(lastCardID(t, f))
+	if len(entries) == 0 {
 		return false
 	}
-	return strings.Contains(comments[len(comments)-1].Text, want)
+	last := entries[len(entries)-1]
+	return last.Kind == kind && strings.Contains(last.Text, want)
 }
 
-func anyCommentContains(t *testing.T, f fixture, cardID, want string) bool {
+func anyEntryIs(t *testing.T, f fixture, cardID string, kind model.EntryKind, want string) bool {
 	t.Helper()
-	comments, _ := f.store.Comments(cardID)
-	for _, c := range comments {
-		if strings.Contains(c.Text, want) {
+	entries, _ := f.store.Journal(cardID)
+	for _, e := range entries {
+		if e.Kind == kind && strings.Contains(e.Text, want) {
 			return true
 		}
 	}
