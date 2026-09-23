@@ -175,8 +175,9 @@ export function Done(): $CancellablePromise<model$0.Card[] | null> {
 }
 
 /**
- * DropCard files a card away without doing it. The card is kept — what was
- * dropped and why is the sort of thing somebody asks about later.
+ * DropCard files a card away without doing it, from the inbox or straight off
+ * its flow. The card is kept — what was dropped and why is the sort of thing
+ * somebody asks about later.
  */
 export function DropCard(cardID: string): $CancellablePromise<void> {
     return $Call.ByID(216846176, cardID);
@@ -231,6 +232,13 @@ export function Inbox(): $CancellablePromise<model$0.InboxGroup[] | null> {
  */
 export function InstallUpdate(): $CancellablePromise<void> {
     return $Call.ByID(1867268347);
+}
+
+/**
+ * Journal is the card's audit: who did what to it and when, oldest first.
+ */
+export function Journal(cardID: string): $CancellablePromise<model$0.JournalEntry[] | null> {
+    return $Call.ByID(1991929330, cardID);
 }
 
 /**

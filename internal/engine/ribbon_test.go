@@ -383,6 +383,9 @@ func TestAReportStaysUnderItsOwnRun(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("сессия: %v", err)
 	}
+	// A run is placed by when it started, and one that started in the very
+	// millisecond the card left would belong to neither visit.
+	time.Sleep(2 * time.Millisecond)
 	f.store.Record(model.JournalEntry{CardID: card.ID, Kind: model.EntryReport, SessionID: "s1", Text: "Форма починена."})
 	f.runner.finish(card.ID, model.TriggerSuccess, "")
 	f.store.Record(model.JournalEntry{CardID: card.ID, Kind: model.EntryProblem, SessionID: "s1", Text: "Сессия агента отменена."})

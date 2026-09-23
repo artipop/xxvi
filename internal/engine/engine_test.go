@@ -528,6 +528,44 @@ func TestManualMoveCancelsWhateverWasRunning(t *testing.T) {
 	}
 }
 
+// Dropping a card in work is one decision, not «take it off, then drop it»:
+// the agent stops and the card is gone from the flow in one go.
+func TestDropTakesACardStraightOffItsFlow(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Т")
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+
+	if err := f.engine.Drop(card.ID); err != nil {
+		t.Fatalf("отбросить: %v", err)
+	}
+	if f.stateOf(t, card.ID) != model.StateDropped {
+		t.Fatal("карточка отброшена")
+	}
+	if f.runner.RunningOnStage("work") != 0 {
+		t.Fatal("работавшая сессия должна быть отменена")
+	}
+	if got := f.stageOf(t, card.ID); got != "" {
+		t.Fatalf("положение должно быть очищено, получено %q", got)
+	}
+	if !anyEntryIs(t, f, card.ID, model.EntryMove, "отброшена") {
+		t.Fatal("журнал говорит, что карточку отбросили")
+	}
+}
+
+func TestADoneCardIsNotDropped(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Т")
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+	f.runner.finish(card.ID, model.TriggerFailure, "") // в «Заблокировано», финал
+
+	if err := f.engine.Drop(card.ID); err == nil {
+		t.Fatal("сделанную карточку отбросить нельзя")
+	}
+	if f.stateOf(t, card.ID) != model.StateDone {
+		t.Fatal("карточка остаётся сделанной")
+	}
+}
+
 func TestRemoveFromFlowReturnsTheCardToTheInbox(t *testing.T) {
 	f := setup(t, devFlow())
 	card := f.card(t, "Т")

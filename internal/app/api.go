@@ -184,16 +184,11 @@ func (s *API) RemoveFromFlow(cardID string) (CardView, error) {
 	return s.Card(cardID)
 }
 
-// DropCard files a card away without doing it. The card is kept — what was
-// dropped and why is the sort of thing somebody asks about later.
+// DropCard files a card away without doing it, from the inbox or straight off
+// its flow. The card is kept — what was dropped and why is the sort of thing
+// somebody asks about later.
 func (s *API) DropCard(cardID string) error {
-	dropped := model.StateDropped
-	s.app.Agents.Cancel(cardID, "карточка отброшена")
-	if err := s.app.Store.LeaveFlow(cardID, dropped); err != nil {
-		return err
-	}
-	s.app.Emit(engine.EventCard, map[string]any{"cardId": cardID})
-	return nil
+	return s.app.Engine.Drop(cardID)
 }
 
 // AddComment writes a person's note into a card's history.
@@ -202,6 +197,11 @@ func (s *API) AddComment(cardID, text string) (CardView, error) {
 		return CardView{}, err
 	}
 	return s.Card(cardID)
+}
+
+// Journal is the card's audit: who did what to it and when, oldest first.
+func (s *API) Journal(cardID string) ([]model.JournalEntry, error) {
+	return s.app.Store.Journal(cardID)
 }
 
 // ---- the ribbon ----

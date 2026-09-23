@@ -153,6 +153,33 @@ func (e *Engine) RemoveFromFlow(cardID string) error {
 	return nil
 }
 
+// Drop files a card away from wherever it is — the inbox or a flow — without
+// putting it back in the inbox first: a job abandoned halfway is a decision of
+// its own, not two. A finished card is not dropped: it was done, and saying
+// otherwise afterwards would rewrite what happened.
+func (e *Engine) Drop(cardID string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	card, err := e.store.Card(cardID)
+	if err != nil {
+		return err
+	}
+	switch card.State {
+	case model.StateDone:
+		return fmt.Errorf("карточка «%s» уже сделана — отбросить её нельзя", card.Title)
+	case model.StateDropped:
+		return nil
+	}
+	e.cancel(cardID, "карточка отброшена")
+	if err := e.store.LeaveFlow(cardID, model.StateDropped); err != nil {
+		return err
+	}
+	e.record(cardID, model.EntryMove, "Карточка отброшена.")
+	e.emitCard(cardID)
+	return nil
+}
+
 // Finished is what a runner calls when a session ends: its outcome is the event
 // the stage moves on. A cancelled session reports no outcome at all — somebody
 // intervened, and the flow waits for them.

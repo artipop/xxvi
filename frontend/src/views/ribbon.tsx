@@ -6,8 +6,9 @@ import { Events } from "@wailsio/runtime";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
 import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
-import { attention, closedRibbon, guard, list, loadAttention, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
+import { attention, closedRibbon, guard, list, loadAttention, loadRibbons, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
 import { QuestionForm } from "./attention";
+import { JournalList } from "./journal";
 import { NAV } from "../nav";
 
 // The emulator is a large chunk and most screens are not terminals, so it
@@ -84,6 +85,7 @@ export default function Ribbon(): JSX.Element {
   const [widths, setWidths] = createSignal<Record<string, number>>({});
 
   const [menu, setMenu] = createSignal(false);
+  const [journal, setJournal] = createSignal(false);
   // Which pane has taken the keyboard: a preview or a note that a person
   // clicked into. Worth saying out loud, because from inside a preview the
   // ribbon cannot hear a key at all — the page has it — and a person pressing
@@ -303,9 +305,13 @@ export default function Ribbon(): JSX.Element {
         e.preventDefault();
         resize((at) => (at === WIDTHS.length - 1 ? DEFAULT_WIDTH : WIDTHS.length - 1));
         break;
+      case "j": case "J": case "о": case "О":
+        e.preventDefault(); setJournal(!journal()); break;
       case "Escape":
         e.preventDefault();
-        menu() ? setMenu(false) : setTab("inbox");
+        if (menu()) setMenu(false);
+        else if (journal()) setJournal(false);
+        else setTab("inbox");
         break;
     }
   };
@@ -340,6 +346,13 @@ export default function Ribbon(): JSX.Element {
           </Show>
         </span>
         <div class="spacer" />
+        <Show when={current()}>
+          <CardMenu
+            cardId={current()!.cardId}
+            closed={current()!.id === closedRibbon()}
+            onJournal={() => setJournal(!journal())}
+          />
+        </Show>
         <Show when={behind()}>
           {/* The bar is the window's drag handle, and a button inside one has
               to say it is not: dragging the window from a button is not what
@@ -416,6 +429,23 @@ export default function Ribbon(): JSX.Element {
           </For>
         </div>
 
+        {/* Keyed on the card, so moving to another job shows that job's
+            journal rather than the last one's. */}
+        <Show when={journal() && current()}>
+          <For each={[current()!.cardId]}>
+            {(cardId) => (
+              <aside class="ribbon-journal">
+                <header class="row">
+                  <h3>Журнал</h3>
+                  <div class="spacer" />
+                  <button class="btn quiet tiny" onClick={() => setJournal(false)} title="J или Esc">Закрыть</button>
+                </header>
+                <JournalList cardId={cardId} />
+              </aside>
+            )}
+          </For>
+        </Show>
+
         {/* Where you are in the stack, and which other jobs moved while you
             were not looking. One job needs no map of itself. */}
         <Show when={ribbons.length > 1}>
@@ -478,6 +508,53 @@ function Sections(props: { open: boolean; setOpen: (v: boolean) => void }): JSX.
               </>
             )}
           </For>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
+// What can be done to the job as a whole, as opposed to its current step. Few
+// and rare, so folded away: the bar is the window's drag handle and the name of
+// the job, not a toolbar.
+function CardMenu(props: { cardId: string; closed: boolean; onJournal: () => void }): JSX.Element {
+  const [open, setOpen] = createSignal(false);
+  // Dropping cannot be taken back from here, so it takes a second press — a
+  // dialog would be a second window for one word.
+  const [sure, setSure] = createSignal(false);
+  let box: HTMLDivElement | undefined;
+
+  onSettled(() => {
+    const away = (e: MouseEvent) => {
+      if (box && !box.contains(e.target as Node)) { setOpen(false); setSure(false); }
+    };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  });
+
+  const run = (fn: () => Promise<unknown>) => {
+    setOpen(false); setSure(false);
+    void guard(fn).then(() => loadRibbons());
+  };
+
+  return (
+    <div class="card-menu" ref={box} style={{ "--wails-draggable": "no-drag" }}>
+      <button class="btn quiet tiny" onClick={() => { setOpen(!open()); setSure(false); }} title="Карточка">⋯</button>
+      <Show when={open()}>
+        <div class="menu">
+          <button onClick={() => { setOpen(false); props.onJournal(); }}>
+            <span>Журнал</span><span class="count">J</span>
+          </button>
+          <Show when={!props.closed}>
+            <hr />
+            <button onClick={() => run(() => API.RemoveFromFlow(props.cardId))}>Снять с флоу</button>
+            <button
+              class={sure() ? "danger" : ""}
+              onClick={() => (sure() ? run(() => API.DropCard(props.cardId)) : setSure(true))}
+            >
+              {sure() ? "Точно отбросить?" : "Отбросить"}
+            </button>
+          </Show>
         </div>
       </Show>
     </div>
