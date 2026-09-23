@@ -554,15 +554,13 @@ func (s *API) AddCard(sourceName, title, body string) (model.Card, error) {
 //
 // The first line is the title, as it is in a commit: what fits in a list. The
 // whole text is the body, because that is what the agent is handed.
-func (s *API) StartTask(text, projectID, agent, flowID string) (CardView, error) {
+func (s *API) StartTask(text, projectID, workMode, agent, flowID string) (CardView, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return CardView{}, fmt.Errorf("задача пустая — напишите, что сделать")
 	}
-	if projectID != "" {
-		if _, err := s.app.Store.Project(projectID); err != nil {
-			return CardView{}, err
-		}
+	if err := s.checkWorkMode(projectID, workMode); err != nil {
+		return CardView{}, err
 	}
 	if _, err := s.app.Store.Flow(flowID); err != nil {
 		return CardView{}, err
@@ -573,7 +571,7 @@ func (s *API) StartTask(text, projectID, agent, flowID string) (CardView, error)
 	}
 	card, err := s.app.Store.CreateCard(model.Card{
 		Title: title, Body: body, State: model.StateInbox,
-		Assignee: strings.TrimSpace(agent), Project: projectID,
+		Assignee: strings.TrimSpace(agent), Project: projectID, WorkMode: workMode,
 	})
 	if err != nil {
 		return CardView{}, err
@@ -596,7 +594,16 @@ func taskTitle(text string) string {
 // ---- projects ----
 
 // Projects is the registry of places work happens.
-func (s *API) Projects() ([]model.Project, error) { return s.app.Store.Projects() }
+func (s *API) Projects() ([]model.Project, error) {
+	list, err := s.app.Store.Projects()
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		list[i].Repo = acp.IsRepo(list[i].Path)
+	}
+	return list, nil
+}
 
 // SaveProject adds or edits one entry.
 //
@@ -650,6 +657,13 @@ func (s *API) DeleteProject(id string) error {
 // purpose: both are about by whom and where, and both are a person's answer
 // rather than the graph's.
 func (s *API) SetCardProject(cardID, projectID string) (CardView, error) {
+	card, err := s.app.Store.Card(cardID)
+	if err != nil {
+		return CardView{}, err
+	}
+	if card.Branch != "" && projectID != card.Project {
+		return CardView{}, fmt.Errorf("работа по карточке уже идёт в ветке `%s` — проект у неё не меняется", card.Branch)
+	}
 	if projectID != "" {
 		if _, err := s.app.Store.Project(projectID); err != nil {
 			return CardView{}, err
@@ -658,8 +672,63 @@ func (s *API) SetCardProject(cardID, projectID string) (CardView, error) {
 	if err := s.app.Store.SetCardProject(cardID, projectID); err != nil {
 		return CardView{}, err
 	}
+	// A branch of its own is a question about a repository; a card moved to
+	// a folder that is not one, or to no project at all, works as it stands.
+	if card.WorkMode != model.WorkModeFolder && s.checkWorkMode(projectID, card.WorkMode) != nil {
+		if err := s.app.Store.SetCardWorkMode(cardID, model.WorkModeFolder); err != nil {
+			return CardView{}, err
+		}
+	}
 	s.app.Emit(engine.EventCard, map[string]any{"cardId": cardID})
 	return s.Card(cardID)
+}
+
+// SetCardWorkMode says how a card works in its project's repository: in the
+// folder as it stands, in a separate working tree, or on a branch in the folder
+// itself (model/workmode.go). Answered before the work starts — once the card
+// has a branch, the work is on it, and changing the answer would leave it
+// there with nothing pointing at it.
+func (s *API) SetCardWorkMode(cardID, mode string) (CardView, error) {
+	card, err := s.app.Store.Card(cardID)
+	if err != nil {
+		return CardView{}, err
+	}
+	if mode == card.WorkMode {
+		return s.Card(cardID)
+	}
+	if card.Branch != "" {
+		return CardView{}, fmt.Errorf("работа по карточке уже идёт в ветке `%s` — способ работы с папкой у неё не меняется", card.Branch)
+	}
+	if err := s.checkWorkMode(card.Project, mode); err != nil {
+		return CardView{}, err
+	}
+	if err := s.app.Store.SetCardWorkMode(cardID, mode); err != nil {
+		return CardView{}, err
+	}
+	s.app.Emit(engine.EventCard, map[string]any{"cardId": cardID})
+	return s.Card(cardID)
+}
+
+// checkWorkMode refuses a mode the project cannot have: an unknown one, or a
+// branch of its own where there is no repository to make it in.
+func (s *API) checkWorkMode(projectID, mode string) error {
+	if err := model.ValidateWorkMode(mode); err != nil {
+		return err
+	}
+	if projectID == "" {
+		if mode != model.WorkModeFolder {
+			return fmt.Errorf("«%s» — про папку проекта, а у карточки проект не выбран", model.WorkModeLabel(mode))
+		}
+		return nil
+	}
+	project, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return err
+	}
+	if mode != model.WorkModeFolder && !acp.IsRepo(project.Path) {
+		return fmt.Errorf("папка проекта «%s» — не git-репозиторий: «%s» для неё невозможно", project.Name, model.WorkModeLabel(mode))
+	}
+	return nil
 }
 
 // ---- agents ----

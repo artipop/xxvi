@@ -718,3 +718,17 @@ func TestACardCanGoRoundALoopTwice(t *testing.T) {
 		t.Fatalf("после двух кругов карточка должна доехать до конца, а она %q", got)
 	}
 }
+
+// An agent sent into a card's own branch is told so, or a stage that asks for
+// «Ветка» invites it to cut another one where nothing looks for the work.
+func TestPromptSaysTheCardIsOnItsOwnBranch(t *testing.T) {
+	card := model.Card{Title: "Т", WorkMode: model.WorkModeWorktree, Branch: "t-1"}
+	got := ComposePrompt(card, model.Flow{}, model.Stage{}, model.Agent{}, "")
+	if !strings.Contains(got, "новую ветку не заводи") || !strings.Contains(got, "Ветка: t-1.") {
+		t.Fatalf("агенту не сказано про ветку задачи:\n%s", got)
+	}
+	card.WorkMode, card.Branch = model.WorkModeFolder, ""
+	if got := ComposePrompt(card, model.Flow{}, model.Stage{}, model.Agent{}, ""); strings.Contains(got, "ветк") {
+		t.Fatalf("в папке как есть про ветку молчат:\n%s", got)
+	}
+}

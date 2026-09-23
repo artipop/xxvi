@@ -20,6 +20,18 @@ export const [agents, setAgents] = createSignal<AgentsView>({ agents: [], adapte
 export const [attention, setAttention] = createSignal<Attention[]>([]);
 export const [projects, setProjects] = createSignal<Project[]>([]);
 
+// How a card works in a repository, in the words the server names them
+// (model/workmode.go). Offered wherever a card gets its project: the card
+// itself and a task typed into the ribbon.
+export const WORK_MODES = [
+  { value: "", label: "в самой папке, как есть",
+    why: "агент работает в папке на той ветке, что сейчас в ней стоит" },
+  { value: "worktree", label: "отдельное рабочее дерево",
+    why: "своя копия папки на своей ветке — можно вести несколько задач одного репозитория сразу, ваша папка не трогается" },
+  { value: "branch", label: "ветка в этой же папке",
+    why: "папка переключается на ветку задачи — по одной задаче за раз, работа сразу видна в вашем редакторе" },
+];
+
 // Where the application is in replacing itself. A build with no updater — a
 // headless run, a test — answers too, and says «не поддерживается»: the screen
 // then shows the version and nothing else rather than an empty panel.

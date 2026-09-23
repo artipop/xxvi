@@ -314,5 +314,16 @@ WHERE source IN (SELECT name FROM source WHERE plugin = 'demo' AND name IN ('З�
 DELETE FROM source_rule
 WHERE source IN (SELECT name FROM source WHERE plugin = 'demo' AND name IN ('Задачи', 'Телефон'));
 DELETE FROM source WHERE plugin = 'demo' AND name IN ('Задачи', 'Телефон');`,
+
+		// 13. How a card works in its project when that is a repository — in
+		// the folder as it stands, in a separate working tree, or on a branch
+		// in the folder itself — and what that came to: the branch, what it
+		// was cut from, and where the tree is. On the card, because the card
+		// is what owns the work; an empty mode is what every card did before.
+		`
+ALTER TABLE card ADD COLUMN work_mode TEXT NOT NULL DEFAULT '';
+ALTER TABLE card ADD COLUMN branch    TEXT NOT NULL DEFAULT '';
+ALTER TABLE card ADD COLUMN base_ref  TEXT NOT NULL DEFAULT '';
+ALTER TABLE card ADD COLUMN worktree  TEXT NOT NULL DEFAULT '';`,
 	}
 }

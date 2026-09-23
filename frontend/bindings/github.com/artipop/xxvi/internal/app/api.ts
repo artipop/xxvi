@@ -402,6 +402,17 @@ export function SetCardProject(cardID: string, projectID: string): $CancellableP
 }
 
 /**
+ * SetCardWorkMode says how a card works in its project's repository: in the
+ * folder as it stands, in a separate working tree, or on a branch in the folder
+ * itself (model/workmode.go). Answered before the work starts — once the card
+ * has a branch, the work is on it, and changing the answer would leave it
+ * there with nothing pointing at it.
+ */
+export function SetCardWorkMode(cardID: string, mode: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(4227310037, cardID, mode);
+}
+
+/**
  * SetProp sets a property on a card and tells the engine, because a property is
  * how a person answers a waiting stage. Which stage cares, and whether this was
  * the value it wanted, is the engine's to decide — setting anything else is
@@ -444,8 +455,8 @@ export function Sources(): $CancellablePromise<model$0.Source[] | null> {
  * The first line is the title, as it is in a commit: what fits in a list. The
  * whole text is the body, because that is what the agent is handed.
  */
-export function StartTask(text: string, projectID: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(289388112, text, projectID, agent, flowID);
+export function StartTask(text: string, projectID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(289388112, text, projectID, workMode, agent, flowID);
 }
 
 /**

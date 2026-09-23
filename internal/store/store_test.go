@@ -579,6 +579,10 @@ func TestStageColumnsAreAddedToADatabaseThatAlreadyHasFlows(t *testing.T) {
 		`ALTER TABLE card_comment DROP COLUMN kind`,
 		`ALTER TABLE card_comment DROP COLUMN session_id`,
 		`ALTER TABLE card_comment DROP COLUMN event_id`,
+		`ALTER TABLE card DROP COLUMN work_mode`,
+		`ALTER TABLE card DROP COLUMN branch`,
+		`ALTER TABLE card DROP COLUMN base_ref`,
+		`ALTER TABLE card DROP COLUMN worktree`,
 		`DELETE FROM schema_migration WHERE version >= 6`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -672,6 +676,10 @@ func TestCommentModeIsMigratedAway(t *testing.T) {
 	for _, stmt := range []string{
 		`UPDATE source SET update_mode = 'comment'`,
 		`UPDATE source_rule SET then_action = 'comment'`,
+		`ALTER TABLE card DROP COLUMN work_mode`,
+		`ALTER TABLE card DROP COLUMN branch`,
+		`ALTER TABLE card DROP COLUMN base_ref`,
+		`ALTER TABLE card DROP COLUMN worktree`,
 		`DELETE FROM schema_migration WHERE version >= 11`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -716,8 +724,16 @@ func TestDemoSourcesAreMigratedAway(t *testing.T) {
 	s.LeaveFlow(worked.ID, model.StateInbox)
 	mine, _ := s.CreateCard(model.Card{Source: "Почта", ExternalID: "1", Title: "Своё"})
 
-	if _, err := s.db.Exec(`DELETE FROM schema_migration WHERE version >= 12`); err != nil {
-		t.Fatalf("откатить версию: %v", err)
+	for _, stmt := range []string{
+		`ALTER TABLE card DROP COLUMN work_mode`,
+		`ALTER TABLE card DROP COLUMN branch`,
+		`ALTER TABLE card DROP COLUMN base_ref`,
+		`ALTER TABLE card DROP COLUMN worktree`,
+		`DELETE FROM schema_migration WHERE version >= 12`,
+	} {
+		if _, err := s.db.Exec(stmt); err != nil {
+			t.Fatalf("откатить версию (%s): %v", stmt, err)
+		}
 	}
 	if err := s.migrate(); err != nil {
 		t.Fatalf("миграция: %v", err)

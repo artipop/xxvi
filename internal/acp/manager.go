@@ -536,6 +536,9 @@ func (m *Manager) WorkDir(cardID string) (string, error) { return m.workDir(card
 // than a reason to quietly open somewhere else — working in the wrong place is
 // worse than not working, and the stage that could not start says which.
 //
+// A card that asked for a branch of its own gets it here, in a separate
+// working tree or in the folder itself (workspace.go).
+//
 // Otherwise a directory of the card's own, so two cards never share a working
 // copy and the agent's file jail means something. That is the right answer for
 // work that starts from a blank page, which is why an empty project is a real
@@ -550,6 +553,9 @@ func (m *Manager) workDir(cardID string) (string, error) {
 		info, err := os.Stat(project.Path)
 		if err != nil || !info.IsDir() {
 			return "", fmt.Errorf("папка проекта «%s» не найдена: %s", project.Name, project.Path)
+		}
+		if card.WorkMode != model.WorkModeFolder {
+			return m.claimWorkspace(card, project)
 		}
 		return project.Path, nil
 	}

@@ -1,6 +1,6 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import { agents, applyCard, closeCard, guard, list, openCard, projects, showRibbon } from "../state";
+import { agents, applyCard, closeCard, guard, list, openCard, projects, showRibbon, WORK_MODES } from "../state";
 import { QuestionForm } from "./attention";
 import { JournalList } from "./journal";
 
@@ -193,6 +193,7 @@ function Place() {
   const set = async (id: string) =>
     applyCard(await guard(() => API.SetCardProject(view().card.id, id)));
   const current = () => projects().find((p) => p.id === view().card.project);
+  const where = () => view().card.worktree || current()!.path;
 
   return (
     <div class="panel">
@@ -207,8 +208,41 @@ function Place() {
         </select>
         <div class="meta" style={{ "margin-top": "6px" }}>
           {current()
-            ? `Агент, терминал и заметки открываются в ${current()!.path}`
+            ? `Агент, терминал и заметки открываются в ${where()}`
             : "Карточка получит свою пустую папку — это верно для работы с чистого листа."}
+        </div>
+        <Show when={current()?.repo}>
+          <WorkMode />
+        </Show>
+      </Show>
+    </div>
+  );
+}
+
+/** How the card works in a repository: the folder as it stands, a separate
+ *  working tree, or its own branch in the folder itself. Answered before the
+ *  work starts — once the branch exists, the work is on it and the answer is
+ *  the fact, so it is shown rather than offered. */
+function WorkMode() {
+  const view = () => openCard()!;
+  const set = async (mode: string) =>
+    applyCard(await guard(() => API.SetCardWorkMode(view().card.id, mode)));
+
+  return (
+    <div style={{ "margin-top": "10px" }}>
+      <Show when={!view().card.branch} fallback={
+        <div class="meta">
+          {view().card.worktree ? "Отдельное рабочее дерево" : "Ветка в этой же папке"}:{" "}
+          <code>{view().card.branch}</code>
+          {view().card.base ? <> от <code>{view().card.base}</code></> : null}
+        </div>
+      }>
+        <select value={view().card.workMode ?? ""} onChange={(e) => set(e.currentTarget.value)}
+                style={{ width: "auto" }} title="Как агенту работать с папкой">
+          <For each={WORK_MODES}>{(m) => <option value={m.value}>{m.label}</option>}</For>
+        </select>
+        <div class="meta" style={{ "margin-top": "6px" }}>
+          {WORK_MODES.find((m) => m.value === (view().card.workMode ?? ""))?.why}
         </div>
       </Show>
     </div>

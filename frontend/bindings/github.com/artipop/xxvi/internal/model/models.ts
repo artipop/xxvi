@@ -92,6 +92,23 @@ export interface Card {
     "project"?: string;
 
     /**
+     * WorkMode is how the card works in its project when that is a repository
+     * (workmode.go). A person's answer, like the project itself.
+     */
+    "workMode"?: string;
+
+    /**
+     * Branch, Base and Worktree are what that answer came to, written the first
+     * time the card's work needed a folder: the card's branch, what it was cut
+     * from, and — for a separate working tree — where that tree is. Empty until
+     * then. Once written they are the fact, and the mode no longer changes:
+     * the work is on that branch.
+     */
+    "branch"?: string;
+    "base"?: string;
+    "worktree"?: string;
+
+    /**
      * Props are the card's own named values. A flow condition asks about these,
      * and a person answers a waiting stage by setting one.
      */
@@ -343,6 +360,13 @@ export interface Project {
      * where it lands on this machine once it is fetched.
      */
     "path": string;
+
+    /**
+     * Repo says the folder is a git repository, which is what offers a card
+     * the choice of a branch of its own. Not stored: asked of the folder when
+     * the registry is read, since a folder can become one at any time.
+     */
+    "repo"?: boolean;
 }
 
 /**

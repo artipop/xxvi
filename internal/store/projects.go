@@ -111,3 +111,41 @@ func (s *Store) SetCardProject(cardID, projectID string) error {
 		projectID, millis(time.Now()), cardID)
 	return err
 }
+
+// SetCardWorkMode says how a card works in its project's repository.
+func (s *Store) SetCardWorkMode(cardID, mode string) error {
+	_, err := s.db.Exec(`UPDATE card SET work_mode = ?, updated_at = ? WHERE id = ?`,
+		mode, millis(time.Now()), cardID)
+	return err
+}
+
+// SetCardWorkspace records what the card's work mode came to: its branch, what
+// that was cut from, and the working tree when there is one.
+func (s *Store) SetCardWorkspace(cardID, branch, base, worktree string) error {
+	_, err := s.db.Exec(`UPDATE card SET branch = ?, base_ref = ?, worktree = ?, updated_at = ? WHERE id = ?`,
+		branch, base, worktree, millis(time.Now()), cardID)
+	return err
+}
+
+// FolderHolder is the card that has a project's folder switched to its branch,
+// other than the one asking: a card in branch mode with its branch made and
+// its work not over. Not found is the folder being free.
+//
+// No lock of its own: the card's state is the lock. A card that is done or
+// dropped has let go, and nothing has to remember to release anything.
+func (s *Store) FolderHolder(projectID, exceptCard string) (model.Card, bool, error) {
+	var r cardRow
+	err := s.db.Get(&r, `
+		SELECT * FROM card
+		WHERE project = ? AND work_mode = ? AND branch != '' AND id != ?
+		  AND state NOT IN (?, ?)
+		ORDER BY updated_at DESC LIMIT 1`,
+		projectID, model.WorkModeBranch, exceptCard, string(model.StateDone), string(model.StateDropped))
+	if errors.Is(err, sql.ErrNoRows) {
+		return model.Card{}, false, nil
+	}
+	if err != nil {
+		return model.Card{}, false, err
+	}
+	return r.card(), true, nil
+}

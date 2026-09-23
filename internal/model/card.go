@@ -55,6 +55,17 @@ type Card struct {
 	// project can be renamed without the card noticing. Empty is a real answer —
 	// a task that starts from a blank page gets a folder of its own.
 	Project string `json:"project,omitempty"`
+	// WorkMode is how the card works in its project when that is a repository
+	// (workmode.go). A person's answer, like the project itself.
+	WorkMode string `json:"workMode,omitempty"`
+	// Branch, Base and Worktree are what that answer came to, written the first
+	// time the card's work needed a folder: the card's branch, what it was cut
+	// from, and — for a separate working tree — where that tree is. Empty until
+	// then. Once written they are the fact, and the mode no longer changes:
+	// the work is on that branch.
+	Branch   string `json:"branch,omitempty"`
+	Base     string `json:"base,omitempty"`
+	Worktree string `json:"worktree,omitempty"`
 
 	// Props are the card's own named values. A flow condition asks about these,
 	// and a person answers a waiting stage by setting one.

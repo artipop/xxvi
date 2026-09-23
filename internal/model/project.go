@@ -45,6 +45,10 @@ type Project struct {
 	// Path is the folder, absolute. For a kind that is not a folder this is
 	// where it lands on this machine once it is fetched.
 	Path string `json:"path"`
+	// Repo says the folder is a git repository, which is what offers a card
+	// the choice of a branch of its own. Not stored: asked of the folder when
+	// the registry is read, since a folder can become one at any time.
+	Repo bool `json:"repo,omitempty"`
 }
 
 // There is deliberately no timestamp here, as there is none on an agent, a

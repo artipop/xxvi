@@ -492,7 +492,7 @@ func TestStartTaskGoesStraightToWork(t *testing.T) {
 		t.Fatalf("проект: %v", err)
 	}
 
-	view, err := api.StartTask("Починить форму входа\n\nПадает на пустом пароле.", proj.ID, "Claude", dev.ID)
+	view, err := api.StartTask("Починить форму входа\n\nПадает на пустом пароле.", proj.ID, "", "Claude", dev.ID)
 	if err != nil {
 		t.Fatalf("начать задачу: %v", err)
 	}
@@ -505,13 +505,81 @@ func TestStartTaskGoesStraightToWork(t *testing.T) {
 	}
 
 	// A refusal comes before anything exists.
-	if _, err := api.StartTask("Ещё одна", "нет-такого", "Claude", dev.ID); err == nil {
+	if _, err := api.StartTask("Ещё одна", "нет-такого", "", "Claude", dev.ID); err == nil {
 		t.Fatal("несуществующий проект — отказ")
 	}
-	if _, err := api.StartTask("   ", "", "Claude", dev.ID); err == nil {
+	if _, err := api.StartTask("   ", "", "", "Claude", dev.ID); err == nil {
 		t.Fatal("пустая задача — отказ")
 	}
 	if cards, _ := a.Store.CardsInState(model.StateInbox); len(cards) != 0 {
 		t.Fatalf("отказ не оставляет карточек во входящих: %+v", cards)
+	}
+}
+
+// A branch of its own is asked of a repository and answered before the work
+// starts: a folder with no git cannot have it, and a card whose branch exists
+// keeps it.
+func TestWorkModeIsARepositoryQuestionAnsweredOnce(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git не установлен")
+	}
+	a := open(t)
+	api := NewAPI(a)
+	plain, err := api.SaveProject(model.Project{Name: "Заметки", Kind: model.ProjectFolder, Path: t.TempDir()})
+	if err != nil {
+		t.Fatalf("проект: %v", err)
+	}
+	repoDir := t.TempDir()
+	if out, err := exec.Command("git", "-C", repoDir, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	repo, err := api.SaveProject(model.Project{Name: "Код", Kind: model.ProjectFolder, Path: repoDir})
+	if err != nil {
+		t.Fatalf("проект: %v", err)
+	}
+	list, _ := api.Projects()
+	for _, p := range list {
+		if p.Repo != (p.ID == repo.ID) {
+			t.Fatalf("репозиторий — только «Код»: %+v", list)
+		}
+	}
+
+	card, _ := api.AddCard("", "Задача", "")
+	if _, err := api.SetCardWorkMode(card.ID, model.WorkModeWorktree); err == nil {
+		t.Fatal("без проекта своей ветки не бывает")
+	}
+	if _, err := api.SetCardProject(card.ID, plain.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := api.SetCardWorkMode(card.ID, model.WorkModeBranch); err == nil {
+		t.Fatal("папка без git — отказ")
+	}
+	if _, err := api.SetCardProject(card.ID, repo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if view, err := api.SetCardWorkMode(card.ID, model.WorkModeWorktree); err != nil || view.Card.WorkMode != model.WorkModeWorktree {
+		t.Fatalf("репозиторию можно: %+v, %v", view.Card, err)
+	}
+	// Moved to a folder with no git, the card works in it as it stands.
+	if view, _ := api.SetCardProject(card.ID, plain.ID); view.Card.WorkMode != model.WorkModeFolder {
+		t.Fatalf("режим сбрасывается: %+v", view.Card)
+	}
+
+	// Once the branch is made, neither the mode nor the project moves.
+	if _, err := api.SetCardProject(card.ID, repo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Store.SetCardWorkspace(card.ID, "zadacha-1", "main", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := api.SetCardWorkMode(card.ID, model.WorkModeBranch); err == nil {
+		t.Fatal("ветка уже есть — режим не меняется")
+	}
+	if _, err := api.SetCardProject(card.ID, plain.ID); err == nil {
+		t.Fatal("ветка уже есть — проект не меняется")
+	}
+
+	if _, err := api.StartTask("Ещё", plain.ID, model.WorkModeWorktree, "Claude", mustFlow(t, a, "Разработка").ID); err == nil {
+		t.Fatal("задача с деревом в папке без git — отказ до создания")
 	}
 }

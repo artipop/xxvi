@@ -45,6 +45,17 @@ func ComposePrompt(card model.Card, flow model.Flow, stage model.Stage, agent mo
 		fmt.Fprintf(&b, "\nСвойства карточки:\n%s", props)
 	}
 
+	// A card with a branch of its own is already on it when the agent starts:
+	// the application made it. An agent that cut another one — which a stage
+	// asking for «Ветка» invites — would leave the work where nothing looks.
+	if card.WorkMode != model.WorkModeFolder {
+		b.WriteString("\nТы уже на ветке этой задачи — новую ветку не заводи и не переключайся, коммить сюда.")
+		if card.Branch != "" {
+			fmt.Fprintf(&b, " Ветка: %s.", card.Branch)
+		}
+		b.WriteString("\n")
+	}
+
 	// Why this card is in front of this agent. Only worth saying when it is
 	// news: a card arriving on a failure has a reason, and telling the next
 	// session what went wrong is the difference between a loop that converges

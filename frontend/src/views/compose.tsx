@@ -1,7 +1,7 @@
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import { agents, applyCard, flows, guard, list, projects, showRibbon } from "../state";
+import { agents, applyCard, flows, guard, list, projects, showRibbon, WORK_MODES } from "../state";
 
 // A task typed where the work is watched, not filed first and fetched back from
 // the inbox: the inbox is for what arrived and waits for a decision, and a task
@@ -13,7 +13,7 @@ import { agents, applyCard, flows, guard, list, projects, showRibbon } from "../
 
 const KEY = "xxvi.compose";
 
-function remembered(): { project?: string; agent?: string; flow?: string } {
+function remembered(): { project?: string; workMode?: string; agent?: string; flow?: string } {
   try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; }
 }
 
@@ -21,6 +21,7 @@ export function Compose(props: { onDone?: () => void }): JSX.Element {
   const was = remembered();
   const [text, setText] = createSignal("");
   const [project, setProject] = createSignal(was.project ?? "");
+  const [workMode, setWorkMode] = createSignal(was.workMode ?? "");
   const [agent, setAgent] = createSignal(was.agent ?? "");
   const [flow, setFlow] = createSignal(was.flow ?? "");
   const [busy, setBusy] = createSignal(false);
@@ -28,6 +29,10 @@ export function Compose(props: { onDone?: () => void }): JSX.Element {
 
   // A remembered choice that is no longer in the registry is not a choice.
   const projectID = () => (projects().some((p) => p.id === project()) ? project() : "");
+  // A branch of its own is a question about a repository; anywhere else the
+  // answer is the folder as it stands, whatever was remembered.
+  const isRepo = () => projects().find((p) => p.id === projectID())?.repo ?? false;
+  const mode = () => (isRepo() && WORK_MODES.some((m) => m.value === workMode()) ? workMode() : "");
   const agentName = () =>
     list(agents().agents).find((a) => a.name === agent())?.name ?? list(agents().agents)[0]?.name ?? "";
   const flowID = () => flows().find((f) => f.id === flow())?.id ?? flows()[0]?.id ?? "";
@@ -37,11 +42,11 @@ export function Compose(props: { onDone?: () => void }): JSX.Element {
   const start = async () => {
     if (busy() || !text().trim() || !flowID()) return;
     setBusy(true);
-    const view = await guard(() => API.StartTask(text(), projectID(), agentName(), flowID()));
+    const view = await guard(() => API.StartTask(text(), projectID(), mode(), agentName(), flowID()));
     setBusy(false);
     if (!view) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ project: projectID(), agent: agentName(), flow: flowID() }));
+      localStorage.setItem(KEY, JSON.stringify({ project: projectID(), workMode: workMode(), agent: agentName(), flow: flowID() }));
     } catch { /* a convenience, not a record */ }
     setText("");
     applyCard(view);
@@ -69,6 +74,12 @@ export function Compose(props: { onDone?: () => void }): JSX.Element {
           <option value="">своя папка</option>
           <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
         </select>
+        <Show when={isRepo()}>
+          <select value={mode()} onChange={(e) => setWorkMode(e.currentTarget.value)}
+                  title={WORK_MODES.find((m) => m.value === mode())?.why}>
+            <For each={WORK_MODES}>{(m) => <option value={m.value}>{m.label}</option>}</For>
+          </select>
+        </Show>
         <select value={agentName()} onChange={(e) => setAgent(e.currentTarget.value)} title="Кто делает">
           <For each={list(agents().agents)}>{(a) => <option value={a.name}>{a.name}</option>}</For>
         </select>
