@@ -135,8 +135,12 @@ func (m *Manager) ask(ctx context.Context, s *session, q Question) Answer {
 	closed := q.attention()
 	closed.Awaiting = false
 	m.emitAttention(closed)
+	// What was answered goes into the stream, not just that something was:
+	// the stream is where the ribbon shows the question, and an answer it
+	// cannot read out is a gap right after it.
 	s.event(m, "answer", map[string]any{
-		"questionId": q.ID, "optionId": answer.OptionID, "declined": answer.Declined,
+		"questionId": q.ID, "optionId": answer.OptionID, "declined": answer.Declined || answer.empty(),
+		"text": answer.Text, "label": optionLabel(q, answer.OptionID),
 	})
 	m.record(s, model.EntryAsk, answerEntry(q, answer))
 	return answer

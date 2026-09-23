@@ -365,3 +365,83 @@ func TestOnlyTheSegmentACardStandsInCarriesTheAnswers(t *testing.T) {
 		t.Fatalf("сегмент, который уже не текущий, больше ничего не спрашивает: %+v", last.Segments[1].Marks)
 	}
 }
+
+// A step's report is written the moment before the card moves on — in the same
+// millisecond as the next transition, as often as not. It belongs under the
+// screen of the run that wrote it, and so does a failure written for a run
+// after the card has already left.
+func TestAReportStaysUnderItsOwnRun(t *testing.T) {
+	f := setup(t, screenFlow())
+	card := f.card(t, "Починить форму")
+	if err := f.engine.TakeIntoWork(card.ID, f.flow.ID); err != nil {
+		t.Fatalf("взять в работу: %v", err)
+	}
+	if err := f.store.InsertSession(store.Session{
+		ID: "s1", CardID: card.ID, FlowID: f.flow.ID, StageID: "work",
+		AgentName: "Claude", AgentKind: model.KindClaude,
+		Status: store.StatusDone, StartedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("сессия: %v", err)
+	}
+	f.store.Record(model.JournalEntry{CardID: card.ID, Kind: model.EntryReport, SessionID: "s1", Text: "Форма починена."})
+	f.runner.finish(card.ID, model.TriggerSuccess, "")
+	f.store.Record(model.JournalEntry{CardID: card.ID, Kind: model.EntryProblem, SessionID: "s1", Text: "Сессия агента отменена."})
+
+	view := ribbonOf(t, f, card.ID)
+	work, qa := view.Segments[0], view.Segments[1]
+	if got := work.Screens[0].Report; got != "Форма починена." {
+		t.Fatalf("итог шага — под экраном его агента: %+v", work.Screens[0])
+	}
+	if len(work.Problems) != 1 || len(qa.Problems) != 0 {
+		t.Fatalf("сбой сессии — в сегменте сессии, а не там, где карточка уже стоит: %+v / %+v", work.Problems, qa.Problems)
+	}
+}
+
+// A step that could not start fails in the same millisecond as the failure edge
+// takes the card on. Why it failed is said on the step that failed.
+func TestAStepThatDidNotStartSaysSoOnItsOwnSegment(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Т")
+	f.runner.fail = errAgentWontStart
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+
+	view := ribbonOf(t, f, card.ID)
+	if len(view.Segments) != 2 {
+		t.Fatalf("работа и отказ: %+v", view.Segments)
+	}
+	if len(view.Segments[0].Problems) != 1 || len(view.Segments[1].Problems) != 0 {
+		t.Fatalf("причина — на стадии, которая не запустилась: %+v / %+v",
+			view.Segments[0].Problems, view.Segments[1].Problems)
+	}
+}
+
+// «The stage is full» explained a wait. Once a run has started in the same
+// visit the wait is over, and a plaque saying otherwise over a working agent
+// would be wrong; what went wrong after the start still shows.
+func TestAWaitThatEndedIsNotShown(t *testing.T) {
+	f := setup(t, screenFlow())
+	card := f.card(t, "Т")
+	if err := f.engine.TakeIntoWork(card.ID, f.flow.ID); err != nil {
+		t.Fatalf("взять в работу: %v", err)
+	}
+	f.store.Record(model.JournalEntry{CardID: card.ID, Kind: model.EntryProblem, Text: "Стадия занята."})
+	if got := ribbonOf(t, f, card.ID).Segments[0].Problems; len(got) != 1 {
+		t.Fatalf("пока ждёт — плашка есть: %+v", got)
+	}
+
+	time.Sleep(5 * time.Millisecond)
+	if err := f.store.InsertSession(store.Session{
+		ID: "s1", CardID: card.ID, FlowID: f.flow.ID, StageID: "work",
+		AgentName: "Claude", AgentKind: model.KindClaude,
+		Status: store.StatusRunning, StartedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("сессия: %v", err)
+	}
+	time.Sleep(5 * time.Millisecond)
+	f.store.Record(model.JournalEntry{CardID: card.ID, Kind: model.EntryProblem, Text: "Не записано обязательное."})
+
+	got := ribbonOf(t, f, card.ID).Segments[0].Problems
+	if len(got) != 1 || got[0].Text != "Не записано обязательное." {
+		t.Fatalf("остаётся только то, что случилось после старта: %+v", got)
+	}
+}

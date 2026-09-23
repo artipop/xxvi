@@ -5,6 +5,7 @@ export type {
     CardFlow,
     CardStage,
     FlowOverview,
+    Notice,
     RibbonView,
     ScreenView,
     Segment,

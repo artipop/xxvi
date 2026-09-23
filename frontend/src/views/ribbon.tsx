@@ -514,6 +514,12 @@ function Pane(props: {
           <span class={`tag ${props.segment.current ? "accent" : ""}`}>{props.segment.stageName}</span>
         </Show>
         <span class="screen-title">{props.title}</span>
+        {/* How the card got here — «вернулась: не прошло» reads differently
+            from «взята в работу», and it is the one line of the journal that is
+            about the whole segment. */}
+        <Show when={props.first && props.segment.detail}>
+          <span class="screen-why" title={props.segment.detail}>{props.segment.detail}</span>
+        </Show>
         <Show when={props.captured}>
           <span class="tag warn" title="Клавиши уходят сюда. Нажмите на заголовок, чтобы вернуть их ленте">
             клавиши здесь
@@ -546,6 +552,14 @@ function Pane(props: {
         </Show>
       </header>
 
+      {/* Why the card stands, or why the step broke, on the step itself:
+          without it a stopped strip looks exactly like a working one. */}
+      <Show when={props.first && list(props.segment.problems).length > 0}>
+        <div class={`screen-problems ${props.segment.current ? "now" : ""}`}>
+          <For each={list(props.segment.problems)}>{(p) => <p>{p.text}</p>}</For>
+        </div>
+      </Show>
+
       <div class="screen-body">
         <Switch fallback={<Body screen={props.screen!} cardId={props.cardId ?? ""} />}>
           {/* A stage removed from the flow does not take its part of the ribbon
@@ -569,7 +583,22 @@ function Pane(props: {
           </Match>
         </Switch>
       </div>
+
+      <Show when={props.screen?.report}>
+        <Report text={props.screen!.report!} />
+      </Show>
     </section>
+  );
+}
+
+// Folded to one line: the screen above is the step, and this is what the agent
+// said about it — read after the work, not instead of it.
+function Report(props: { text: string }): JSX.Element {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <div class={`screen-report ${open() ? "open" : ""}`} onClick={() => setOpen(!open())}>
+      <span class="meta">Итог:</span> {props.text}
+    </div>
   );
 }
 
@@ -711,6 +740,12 @@ function StreamLine(props: { event: SessionEvent; statuses: Record<string, strin
         <p class="stream-tool dim">
           <span class={`tag ${data().decision?.startsWith("allow") ? "ok" : "warn"}`}>доступ</span>{" "}
           {data().tool} — {DECISION[data().decision] ?? data().decision}
+        </p>
+      </Match>
+      <Match when={props.event.kind === "answer"}>
+        <p class="stream-tool dim">
+          <span class={`tag ${data().declined ? "warn" : "ok"}`}>ответ</span>{" "}
+          {data().declined ? "без ответа" : data().text || data().label || data().optionId}
         </p>
       </Match>
       <Match when={props.event.kind === "question"}>

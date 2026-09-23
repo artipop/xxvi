@@ -66,6 +66,16 @@ export interface FlowOverview {
 }
 
 /**
+ * Notice is a journal entry the strip shows: why the card stands here, or why
+ * the step broke.
+ */
+export interface Notice {
+    "text": string;
+    "author"?: string;
+    "at": string;
+}
+
+/**
  * RibbonView is one card in work, shown as a strip.
  */
 export interface RibbonView {
@@ -124,6 +134,12 @@ export interface ScreenView {
      * terminal it was worked in, or the stream of a session.
      */
     "sessionId"?: string;
+
+    /**
+     * Report is what the run said its step came to. A terminal has nowhere
+     * else to show it: the agent hands it over in a tool call, not on screen.
+     */
+    "report"?: string;
 }
 
 /**
@@ -168,6 +184,11 @@ export interface Segment {
      * leaving the thing they are answering about.
      */
     "marks"?: model$0.Mark[] | null;
+
+    /**
+     * Problems are why the card stood or broke during this visit, oldest first.
+     */
+    "problems"?: Notice[] | null;
 }
 
 /**

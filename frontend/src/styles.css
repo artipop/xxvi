@@ -454,6 +454,32 @@ label.field > span { display: block; color: var(--dim); font-size: 12px; margin-
 
 .screen-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .screen-note { padding: 14px; color: var(--faint); }
+.screen-why {
+  color: var(--faint); font-size: 11px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+
+/* Past problems stay readable but quiet: the step is over. The one on the
+   segment the card stands in is the reason it is not moving, and looks it. */
+.screen-problems {
+  flex: 0 0 auto; padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px; color: var(--dim);
+}
+.screen-problems.now { color: var(--warn); background: #241f14; border-bottom-color: #4a3d22; }
+.screen-problems p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.screen-problems p + p { margin-top: 4px; }
+
+.screen-report {
+  flex: 0 0 auto; padding: 6px 12px;
+  border-top: 1px solid var(--line); background: var(--panel-2);
+  font-size: 12px; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.screen-report.open {
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  max-height: 40%; overflow-y: auto; overscroll-behavior-y: contain;
+}
 
 /* Where you are in the stack, and which other jobs moved while you were not
    looking. On the right edge, out of the way of the work. */

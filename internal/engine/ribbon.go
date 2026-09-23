@@ -35,6 +35,17 @@ type ScreenView struct {
 	// SessionID is set on the screen that belongs to an agent's run: the
 	// terminal it was worked in, or the stream of a session.
 	SessionID string `json:"sessionId,omitempty"`
+	// Report is what the run said its step came to. A terminal has nowhere
+	// else to show it: the agent hands it over in a tool call, not on screen.
+	Report string `json:"report,omitempty"`
+}
+
+// Notice is a journal entry the strip shows: why the card stands here, or why
+// the step broke.
+type Notice struct {
+	Text   string    `json:"text"`
+	Author string    `json:"author,omitempty"`
+	At     time.Time `json:"at"`
 }
 
 // Segment is one visit to one stage: everything that happened between this
@@ -66,6 +77,8 @@ type Segment struct {
 	// preview — and sending the person to the card screen to answer would mean
 	// leaving the thing they are answering about.
 	Marks []model.Mark `json:"marks,omitempty"`
+	// Problems are why the card stood or broke during this visit, oldest first.
+	Problems []Notice `json:"problems,omitempty"`
 }
 
 // RibbonView is one card in work, shown as a strip.
@@ -156,6 +169,14 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 	if err != nil {
 		return RibbonView{}, err
 	}
+	journal, err := e.store.Journal(cardID)
+	if err != nil {
+		return RibbonView{}, err
+	}
+	// Which visit each run belongs to, so that an entry written for a run lands
+	// where the run is — even when it was written after the card had moved on,
+	// as a cancelled run's is.
+	visitOf := map[string]int64{}
 
 	for i, ev := range events {
 		seg := Segment{
@@ -186,6 +207,7 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 		// stream, which is all a session ever had. The run says which — not the
 		// stage, which may have been edited since (docs/system.md §12.2).
 		for _, s := range sessionsIn(sessions, stage.ID, ev.CreatedAt, entryAfter(events, i)) {
+			visitOf[s.ID] = ev.ID
 			kind, title := "agent", "Ход агента · "
 			if s.Work == model.WorkTerminal {
 				kind, title = "agentTerminal", "Агент · "
@@ -195,6 +217,7 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 				Kind:      kind,
 				Title:     title + s.AgentName,
 				SessionID: s.ID,
+				Report:    lastReport(journal, s.ID),
 			})
 		}
 		for n, sc := range stage.Screens {
@@ -213,6 +236,8 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 		}
 		view.Segments = append(view.Segments, seg)
 	}
+
+	placeProblems(view.Segments, events, journal, sessions, visitOf)
 
 	for _, seg := range view.Segments {
 		if seg.Current && len(seg.Screens) > 0 {
@@ -257,4 +282,69 @@ func sessionsIn(sessions []store.Session, stageID string, from, until time.Time)
 		out = append(out, s)
 	}
 	return out
+}
+
+func lastReport(journal []model.JournalEntry, sessionID string) string {
+	for i := len(journal) - 1; i >= 0; i-- {
+		if e := journal[i]; e.Kind == model.EntryReport && e.SessionID == sessionID {
+			return e.Text
+		}
+	}
+	return ""
+}
+
+// placeProblems hangs each problem on the visit it happened in: by its run when
+// it has one, by the transition it was written in when it has that, and by time
+// only for the entries older than both.
+//
+// A problem that came before a run started in the same visit is left off: it
+// explained a wait that is over — the stage was full, the card was a person's —
+// and a plaque saying the stage is busy over an agent at work is a plaque that
+// is wrong.
+func placeProblems(segs []Segment, events []model.FlowEvent, journal []model.JournalEntry,
+	sessions []store.Session, visitOf map[string]int64) {
+	at := make(map[int64]int, len(segs))
+	for i, seg := range segs {
+		at[seg.EventID] = i
+	}
+	started := map[int64]time.Time{}
+	for _, s := range sessions {
+		if v, ok := visitOf[s.ID]; ok && s.StartedAt.After(started[v]) {
+			started[v] = s.StartedAt
+		}
+	}
+	for _, e := range journal {
+		if e.Kind != model.EntryProblem {
+			continue
+		}
+		var visit int64
+		switch {
+		case e.SessionID != "":
+			visit = visitOf[e.SessionID]
+		case e.EventID != 0:
+			visit = e.EventID
+		default:
+			visit = visitByTime(events, e.CreatedAt)
+		}
+		i, ok := at[visit]
+		if !ok {
+			continue
+		}
+		if e.SessionID == "" && e.CreatedAt.Before(started[visit]) {
+			continue
+		}
+		segs[i].Problems = append(segs[i].Problems, Notice{Text: e.Text, Author: e.Author, At: e.CreatedAt})
+	}
+}
+
+// visitByTime is the transition in force at t: entry ≤ t < next entry.
+func visitByTime(events []model.FlowEvent, t time.Time) int64 {
+	var visit int64
+	for _, ev := range events {
+		if ev.CreatedAt.After(t) {
+			break
+		}
+		visit = ev.ID
+	}
+	return visit
 }
