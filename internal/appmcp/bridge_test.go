@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -117,5 +118,34 @@ func TestHandoffRoundTrip(t *testing.T) {
 	RemoveHandoff(dir)
 	if _, err := ReadHandoff(dir); err == nil {
 		t.Fatal("убранный адрес не должен читаться")
+	}
+}
+
+// An agent ends a session by closing stdio, and that is how every session ends.
+// It must come back as success: a non-zero exit there would make every finished
+// session look like a broken server in somebody's agent log.
+func TestClosedStdioIsHowASessionEnds(t *testing.T) {
+	s := serve(t)
+	dir := t.TempDir()
+	if err := WriteHandoff(dir, s.URL(), s.Token()); err != nil {
+		t.Fatalf("записать адрес: %v", err)
+	}
+
+	in, inWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("канал: %v", err)
+	}
+	outReader, out, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("канал: %v", err)
+	}
+	defer outReader.Close()
+	defer out.Close()
+	// Nothing is ever said: the caller opened the session and closed it, which
+	// is what a CLI shutting down does.
+	inWriter.Close()
+
+	if err := ServeStdio(context.Background(), dir, in, out); err != nil {
+		t.Fatalf("закрытый stdio — это конец сессии, а не ошибка: %v", err)
 	}
 }

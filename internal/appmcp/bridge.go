@@ -3,7 +3,9 @@ package appmcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -83,7 +85,29 @@ func ServeStdio(ctx context.Context, dataDir string, in *os.File, out *os.File) 
 	if err != nil {
 		return err
 	}
-	return Bridge(ctx, h, &mcp.IOTransport{Reader: in, Writer: out})
+	if err := Bridge(ctx, h, &mcp.IOTransport{Reader: in, Writer: out}); err != nil && !ended(err) {
+		return err
+	}
+	return nil
+}
+
+// ended reports the session simply being over. An agent ends one by closing
+// stdio, so that is success and not a failure to report: a non-zero exit there
+// would make every finished session look like a broken server in somebody's
+// agent log.
+//
+// The text is matched because the error underneath is a code of the SDK's
+// internal jsonrpc2 package (ErrServerClosing), which is not ours to compare
+// against. Narrow on purpose: everything it does not recognise is still an
+// error.
+func ended(err error) bool {
+	switch {
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrClosedPipe),
+		errors.Is(err, context.Canceled), errors.Is(err, mcp.ErrConnectionClosed):
+		return true
+	}
+	text := err.Error()
+	return strings.Contains(text, "server is closing") || strings.Contains(text, "connection closed")
 }
 
 // Bridge pipes one session on transport through to the application at h.
