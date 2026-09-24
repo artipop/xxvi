@@ -34,7 +34,7 @@ export default function Terminal(props: {
   // that exited and a step that is over are not the same news.
   ended?: string;
 }): JSX.Element {
-  const [status, setStatus] = createSignal<"opening" | "live" | "closed">("opening");
+  const [status, setStatus] = createSignal<"opening" | "live" | "reconnecting" | "closed">("opening");
   const [error, setError] = createSignal("");
   let host: HTMLDivElement | undefined;
 
@@ -46,6 +46,7 @@ export default function Terminal(props: {
     let terminal: any = null;
     let observer: ResizeObserver | null = null;
     let socket: WebSocket | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
 
     const start = async () => {
       const handle = await props.open();
@@ -57,12 +58,13 @@ export default function Terminal(props: {
       ]);
       if (disposed || !host) return;
 
-      // xterm paints on a canvas and cannot read CSS, so the font and the two
+      // xterm paints on a canvas and cannot read CSS, so the font and the
       // colours are handed to it as strings — taken off the page rather than
       // written here, so the emulator and the chrome around it cannot drift.
       const style = getComputedStyle(host);
       const value = (token: string, fallback: string) =>
         style.getPropertyValue(token).trim() || fallback;
+      const ansi = (name: string) => value(`--ansi-${name}`, "") || undefined;
 
       terminal = new Terminal({
         fontFamily: value("--mono", 'ui-monospace, SFMono-Regular, Menlo, monospace'),
@@ -73,6 +75,22 @@ export default function Terminal(props: {
         theme: {
           background: value("--bg", "#111216"),
           foreground: value("--text", "#e6e8ee"),
+          black: ansi("black"),
+          red: ansi("red"),
+          green: ansi("green"),
+          yellow: ansi("yellow"),
+          blue: ansi("blue"),
+          magenta: ansi("magenta"),
+          cyan: ansi("cyan"),
+          white: ansi("white"),
+          brightBlack: ansi("bright-black"),
+          brightRed: ansi("bright-red"),
+          brightGreen: ansi("bright-green"),
+          brightYellow: ansi("bright-yellow"),
+          brightBlue: ansi("bright-blue"),
+          brightMagenta: ansi("bright-magenta"),
+          brightCyan: ansi("bright-cyan"),
+          brightWhite: ansi("bright-white"),
         },
       });
       const fit = new FitAddon();
@@ -80,31 +98,68 @@ export default function Terminal(props: {
       terminal.open(host);
       fit.fit();
 
-      const ws = new WebSocket(handle.url);
-      ws.binaryType = "arraybuffer";
-      socket = ws;
-
+      const send = (data: string | Uint8Array) => {
+        if (socket?.readyState === WebSocket.OPEN) socket.send(data);
+      };
       const sendSize = () => {
-        if (ws.readyState === WebSocket.OPEN && terminal) {
-          ws.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
-        }
+        if (terminal) send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
       };
 
-      ws.onopen = () => { setStatus("live"); sendSize(); };
-      ws.onmessage = (e: MessageEvent) => {
-        if (typeof e.data === "string") {
-          // The only text frame is the shell saying it has gone.
-          if (e.data.includes('"exit"')) setStatus("closed");
-          return;
-        }
-        terminal.write(new Uint8Array(e.data as ArrayBuffer));
+      // The process is gone. A spinner frozen mid-turn looks exactly like one
+      // that is still thinking, so the screen itself has to say it stopped, not
+      // only the line under it.
+      const finish = () => {
+        setStatus("closed");
+        terminal.options.cursorBlink = false;
+        terminal.options.disableStdin = true;
+        terminal.write(`${belowContent(terminal)}\x1b[0m\x1b[2m— ${props.ended ?? t("terminal.shellEnded")} —\x1b[0m\x1b[?25l`);
       };
-      ws.onclose = () => setStatus("closed");
-      ws.onerror = () => setStatus("closed");
+
+      // A socket that closes without «exit» is the connection, not the
+      // process: the window slept, the webview dropped it. The process is still
+      // there, so the pane goes back for it rather than declaring it over.
+      let attempt = 0;
+      const connect = () => {
+        const ws = new WebSocket(handle.url);
+        ws.binaryType = "arraybuffer";
+        socket = ws;
+        let exited = false;
+
+        ws.onopen = () => {
+          // Every socket starts with the whole history, and drawn over the
+          // screen the last one left it would be the same output twice.
+          if (attempt > 0) terminal.reset();
+          attempt = 0;
+          setStatus("live");
+          sendSize();
+        };
+        ws.onmessage = (e: MessageEvent) => {
+          if (typeof e.data === "string") {
+            // The only text frame is the process saying it has gone.
+            if (e.data.includes('"exit"')) { exited = true; finish(); }
+            return;
+          }
+          terminal.write(new Uint8Array(e.data as ArrayBuffer));
+        };
+        // An error is always followed by a close, so the close alone decides.
+        ws.onclose = () => {
+          if (disposed || exited || socket !== ws) return;
+          setStatus("reconnecting");
+          const delay = Math.min(500 * 2 ** attempt, 10_000);
+          attempt++;
+          retry = setTimeout(connect, delay);
+        };
+      };
+      connect();
 
       const encoder = new TextEncoder();
-      terminal.onData((data: string) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(encoder.encode(data));
+      terminal.onData((data: string) => send(encoder.encode(data)));
+      // Some mouse reports are not text: the X10 encoding puts coordinates in
+      // bytes above 0x7f, and UTF-8 would turn each into two.
+      terminal.onBinary((data: string) => {
+        const bytes = new Uint8Array(data.length);
+        for (let i = 0; i < data.length; i++) bytes[i] = data.charCodeAt(i) & 0xff;
+        send(bytes);
       });
 
       // The pane is resized by more than the window: widening a column with R
@@ -120,6 +175,7 @@ export default function Terminal(props: {
 
     return () => {
       disposed = true;
+      clearTimeout(retry);
       observer?.disconnect();
       socket?.close();
       terminal?.dispose();
@@ -132,9 +188,24 @@ export default function Terminal(props: {
         <div class="screen-note">{error()}</div>
       </Show>
       <div class="terminal-host" ref={host} />
+      <Show when={status() === "reconnecting"}>
+        <div class="meta">{t("terminal.reconnecting")}</div>
+      </Show>
       <Show when={status() === "closed"}>
         <div class="meta">{props.ended ?? t("terminal.shellEnded")}</div>
       </Show>
     </div>
   );
+}
+
+// belowContent is where the closing line goes: under the last line anything was
+// drawn on. A full-screen program that was killed leaves the cursor wherever it
+// was drawing — inside its own input box, as often as not — and a line written
+// from there would land on top of what it drew.
+function belowContent(terminal: any): string {
+  const buffer = terminal.buffer.active;
+  let last = terminal.rows - 1;
+  while (last >= 0 && !buffer.getLine(buffer.baseY + last)?.translateToString(true).trim()) last--;
+  if (last >= terminal.rows - 1) return `\x1b[${terminal.rows};1H\r\n`;
+  return `\x1b[${last + 2};1H`;
 }

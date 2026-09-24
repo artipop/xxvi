@@ -253,6 +253,7 @@ export const ru: Dict = {
 
   // ---- terminal ----
   "terminal.shellEnded": "шелл завершился",
+  "terminal.reconnecting": "переподключение…",
 
   // ---- diff ----
   "fileStatus.added": "новый",

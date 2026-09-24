@@ -15,6 +15,26 @@
   --bad: #e06c75;
   --radius: 8px;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  /* The sixteen colours a terminal program asks for by number. xterm's own are
+     made for a black screen and an unknown one: its blue is unreadable on
+     --bg, and its black is --bg. */
+  --ansi-black: #4b5161;
+  --ansi-red: #e06c75;
+  --ansi-green: #7bc47f;
+  --ansi-yellow: #e0a458;
+  --ansi-blue: #6aa2e8;
+  --ansi-magenta: #c38ee0;
+  --ansi-cyan: #4fb8ad;
+  --ansi-white: #c9cdd6;
+  --ansi-bright-black: #7a8092;
+  --ansi-bright-red: #f08c94;
+  --ansi-bright-green: #9ad89d;
+  --ansi-bright-yellow: #f0c27e;
+  --ansi-bright-blue: #8fbcf5;
+  --ansi-bright-magenta: #d9aef2;
+  --ansi-bright-cyan: #74d3c9;
+  --ansi-bright-white: #f4f5f8;
 }
 
 * { box-sizing: border-box; }

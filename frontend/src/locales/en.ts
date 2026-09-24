@@ -252,6 +252,7 @@ export const en: Dict = {
 
   // ---- terminal ----
   "terminal.shellEnded": "the shell has ended",
+  "terminal.reconnecting": "reconnecting…",
 
   // ---- diff ----
   "fileStatus.added": "new",
