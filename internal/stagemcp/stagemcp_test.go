@@ -140,6 +140,22 @@ func TestToolNamesTheValuesItWants(t *testing.T) {
 	}
 }
 
+// An agent that reports alongside its last command reports before knowing how
+// that command went, and the terminal is closed on it seconds later. Both
+// places the agent reads before calling say so, the ones with values and
+// without alike.
+func TestFinishIsToldToBeTheLastCall(t *testing.T) {
+	for _, text := range []string{
+		describe(Step{}),
+		describe(Step{Writes: []model.PropertyWrite{{Property: "Вердикт"}}}),
+		instructions(Step{}),
+	} {
+		if !strings.Contains(text, lastCall) {
+			t.Fatalf("агенту должно быть сказано, что это последний вызов: %q", text)
+		}
+	}
+}
+
 func content(res *mcp.CallToolResult) string {
 	var b strings.Builder
 	for _, c := range res.Content {

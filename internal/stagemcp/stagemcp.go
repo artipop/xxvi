@@ -219,6 +219,13 @@ func newServer(step Step) *mcp.Server {
 	return srv
 }
 
+// lastCall is said in both the instructions and the tool, because the call is
+// taken at its word: seconds after it the terminal is closed, so a commit
+// running alongside it is cut off, and a commit that failed alongside it has
+// already been reported as done.
+const lastCall = "Make it your last call, on its own: not alongside other tool calls, and only once the results of every earlier call are in — " +
+	"right after it the session is closed, and anything still running is stopped."
+
 func instructions(step Step) string {
 	var b strings.Builder
 	b.WriteString("This is a step of an XXVI flow")
@@ -229,7 +236,8 @@ func instructions(step Step) string {
 		fmt.Fprintf(&b, " for the card «%s»", step.CardTitle)
 	}
 	b.WriteString(".\n\nWhen you are done, call finish_step: until it is called, the card stands here and goes nowhere. ")
-	b.WriteString("Leaving the terminal does not count as finishing the step.")
+	b.WriteString("Leaving the terminal does not count as finishing the step. ")
+	b.WriteString(lastCall)
 	return b.String()
 }
 
@@ -239,7 +247,8 @@ func instructions(step Step) string {
 // about too late.
 func describe(step Step) string {
 	var b strings.Builder
-	b.WriteString("Report that the step is finished, and how. Call it when the work is done or when it has become clear it cannot be done: until this call the card stays where it is.")
+	b.WriteString("Report that the step is finished, and how. Call it when the work is done or when it has become clear it cannot be done: until this call the card stays where it is. ")
+	b.WriteString(lastCall)
 	if len(step.Writes) == 0 {
 		return b.String()
 	}
