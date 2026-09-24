@@ -127,12 +127,14 @@ func publishFlow() model.Flow {
 			{ID: "p-mr", Name: "MR", Action: model.ActionPublish},
 			{ID: "p-wait", Name: "Ждёт", Action: model.ActionNone},
 			{ID: "p-stuck", Name: "Не вышло", Action: model.ActionNone},
+			{ID: "p-done", Name: "Влит", Final: true},
 		},
 		Edges: []model.Edge{
 			{From: "p-work", To: "p-mr", On: model.TriggerCardChanged,
 				If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomePassed}},
 			{From: "p-mr", To: "p-wait", On: model.TriggerSuccess},
 			{From: "p-mr", To: "p-stuck", On: model.TriggerFailure},
+			{From: "p-wait", To: "p-done", On: model.TriggerMRMerged},
 		},
 	}
 }
@@ -219,5 +221,16 @@ func TestPublishPushesAndOpensOneMR(t *testing.T) {
 	waitStage(t, h.app, card.ID, "p-mr")
 	if n := len(h.srv.All()); n != 1 {
 		t.Fatalf("второй публикацией открыт второй MR: %d", n)
+	}
+
+	// Still open: asking changes nothing.
+	h.app.Hosting.Poll()
+	if st, _, _ := h.app.Store.FlowState(card.ID); st.StageID != "p-wait" {
+		t.Fatalf("MR открыт — карточка ждёт, а она на %q", st.StageID)
+	}
+	h.srv.Change(h.repo, mrs[0].IID, func(m *gitlabtest.MR) { m.State = "merged" })
+	h.app.Hosting.Poll()
+	if c, _ := h.app.Store.Card(card.ID); c.State != model.StateDone {
+		t.Fatalf("влитый MR закрывает карточку, а она %s", c.State)
 	}
 }

@@ -25,6 +25,7 @@ type Service struct {
 	log     *slog.Logger
 
 	reporter Reporter
+	pollState
 }
 
 func New(st *store.Store, secrets Secrets, log *slog.Logger) *Service {

@@ -218,6 +218,10 @@ export const msgRu: Dict = {
   "msg.cancel.leftFlow": "карточка снята с флоу",
   "msg.cancel.dropped": "карточка отброшена",
   "msg.cancel.cardChanged": "на карточке выбрано значение, по которому стадия переходит дальше",
+  "msg.move.mrMerged": "MR {mr} влит",
+  "msg.move.mrClosed": "MR {mr} закрыт без вливания",
+  "msg.move.mrUpdated": "в MR {mr} новые коммиты",
+  "msg.cancel.hosting": "MR изменился, и стадия переходит дальше",
 
   // ---- the journal ----
   "msg.journal.leftFlow": "Карточка снята с флоу и вернулась во входящие.",

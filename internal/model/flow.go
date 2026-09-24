@@ -120,14 +120,21 @@ const (
 	// and value is the edge's own condition, so the trigger kind stays closed
 	// and the flow decides only the vocabulary.
 	TriggerCardChanged = "card.changed"
+
+	// The card's MR, as the hosting reports it (docs/system.md §15.3): merged,
+	// closed without merging, or given new commits. The first two are read by
+	// asking the hosting about the cards whose stage waits for them; the third
+	// arrives with the review source, which already notices a new head.
+	TriggerMRMerged  = "mr.merged"
+	TriggerMRClosed  = "mr.closed"
+	TriggerMRUpdated = "mr.updated"
 )
 
-// Trigger sources, which decide who can produce an event. There is no polling
-// source in this application yet; the field exists because adding one (git,
-// github) must not change the engine or the editor — see docs/poc.md.
+// Trigger sources, which decide who can produce an event.
 const (
 	SourceOutcome = "outcome" // the stage's own session finished
 	SourceHuman   = "human"   // the card itself changed; pushed, never polled
+	SourceHosting = "hosting" // the card's MR changed; polled
 )
 
 // The card's own field for how a stage ended, and the two values it takes.
@@ -199,6 +206,26 @@ var Triggers = []Trigger{
 	{Kind: TriggerSuccess, Source: SourceOutcome},
 	{Kind: TriggerFailure, Source: SourceOutcome},
 	{Kind: TriggerCardChanged, Source: SourceHuman},
+	{Kind: TriggerMRMerged, Source: SourceHosting},
+	{Kind: TriggerMRClosed, Source: SourceHosting},
+	{Kind: TriggerMRUpdated, Source: SourceHosting},
+}
+
+// IsHosting reports whether the trigger comes from the card's MR.
+func IsHosting(kind string) bool {
+	t, ok := TriggerByKind(kind)
+	return ok && t.Source == SourceHosting
+}
+
+// WaitsForHosting reports whether the stage has an edge on any of the MR's
+// events — which is what earns a card a question to the hosting.
+func (f Flow) WaitsForHosting(stageID string) bool {
+	for _, e := range f.Edges {
+		if e.From == stageID && IsHosting(e.On) {
+			return true
+		}
+	}
+	return false
 }
 
 // TriggerByKind looks a trigger up in the closed set.

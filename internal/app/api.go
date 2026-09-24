@@ -659,6 +659,7 @@ func (s *API) ConnectHosting(projectID, token string) (model.Project, error) {
 	if _, err := s.app.Hosting.Connect(p, token); err != nil {
 		return model.Project{}, err
 	}
+	s.app.ensureHostingFlows()
 	s.describe(&p)
 	s.app.Emit(EventProjects, map[string]any{"project": p.ID})
 	return p, nil

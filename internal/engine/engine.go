@@ -255,6 +255,31 @@ func (e *Engine) CardChanged(cardID, property, value string) {
 		msg.New("move.cardChanged", "property", property, "value", value), "")
 }
 
+// HostingEvent moves a card along its stage's edge for something that
+// happened to its MR. A stage that does not wait for it hears nothing and
+// leaves no trace, as with a property nobody asked about: the MR moving on is
+// news only where somebody is waiting for it.
+func (e *Engine) HostingEvent(cardID, trigger string, detail msg.Msg) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	st, ok, err := e.store.FlowState(cardID)
+	if err != nil || !ok {
+		return false
+	}
+	flow, err := e.store.Flow(st.FlowID)
+	if err != nil || !flow.HasEdge(st.StageID, trigger) {
+		return false
+	}
+	if e.Publishing(cardID) {
+		// The stage is talking to the hosting right now; its own outcome
+		// moves the card, and a second mover would race it.
+		return false
+	}
+	e.cancel(cardID, msg.New("cancel.hosting"))
+	left := e.advanceLocked(cardID, trigger, detail, "")
+	return left != ""
+}
+
 // advanceLocked moves a card along the edge matching an event and returns the
 // stage it left, so the caller can refill it. Callers hold mu.
 func (e *Engine) advanceLocked(cardID, on string, detail msg.Msg, agentText string) (leftStage string) {

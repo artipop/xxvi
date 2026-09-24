@@ -180,15 +180,18 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	return a, nil
 }
 
-// Start begins the background work: reading sources on a timer.
+// Start begins the background work: reading sources and asking the hosting,
+// each on its own timer.
 func (a *App) Start() {
 	a.Poller.Start()
+	a.Hosting.Start()
 }
 
 // Close stops everything, agents first: a session still writing while the
 // database closes under it is the one ordering mistake worth spelling out.
 func (a *App) Close() error {
 	a.Poller.Stop()
+	a.Hosting.Stop()
 	a.Agents.Close()
 	a.Terminals.Close()
 	a.Tools.Close()

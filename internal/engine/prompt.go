@@ -266,6 +266,12 @@ func describeTrigger(on string) string {
 		return "the step failed"
 	case model.TriggerCardChanged:
 		return "a value was set on the card"
+	case model.TriggerMRMerged:
+		return "the MR was merged"
+	case model.TriggerMRClosed:
+		return "the MR was closed without merging"
+	case model.TriggerMRUpdated:
+		return "new commits arrived in the MR"
 	}
 	return on
 }

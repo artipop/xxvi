@@ -219,6 +219,10 @@ export const msgEn: Dict = {
   "msg.cancel.leftFlow": "the card was taken off the flow",
   "msg.cancel.dropped": "the card was dropped",
   "msg.cancel.cardChanged": "a value the stage moves on was set on the card",
+  "msg.move.mrMerged": "MR {mr} merged",
+  "msg.move.mrClosed": "MR {mr} closed without merging",
+  "msg.move.mrUpdated": "new commits in MR {mr}",
+  "msg.cancel.hosting": "the MR changed, and the stage moves on",
 
   // ---- the journal ----
   "msg.journal.leftFlow": "The card was taken off the flow and went back to the inbox.",

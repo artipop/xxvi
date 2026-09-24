@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/artipop/xxvi/internal/model"
 )
@@ -53,6 +54,10 @@ func defaultAgent() model.Agent {
 // words, and «Page and check» is the short one somebody can walk end to end — by hand
 // or through the tools this application offers outside (internal/appmcp).
 func SeedFlows() []model.Flow {
+	return append(baseFlows(), HostingFlows(defaultAgent().Name)...)
+}
+
+func baseFlows() []model.Flow {
 	return []model.Flow{
 		{
 			Name: "Development",
@@ -262,5 +267,155 @@ func SeedFlows() []model.Flow {
 				{From: "do", To: "triage-blocked", On: model.TriggerFailure},
 			},
 		},
+	}
+}
+
+// HostingFlows are the routes that end at the hosting: one's own task taken to
+// a merged MR, and somebody else's MR reviewed. Seeded with the rest on a first
+// run, and offered again when a project is first connected to a hosting — an
+// installation older than them has never seen them, and connecting is the
+// moment they start to mean something. crew is the agent that does the work.
+func HostingFlows(crew string) []model.Flow {
+	return []model.Flow{
+		{
+			Name: "Task to MR",
+			Description: "An agent does the work on the task's own branch, a person reviews the diff, " +
+				"the application pushes and opens the MR, and the card waits until it is merged.",
+			EntryStage: "tmr-work",
+			Stages: []model.Stage{
+				{
+					ID: "tmr-work", Name: "In progress", Action: model.ActionAgent, Crew: []string{crew},
+					Work: model.WorkTerminal,
+					Prompt: "Do what the card asks. Commit the work on the task's branch when it is done: " +
+						"what is not committed will not reach the MR.",
+					X: 80, Y: 160,
+				},
+				{
+					ID: "tmr-review", Name: "In review", Action: model.ActionNone,
+					Screens: []model.Screen{{Kind: model.ScreenDiff, Title: "Changes"}},
+					X:       360, Y: 160,
+				},
+				{ID: "tmr-publish", Name: "MR", Action: model.ActionPublish, X: 640, Y: 160},
+				{
+					ID: "tmr-wait", Name: "Waiting for merge", Action: model.ActionNone,
+					Screens: []model.Screen{{Kind: model.ScreenBrowser, Title: "MR", Ref: "{MR}"}},
+					X:       900, Y: 160,
+				},
+				{ID: "tmr-done", Name: "Merged", Final: true, X: 1160, Y: 100},
+				{ID: "tmr-closed", Name: "Closed", Final: true, X: 1160, Y: 260},
+			},
+			Edges: []model.Edge{
+				{From: "tmr-work", To: "tmr-review", On: model.TriggerSuccess},
+				{
+					From: "tmr-review", To: "tmr-publish", On: model.TriggerCardChanged,
+					If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomePassed},
+				},
+				{
+					From: "tmr-review", To: "tmr-work", On: model.TriggerCardChanged,
+					If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomeFailed},
+				},
+				// A publish that failed stays where it is, with the reason on
+				// its segment: most reasons — uncommitted files, a rejected
+				// push — are fixed by hand, and then the stage is started again.
+				{From: "tmr-publish", To: "tmr-wait", On: model.TriggerSuccess},
+				{From: "tmr-wait", To: "tmr-done", On: model.TriggerMRMerged},
+				{From: "tmr-wait", To: "tmr-closed", On: model.TriggerMRClosed},
+			},
+		},
+		{
+			Name: "MR review",
+			Description: "Somebody else's MR that waits on your review: read the diff, run it and try it, " +
+				"then approve or send it back with remarks. New commits bring it back to the review.",
+			EntryStage: "rmr-review",
+			Stages: []model.Stage{
+				{
+					ID: "rmr-review", Name: "Review", Action: model.ActionNone,
+					Screens: []model.Screen{
+						{Kind: model.ScreenDiff, Title: "Changes"},
+						{Kind: model.ScreenBrowser, Title: "MR", Ref: "{MR}"},
+					},
+					X: 80, Y: 160,
+				},
+				// Where the branch is run and tried. A shell in the MR's own
+				// working tree: what to run is the project's, not the flow's.
+				{
+					ID: "rmr-try", Name: "Run and check", Action: model.ActionNone,
+					Screens: []model.Screen{{Kind: model.ScreenTerminal}},
+					X:       360, Y: 160,
+				},
+				// Two stages with one action, named after what they send, so
+				// the two buttons of a waiting stage read as the verdict itself.
+				{ID: "rmr-approve", Name: "Approve", Action: model.ActionVerdict, X: 640, Y: 80},
+				{ID: "rmr-changes", Name: "Request changes", Action: model.ActionVerdict, X: 640, Y: 260},
+				{
+					ID: "rmr-wait", Name: "Waiting for the author", Action: model.ActionNone,
+					Screens: []model.Screen{{Kind: model.ScreenBrowser, Title: "MR", Ref: "{MR}"}},
+					X:       900, Y: 160,
+				},
+				{ID: "rmr-done", Name: "Merged", Final: true, X: 1160, Y: 100},
+				{ID: "rmr-closed", Name: "Closed", Final: true, X: 1160, Y: 260},
+			},
+			Edges: append([]model.Edge{
+				{
+					From: "rmr-review", To: "rmr-try", On: model.TriggerCardChanged,
+					If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomePassed},
+				},
+				{
+					From: "rmr-review", To: "rmr-changes", On: model.TriggerCardChanged,
+					If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomeFailed},
+				},
+				{
+					From: "rmr-try", To: "rmr-approve", On: model.TriggerCardChanged,
+					If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomePassed},
+				},
+				{
+					From: "rmr-try", To: "rmr-changes", On: model.TriggerCardChanged,
+					If: &model.Cond{Property: model.OutcomeProperty, Value: model.OutcomeFailed},
+				},
+				{From: "rmr-approve", To: "rmr-wait", On: model.TriggerSuccess},
+				{From: "rmr-changes", To: "rmr-wait", On: model.TriggerSuccess},
+			}, mrEvents("rmr-review", "rmr-try", "rmr-wait")...),
+		},
+	}
+}
+
+// mrEvents is what the MR itself does to a review wherever it stands: new
+// commits send it back to the review — what was read is no longer what is
+// there — and a merge or a close ends it.
+func mrEvents(stages ...string) []model.Edge {
+	var out []model.Edge
+	for _, s := range stages {
+		out = append(out,
+			model.Edge{From: s, To: "rmr-review", On: model.TriggerMRUpdated},
+			model.Edge{From: s, To: "rmr-done", On: model.TriggerMRMerged},
+			model.Edge{From: s, To: "rmr-closed", On: model.TriggerMRClosed},
+		)
+	}
+	return out
+}
+
+// ensureHostingFlows adds the hosting flows an older installation never got,
+// by name: a flow somebody renamed or deleted is left as they left it, and one
+// whose stage ids are already taken is not forced in.
+func (a *App) ensureHostingFlows() {
+	flows, err := a.Store.Flows()
+	if err != nil {
+		return
+	}
+	agents, err := a.Store.Agents()
+	if err != nil || len(agents) == 0 {
+		return
+	}
+	have := map[string]bool{}
+	for _, f := range flows {
+		have[strings.ToLower(f.Name)] = true
+	}
+	for _, f := range HostingFlows(agents[0].Name) {
+		if have[strings.ToLower(f.Name)] {
+			continue
+		}
+		if _, err := a.Store.SaveFlow(f); err != nil {
+			a.log.Info("hosting flow not added", "flow", f.Name, "err", err)
+		}
 	}
 }

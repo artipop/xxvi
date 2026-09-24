@@ -12,9 +12,11 @@ import (
 	"github.com/artipop/xxvi/internal/store"
 )
 
-// Reporter is where a hosting stage says how it ended: the engine.
+// Reporter is the engine, as the hosting side talks to it: a hosting stage
+// saying how it ended, and the MR saying it moved.
 type Reporter interface {
 	StepDone(job engine.Job, outcome string, detail msg.Msg)
+	HostingEvent(cardID, trigger string, detail msg.Msg) bool
 }
 
 // SetReporter supplies the engine once both exist.
