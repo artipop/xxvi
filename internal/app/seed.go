@@ -414,8 +414,10 @@ func (a *App) ensureHostingFlows() {
 		if have[strings.ToLower(f.Name)] {
 			continue
 		}
-		if _, err := a.Store.SaveFlow(f); err != nil {
+		if saved, err := a.Store.SaveFlow(f); err != nil {
 			a.log.Info("hosting flow not added", "flow", f.Name, "err", err)
+		} else {
+			a.Emit(EventFlows, map[string]any{"flowId": saved.ID})
 		}
 	}
 }
