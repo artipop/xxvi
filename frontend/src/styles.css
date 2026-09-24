@@ -95,7 +95,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sidebar.wide .nav { width: 100%; height: auto; justify-content: flex-start; padding: 7px 10px; }
 .sidebar.wide .nav.toggle { width: 32px; height: 32px; padding: 0; justify-content: center; }
 .nav.toggle { color: var(--faint); }
-.nav.apart { margin-top: 14px; }
+.nav-rule { align-self: stretch; border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
 .nav:hover { background: var(--panel-2); color: var(--text); }
 .nav.on { background: var(--panel-2); color: var(--text); }
 .nav .icon { width: 18px; height: 18px; flex: none; }

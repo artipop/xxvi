@@ -35,8 +35,10 @@ export default function Sidebar(): JSX.Element {
       </div>
       <For each={NAV}>
         {(item) => (
+          <>
+          <Show when={item.apart}><hr class="nav-rule" /></Show>
           <button
-            class={`nav ${tab() === item.tab ? "on" : ""} ${item.apart ? "apart" : ""}`}
+            class={`nav ${tab() === item.tab ? "on" : ""}`}
             onClick={() => setTab(item.tab)}
             aria-label={item.label()}
           >
@@ -53,6 +55,7 @@ export default function Sidebar(): JSX.Element {
               <Show when={item.mark && item.mark()}><span class="tip-note">{t("nav.updateMark")}</span></Show>
             </span>
           </button>
+          </>
         )}
       </For>
     </aside>
