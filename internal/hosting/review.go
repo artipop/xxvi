@@ -265,7 +265,7 @@ func reviewItem(project model.Project, mr MR) model.Item {
 		Props: props,
 		Workspace: &model.ItemWorkspace{
 			Project: project.ID, WorkMode: model.WorkModeReview,
-			Branch: mr.Source, Base: "origin/" + mr.Target,
+			Branch: mr.Source, Base: RemoteName(project) + "/" + mr.Target,
 		},
 	}
 }

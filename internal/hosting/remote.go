@@ -85,15 +85,48 @@ func ParseRemote(raw string) (Remote, bool) {
 	return Remote{Web: scheme + "://" + host, Path: path}, true
 }
 
-// GuessProvider says which hosting a server is, when its name says so. A
-// company's own GitLab is often called something else entirely, which is why
-// the answer is stored on the project and a person can correct it.
-func GuessProvider(r Remote) string {
-	host := strings.ToLower(r.Host())
-	if strings.Contains(host, "gitlab") {
-		return model.ProviderGitLab
+// RepoPath is the repository's path on a server, read off a remote's
+// address. A server under a subpath — «https://company.ru/gitlab» — has that
+// subpath in its https remotes and not in its ssh ones, so it is taken off
+// when it is there.
+func RepoPath(server, remoteURL string) (string, bool) {
+	r, ok := ParseRemote(remoteURL)
+	if !ok {
+		return "", false
+	}
+	if u, err := url.Parse(server); err == nil {
+		if prefix := strings.Trim(u.Path, "/"); prefix != "" {
+			r.Path = strings.TrimPrefix(r.Path, prefix+"/")
+		}
+	}
+	return r.Path, r.Path != ""
+}
+
+// TokenURL is the page where a person makes the token this application asks
+// for, with its name and scope already filled in. A personal token and not a
+// project's: a project token is a bot user of its own, which is never
+// anybody's reviewer and whose approval is not the person's.
+func TokenURL(provider, server string) string {
+	server = strings.TrimRight(server, "/")
+	switch provider {
+	case model.ProviderGitLab:
+		if server == "" {
+			return ""
+		}
+		return server + "/-/user_settings/personal_access_tokens?name=XXVI&scopes=api"
 	}
 	return ""
+}
+
+// ServerURL checks an address typed for a server: a web address, which is
+// all it can be, without the trailing slash.
+func ServerURL(raw string) (string, bool) {
+	raw = strings.TrimRight(strings.TrimSpace(raw), "/")
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+		return "", false
+	}
+	return raw, true
 }
 
 // MRRef is where the server keeps an MR's head for fetching. The MR's own

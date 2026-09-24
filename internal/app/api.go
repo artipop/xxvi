@@ -668,15 +668,12 @@ func (s *API) SaveProject(p model.Project) (model.Project, error) {
 	if err != nil || !info.IsDir() {
 		return model.Project{}, msg.Err("project.folderNotFound", "path", checked.Path)
 	}
-	// Where it pushes is git's answer, asked when nobody gave one; which
-	// hosting that is, a guess from the server's name that a person may
-	// correct — and a correction is kept, not guessed over.
-	if checked.Remote == "" {
-		checked.Remote = hosting.DetectRemote(checked.Path)
-	}
-	if checked.Provider == "" {
-		if r, ok := hosting.ParseRemote(checked.Remote); ok {
-			checked.Provider = hosting.GuessProvider(r)
+	// The hosting is changed by connecting and disconnecting, not by the
+	// form: a form opened before a connect would otherwise save it away.
+	checked.Remote, checked.Server, checked.Provider = "", "", ""
+	if checked.ID != "" {
+		if was, err := s.app.Store.Project(checked.ID); err == nil {
+			checked.Remote, checked.Server, checked.Provider = was.Remote, was.Server, was.Provider
 		}
 	}
 	saved, err := s.app.Store.SaveProject(checked)
@@ -688,15 +685,31 @@ func (s *API) SaveProject(p model.Project) (model.Project, error) {
 	return saved, nil
 }
 
-// ConnectHosting gives the application a token for the server a project
-// pushes to. The server is asked who the token belongs to before anything is
-// kept, so a wrong one is refused where it was typed.
-func (s *API) ConnectHosting(projectID, token string) (model.Project, error) {
+// HostingRemotes is what connecting a project offers: its repository's
+// remotes, each with the server and repository its address suggests.
+func (s *API) HostingRemotes(projectID string) ([]hosting.RemoteOption, error) {
+	p, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return nil, err
+	}
+	return hosting.Remotes(p.Path), nil
+}
+
+// TokenURL is the hosting's own page for making the token asked for, filled
+// in: where to send a person who has no token yet.
+func (s *API) TokenURL(provider, server string) string {
+	return hosting.TokenURL(provider, server)
+}
+
+// ConnectHosting ties a project to its hosting through the remote a person
+// chose, on the server they confirmed, with a token the server has to
+// recognise before anything is kept (docs/system.md §15.1).
+func (s *API) ConnectHosting(projectID, provider, remote, server, token string) (model.Project, error) {
 	p, err := s.app.Store.Project(projectID)
 	if err != nil {
 		return model.Project{}, err
 	}
-	if _, err := s.app.Hosting.Connect(p, token); err != nil {
+	if p, err = s.app.Hosting.Connect(p, provider, remote, server, token); err != nil {
 		return model.Project{}, err
 	}
 	s.app.ensureHostingFlows()
@@ -705,13 +718,17 @@ func (s *API) ConnectHosting(projectID, token string) (model.Project, error) {
 	return p, nil
 }
 
-// DisconnectHosting forgets the token of a project's server.
+// DisconnectHosting unties a project from its hosting, and its review queue
+// stops with it.
 func (s *API) DisconnectHosting(projectID string) (model.Project, error) {
 	p, err := s.app.Store.Project(projectID)
 	if err != nil {
 		return model.Project{}, err
 	}
-	if err := s.app.Hosting.Disconnect(p); err != nil {
+	if err := s.app.Hosting.SetReviewInbox(p, false); err != nil {
+		return model.Project{}, err
+	}
+	if p, err = s.app.Hosting.Disconnect(p); err != nil {
 		return model.Project{}, err
 	}
 	s.describe(&p)

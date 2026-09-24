@@ -36,11 +36,24 @@ func TestRemoteDropsCredentials(t *testing.T) {
 	}
 }
 
-func TestProviderGuess(t *testing.T) {
-	if p := GuessProvider(Remote{Web: "https://gitlab.company.ru", Path: "a/b"}); p != "gitlab" {
-		t.Fatalf("gitlab.company.ru — GitLab, получено %q", p)
+// A GitLab under a subpath has it in https remotes and not in ssh ones.
+func TestRepoPathUnderASubpath(t *testing.T) {
+	for _, url := range []string{
+		"https://company.ru/gitlab/team/api.git",
+		"git@company.ru:team/api.git",
+	} {
+		if got, ok := RepoPath("https://company.ru/gitlab", url); !ok || got != "team/api" {
+			t.Errorf("%s: %q", url, got)
+		}
 	}
-	if p := GuessProvider(Remote{Web: "https://git.company.ru", Path: "a/b"}); p != "" {
-		t.Fatalf("по имени git.company.ru провайдера не угадать, получено %q", p)
+}
+
+func TestTokenPageIsTheServersOwn(t *testing.T) {
+	got := TokenURL("gitlab", "https://gitlab.company.ru/")
+	if got != "https://gitlab.company.ru/-/user_settings/personal_access_tokens?name=XXVI&scopes=api" {
+		t.Fatalf("страница токена: %s", got)
+	}
+	if _, ok := ServerURL("gitlab.company.ru"); ok {
+		t.Fatal("адрес сервера без схемы — не адрес")
 	}
 }

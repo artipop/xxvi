@@ -130,7 +130,8 @@ func (m *Manager) RefreshReviewTree(cardID string) error {
 	return nil
 }
 
-// fetchMR brings the MR's head and its target branch from origin, and names
+// fetchMR brings the MR's head and its target branch from the project's
+// hosting remote, and names
 // the local ref the head is now under. The target too: the diff compares
 // against where the MR branched from it, and a target last fetched a week ago
 // would put a week of other people's work into the review.
@@ -141,12 +142,13 @@ func fetchMR(card model.Card, project model.Project) (string, error) {
 	}
 	remote := hosting.MRRef(project.Provider, iid)
 	if remote == "" {
-		return "", msg.Err("hosting.noProvider", "project", project.Name, "server", project.Remote)
+		return "", msg.Err("hosting.notConnected", "project", project.Name)
 	}
+	name := hosting.RemoteName(project)
 	local := fmt.Sprintf("refs/xxvi/mr/%d", iid)
-	args := []string{"fetch", "-q", "origin", "+" + remote + ":" + local}
-	if target := strings.TrimPrefix(card.Base, "origin/"); target != "" && target != card.Base {
-		args = append(args, "+refs/heads/"+target+":refs/remotes/origin/"+target)
+	args := []string{"fetch", "-q", name, "+" + remote + ":" + local}
+	if target := strings.TrimPrefix(card.Base, name+"/"); target != "" && target != card.Base {
+		args = append(args, "+refs/heads/"+target+":refs/remotes/"+name+"/"+target)
 	}
 	if _, err := gitNet(project.Path, args...); err != nil {
 		return "", msg.Wrap(err, "review.fetchFailed")

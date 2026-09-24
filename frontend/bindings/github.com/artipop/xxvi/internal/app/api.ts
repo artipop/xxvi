@@ -24,6 +24,9 @@ import * as engine$0 from "../engine/models.js";
 import * as gitdiff$0 from "../gitdiff/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as hosting$0 from "../hosting/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as model$0 from "../model/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -118,12 +121,12 @@ export function CloseTerminal(id: string): $CancellablePromise<void> {
 }
 
 /**
- * ConnectHosting gives the application a token for the server a project
- * pushes to. The server is asked who the token belongs to before anything is
- * kept, so a wrong one is refused where it was typed.
+ * ConnectHosting ties a project to its hosting through the remote a person
+ * chose, on the server they confirmed, with a token the server has to
+ * recognise before anything is kept (docs/system.md §15.1).
  */
-export function ConnectHosting(projectID: string, token: string): $CancellablePromise<model$0.Project> {
-    return $Call.ByID(1835527855, projectID, token);
+export function ConnectHosting(projectID: string, provider: string, remote: string, server: string, token: string): $CancellablePromise<model$0.Project> {
+    return $Call.ByID(1835527855, projectID, provider, remote, server, token);
 }
 
 /**
@@ -171,7 +174,8 @@ export function Diff(cardID: string, ref: string): $CancellablePromise<gitdiff$0
 }
 
 /**
- * DisconnectHosting forgets the token of a project's server.
+ * DisconnectHosting unties a project from its hosting, and its review queue
+ * stops with it.
  */
 export function DisconnectHosting(projectID: string): $CancellablePromise<model$0.Project> {
     return $Call.ByID(3360420581, projectID);
@@ -219,6 +223,14 @@ export function FlowOverview(flowID: string): $CancellablePromise<engine$0.FlowO
  */
 export function Flows(): $CancellablePromise<model$0.Flow[] | null> {
     return $Call.ByID(2493457172);
+}
+
+/**
+ * HostingRemotes is what connecting a project offers: its repository's
+ * remotes, each with the server and repository its address suggests.
+ */
+export function HostingRemotes(projectID: string): $CancellablePromise<hosting$0.RemoteOption[] | null> {
+    return $Call.ByID(628130670, projectID);
 }
 
 /**
@@ -547,6 +559,14 @@ export function StartTask(text: string, projectID: string, workMode: string, age
  */
 export function TakeIntoWork(cardID: string, flowID: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(1683275391, cardID, flowID);
+}
+
+/**
+ * TokenURL is the hosting's own page for making the token asked for, filled
+ * in: where to send a person who has no token yet.
+ */
+export function TokenURL(provider: string, server: string): $CancellablePromise<string> {
+    return $Call.ByID(3538060801, provider, server);
 }
 
 /**

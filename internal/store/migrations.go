@@ -349,10 +349,11 @@ UPDATE edge SET cond_value = 'passed' WHERE cond_property IN ('Исход', 'и�
 UPDATE edge SET cond_value = 'failed' WHERE cond_property IN ('Исход', 'исход') AND cond_value = 'не прошло';
 UPDATE edge SET cond_property = 'Outcome' WHERE cond_property IN ('Исход', 'исход');`,
 
-		// 16. Where a project pushes and which hosting that is. The token is
-		// not here: it lives in the system keychain, keyed by server.
+		// 16. A project's hosting: which remote, which server, which kind.
+		// The token is not here: it lives in the system keychain, by server.
 		`
 ALTER TABLE project ADD COLUMN remote   TEXT NOT NULL DEFAULT '';
+ALTER TABLE project ADD COLUMN server   TEXT NOT NULL DEFAULT '';
 ALTER TABLE project ADD COLUMN provider TEXT NOT NULL DEFAULT '';`,
 	}
 }

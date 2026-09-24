@@ -50,11 +50,14 @@ func newHosted(t *testing.T) hosted {
 	gitIn(t, folder, "commit", "-q", "-m", "init")
 	gitIn(t, folder, "push", "-q", "origin", "main")
 	gitIn(t, folder, "remote", "set-head", "origin", "main")
+	// origin names the fake server, and git is told to go to the bare
+	// repository instead — the way a person rewrites a remote to a mirror.
+	address := srv.URL + "/group/site.git"
+	gitIn(t, folder, "remote", "set-url", "origin", address)
+	gitIn(t, folder, "config", "url."+bare+".insteadOf", address)
 
 	api := NewAPI(a)
-	project, err := api.SaveProject(model.Project{
-		Name: "Сайт", Path: folder, Remote: srv.URL + "/group/site.git", Provider: model.ProviderGitLab,
-	})
+	project, err := api.SaveProject(model.Project{Name: "Сайт", Path: folder})
 	if err != nil {
 		t.Fatalf("проект: %v", err)
 	}
@@ -63,7 +66,7 @@ func newHosted(t *testing.T) hosted {
 
 func (h hosted) connect(t *testing.T) {
 	t.Helper()
-	if _, err := h.api.ConnectHosting(h.project.ID, h.srv.Token); err != nil {
+	if _, err := h.api.ConnectHosting(h.project.ID, model.ProviderGitLab, "origin", h.srv.URL, h.srv.Token); err != nil {
 		t.Fatalf("подключить: %v", err)
 	}
 }
@@ -80,40 +83,53 @@ func gitIn(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-func TestAProjectKnowsWhereItPushes(t *testing.T) {
+// Connecting offers the repository's own remotes rather than guessing one:
+// origin may be a fork, and a server's name says nothing about what it runs.
+func TestConnectingOffersTheRepositorysRemotes(t *testing.T) {
 	a := open(t)
 	api := NewAPI(a)
 	folder := t.TempDir()
 	gitIn(t, folder, "init", "-q")
-	gitIn(t, folder, "remote", "add", "origin", "git@gitlab.company.ru:team/backend/api.git")
+	gitIn(t, folder, "remote", "add", "upstream", "ssh://git@git.company.ru:2222/team/backend/api.git")
+	gitIn(t, folder, "remote", "add", "origin", "git@git.company.ru:me/api.git")
 
 	p, err := api.SaveProject(model.Project{Name: "API", Path: folder})
 	if err != nil {
 		t.Fatalf("проект: %v", err)
 	}
-	if p.Remote != "git@gitlab.company.ru:team/backend/api.git" || p.Provider != model.ProviderGitLab {
-		t.Fatalf("remote и хостинг должны прочитаться из origin: %+v", p)
+	if p.Remote != "" || p.Provider != "" {
+		t.Fatalf("без подключения хостинга у проекта нет: %+v", p)
 	}
-	if p.Server != "https://gitlab.company.ru" || p.Repository != "team/backend/api" {
-		t.Fatalf("сервер и репозиторий: %+v", p)
+	remotes, err := api.HostingRemotes(p.ID)
+	if err != nil || len(remotes) != 2 {
+		t.Fatalf("remote репозитория: %+v, %v", remotes, err)
+	}
+	if remotes[0].Name != "origin" || remotes[1].Name != "upstream" {
+		t.Fatalf("origin первым: %+v", remotes)
+	}
+	if remotes[1].Server != "https://git.company.ru" || remotes[1].Repository != "team/backend/api" {
+		t.Fatalf("сервер и репозиторий из адреса: %+v", remotes[1])
 	}
 }
 
 func TestATokenIsKeptOnlyWhenTheServerTakesIt(t *testing.T) {
 	h := newHosted(t)
-	if _, err := h.api.ConnectHosting(h.project.ID, "wrong"); !msg.Is(err, "hosting.unauthorized") {
+	if _, err := h.api.ConnectHosting(h.project.ID, model.ProviderGitLab, "origin", h.srv.URL, "wrong"); !msg.Is(err, "hosting.unauthorized") {
 		t.Fatalf("чужой токен должен быть отвергнут, получено %v", err)
+	}
+	if list, _ := h.api.Projects(); list[0].Provider != "" {
+		t.Fatalf("отвергнутый токен ничего не подключает: %+v", list[0])
 	}
 	h.connect(t)
 	list, _ := h.api.Projects()
-	if len(list) != 1 || list[0].Account != "me" {
+	if len(list) != 1 || list[0].Account != "me" || list[0].Repository != "group/site" || list[0].Remote != "origin" {
 		t.Fatalf("после подключения проект знает, кто мы: %+v", list)
 	}
 	if _, err := h.api.DisconnectHosting(h.project.ID); err != nil {
 		t.Fatalf("отключить: %v", err)
 	}
 	list, _ = h.api.Projects()
-	if list[0].Account != "" {
+	if list[0].Account != "" || list[0].Server != "" {
 		t.Fatalf("после отключения аккаунта нет: %+v", list[0])
 	}
 }

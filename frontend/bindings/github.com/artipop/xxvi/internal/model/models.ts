@@ -392,22 +392,25 @@ export interface Project {
     "repo"?: boolean;
 
     /**
-     * Remote is where the folder pushes — origin's address, read from git when
-     * the project is saved. Provider is which hosting that is, stored rather
-     * than guessed every time, because a company's own GitLab rarely says
-     * «gitlab» in its name and a person has to be able to correct the guess.
-     * Empty for a folder that pushes nowhere, or nowhere this application
-     * speaks to.
+     * Remote, Server and Provider are the project's hosting, as a person set
+     * it up: which of the repository's remotes is the one on the hosting —
+     * «origin», or «upstream» where origin is a fork — the server's address as
+     * its web interface opens it, and which hosting it is. Chosen, not guessed:
+     * a server's name says nothing reliable about what it runs, and ssh and
+     * the web interface are not always on one host. Empty until connected.
+     * 
+     * The remote is kept by name and its address asked of git when needed, so
+     * a remote pointed somewhere else in git is followed rather than
+     * remembered wrong.
      */
     "remote"?: string;
+    "server"?: string;
     "provider"?: string;
 
     /**
-     * Server and Repository are Remote taken apart — «https://gitlab.com»
-     * and «group/repo» — for the screen, which shows them rather than the
-     * address git uses. Not stored: they are the remote, read another way.
+     * Repository is the project's path on the server, «group/repo», read off
+     * the remote's address. Not stored: it is the remote, read another way.
      */
-    "server"?: string;
     "repository"?: string;
 
     /**

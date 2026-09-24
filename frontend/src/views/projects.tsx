@@ -1,6 +1,7 @@
-import { createSignal, createStore, storePath, For, Show } from "solid-js";
+import { createEffect, createSignal, createStore, onSettled, storePath, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Project } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { RemoteOption } from "../../bindings/github.com/artipop/xxvi/internal/hosting/models";
 import { guard, list, loadProjects, projects, vocabulary } from "../state";
 import { errorText, label, t } from "../i18n";
 
@@ -41,8 +42,8 @@ export default function ProjectsView() {
               <div class="row">
                 <span class="title">{p.name}</span>
                 <span class="tag">{label("projectKind", p.kind)}</span>
-                <Show when={p.repository}>
-                  <span class="tag">{p.provider ? label("provider", p.provider) : t("projects.noProvider")} · {p.repository}</span>
+                <Show when={p.provider}>
+                  <span class="tag">{label("provider", p.provider!)} · {p.repository}</span>
                 </Show>
                 <Show when={p.provider}>
                   <Show when={p.account} fallback={<span class="tag warn">{t("projects.notConnected")}</span>}>
@@ -79,10 +80,10 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
     setError(null);
     try {
       const saved = await API.SaveProject({ ...draft });
-      // A project that turned out to be on a hosting nobody is connected to
-      // stays open: the token is the next thing to ask, and it is asked here.
-      if (saved.provider && saved.server && !saved.account) {
-        setDraft((d) => { d.id = saved.id; d.remote = saved.remote; d.provider = saved.provider; });
+      // A new repository stays open: connecting its hosting is the next thing
+      // somebody setting it up does, and it is done here.
+      if (!draft.id && saved.repo) {
+        setDraft((d) => { d.id = saved.id; });
         props.onChanged(saved);
         return;
       }
@@ -139,27 +140,9 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
         </div>
       </label>
 
-      <div class="grid2">
-        <label class="field">
-          <span>{t("projects.remote")}</span>
-          <input type="text" class="mono" placeholder={t("projects.remotePlaceholder")} value={draft.remote ?? ""}
-                 onInput={(e) => setDraft(storePath("remote", e.currentTarget.value))} />
-        </label>
-        <label class="field">
-          <span>{t("projects.provider")}</span>
-          <select value={draft.provider ?? ""} onChange={(e) => setDraft(storePath("provider", e.currentTarget.value))}>
-            <option value="">{t("projects.noProvider")}</option>
-            <For each={list(vocabulary().providers)}>
-              {(k) => <option value={k}>{label("provider", k)}</option>}
-            </For>
-          </select>
-        </label>
-      </div>
-
-      {/* The token is asked for only once the project is saved with a hosting:
-          it belongs to the server, and the server is what the saved remote
-          says. */}
-      <Show when={draft.id && props.project.provider && props.project.server}>
+      {/* Only a saved repository can be connected: the remotes are read
+          from its folder. */}
+      <Show when={props.project.id && props.project.repo}>
         <Hosting project={props.project} onChanged={props.onChanged} />
       </Show>
 
@@ -186,21 +169,23 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
   );
 }
 
-// Who the application is on the project's server. The token is checked by
-// asking the server who it belongs to, and kept in the system keychain rather
-// than in the database — one per server, shared by every project on it.
+// The project's hosting. Nothing is guessed: a person picks which of the
+// repository's remotes is the one on the hosting, confirms the server its
+// address suggests — ssh and the web interface are not always one host — and
+// gets a link to the page where the token is made. The token is checked by
+// asking the server who it belongs to, and kept in the system keychain, one
+// per server.
 function Hosting(props: { project: Project; onChanged: (p: Project) => void }) {
-  const [token, setToken] = createSignal("");
-  const [error, setError] = createSignal<unknown>(null);
+  const [open, setOpen] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
+  const [error, setError] = createSignal<unknown>(null);
 
   const run = async (fn: () => Promise<Project>) => {
     setError(null);
     setBusy(true);
     try {
-      const p = await fn();
-      setToken("");
-      props.onChanged(p);
+      props.onChanged(await fn());
+      setOpen(false);
     } catch (e) {
       setError(e);
     } finally {
@@ -210,37 +195,123 @@ function Hosting(props: { project: Project; onChanged: (p: Project) => void }) {
 
   return (
     <div class="hosting">
-      <span class="field-label">{t("projects.hosting", { server: props.project.server ?? "" })}</span>
-      <Show when={props.project.account} fallback={
-        <div class="row">
-          <input type="password" class="grow" placeholder={t("projects.tokenPlaceholder")} value={token()}
-                 onInput={(e) => setToken(e.currentTarget.value)}
-                 onKeyDown={(e) => { if (e.key === "Enter") void run(() => API.ConnectHosting(props.project.id, token())); }} />
-          <button class="btn" disabled={busy() || !token().trim()}
-                  onClick={() => run(() => API.ConnectHosting(props.project.id, token()))}>
-            {t("projects.connect")}
-          </button>
-        </div>
-      }>
-        <div class="row">
-          <span>{t("projects.connectedAs", { account: props.project.account ?? "" })}</span>
-          <div class="spacer" />
-          <button class="btn quiet" disabled={busy()} onClick={() => run(() => API.DisconnectHosting(props.project.id))}>
-            {t("projects.disconnect")}
-          </button>
-        </div>
-        <label class="row check">
-          <input type="checkbox" checked={props.project.reviewInbox ?? false} disabled={busy()}
-                 onChange={(e) => run(() => API.SetReviewInbox(props.project.id, e.currentTarget.checked))} />
-          <span>{t("projects.reviewInbox")}</span>
-        </label>
+      <span class="field-label">{t("projects.hosting")}</span>
+      <Show when={!open()}>
+        <Show when={props.project.provider} fallback={
+          <div class="row">
+            <span class="meta">{t("projects.noHosting")}</span>
+            <div class="spacer" />
+            <button class="btn" onClick={() => setOpen(true)}>{t("projects.connectGitLab")}</button>
+          </div>
+        }>
+          <div class="row">
+            <span>
+              {label("provider", props.project.provider!)} · <span class="mono">{props.project.repository}</span>
+              {" "}<span class="meta">{t("projects.via", { remote: props.project.remote ?? "" })}</span>
+            </span>
+            <Show when={props.project.account} fallback={<span class="tag warn">{t("projects.notConnected")}</span>}>
+              <span class="tag ok"><span class="dot" />@{props.project.account}</span>
+            </Show>
+            <div class="spacer" />
+            <button class="btn quiet" disabled={busy()} onClick={() => setOpen(true)}>{t("common.edit")}</button>
+            <button class="btn quiet" disabled={busy()} onClick={() => run(() => API.DisconnectHosting(props.project.id))}>
+              {t("projects.disconnect")}
+            </button>
+          </div>
+          <label class="row check">
+            <input type="checkbox" checked={props.project.reviewInbox ?? false} disabled={busy()}
+                   onChange={(e) => run(() => API.SetReviewInbox(props.project.id, e.currentTarget.checked))} />
+            <span>{t("projects.reviewInbox")}</span>
+          </label>
+        </Show>
       </Show>
-      <Show when={!props.project.account}>
-        <span class="meta">{t("projects.tokenNote")}</span>
+      <Show when={open()}>
+        <ConnectForm project={props.project} busy={busy()} onCancel={() => setOpen(false)}
+                     onConnect={(remote, server, token) =>
+                       run(() => API.ConnectHosting(props.project.id, "gitlab", remote, server, token))} />
       </Show>
       <Show when={error() !== null}>
         <div class="error"><pre>{errorText(error())}</pre></div>
       </Show>
+    </div>
+  );
+}
+
+function ConnectForm(props: {
+  project: Project;
+  busy: boolean;
+  onCancel: () => void;
+  onConnect: (remote: string, server: string, token: string) => void;
+}) {
+  const [remotes, setRemotes] = createSignal<RemoteOption[] | null>(null);
+  const [remote, setRemote] = createSignal(props.project.remote ?? "");
+  const [server, setServer] = createSignal(props.project.server ?? "");
+  const [token, setToken] = createSignal("");
+  const [tokenURL, setTokenURL] = createSignal("");
+
+  // The server follows the remote until somebody types one: then it is theirs.
+  let typed = Boolean(props.project.server);
+  const choose = (opt: RemoteOption) => {
+    setRemote(opt.name);
+    if (!typed) setServer(opt.server ?? "");
+  };
+
+  onSettled(() => {
+    void guard(() => API.HostingRemotes(props.project.id)).then((list) => {
+      const all = list ?? [];
+      setRemotes(all);
+      const current = all.find((r) => r.name === remote()) ?? all[0];
+      if (current) choose(current);
+    });
+  });
+
+  createEffect(server, (s) => {
+    void API.TokenURL("gitlab", s).then(setTokenURL).catch(() => setTokenURL(""));
+  });
+
+  const connected = () => Boolean(props.project.account) && server() === props.project.server;
+  const ready = () => remote() && server().trim() && (token().trim() || connected());
+
+  return (
+    <div class="hosting">
+      <Show when={remotes() !== null && remotes()!.length === 0}>
+        <span class="meta">{t("projects.noRemotes")}</span>
+      </Show>
+      <For each={remotes() ?? []}>
+        {(opt) => (
+          <label class="row check">
+            <input type="radio" name="remote" checked={remote() === opt.name} onChange={() => choose(opt)} />
+            <span class="mono">{opt.name}</span>
+            <span class="meta mono">{opt.url}</span>
+          </label>
+        )}
+      </For>
+      <label class="field">
+        <span>{t("projects.server")}</span>
+        <input type="text" class="mono" placeholder="https://gitlab.company.ru" value={server()}
+               onInput={(e) => { typed = true; setServer(e.currentTarget.value); }} />
+      </label>
+      <label class="field">
+        <span>{t("projects.token")}</span>
+        <div class="row">
+          <input type="password" class="grow" value={token()}
+                 placeholder={connected() ? t("projects.tokenKept") : t("projects.tokenPlaceholder")}
+                 onInput={(e) => setToken(e.currentTarget.value)}
+                 onKeyDown={(e) => { if (e.key === "Enter" && ready()) props.onConnect(remote(), server(), token()); }} />
+          <Show when={tokenURL()}>
+            <a class="btn quiet" href={tokenURL()} target="_blank" rel="noreferrer">{t("projects.makeToken")}</a>
+          </Show>
+        </div>
+      </label>
+      <span class="meta">{t("projects.tokenNote")}</span>
+      <div class="row">
+        <div class="spacer" />
+        <button class="btn quiet" onClick={props.onCancel}>{t("common.cancel")}</button>
+        <button class="btn primary" disabled={props.busy || !ready()}
+                onClick={() => props.onConnect(remote(), server(), token())}>
+          {t("projects.connect")}
+        </button>
+      </div>
     </div>
   );
 }

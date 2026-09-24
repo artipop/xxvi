@@ -574,6 +574,7 @@ func TestStageColumnsAreAddedToADatabaseThatAlreadyHasFlows(t *testing.T) {
 		`ALTER TABLE stage DROP COLUMN screens_json`,
 		`ALTER TABLE card DROP COLUMN project`,
 		`ALTER TABLE project DROP COLUMN remote`,
+		`ALTER TABLE project DROP COLUMN server`,
 		`ALTER TABLE project DROP COLUMN provider`,
 		`DROP TABLE project`,
 		`ALTER TABLE stage DROP COLUMN work`,
@@ -687,6 +688,7 @@ func TestCommentModeIsMigratedAway(t *testing.T) {
 		`ALTER TABLE card DROP COLUMN keep_worktree`,
 		`ALTER TABLE card_comment DROP COLUMN msg`,
 		`ALTER TABLE project DROP COLUMN remote`,
+		`ALTER TABLE project DROP COLUMN server`,
 		`ALTER TABLE project DROP COLUMN provider`,
 		`DELETE FROM schema_migration WHERE version >= 11`,
 	} {
@@ -740,6 +742,7 @@ func TestDemoSourcesAreMigratedAway(t *testing.T) {
 		`ALTER TABLE card DROP COLUMN keep_worktree`,
 		`ALTER TABLE card_comment DROP COLUMN msg`,
 		`ALTER TABLE project DROP COLUMN remote`,
+		`ALTER TABLE project DROP COLUMN server`,
 		`ALTER TABLE project DROP COLUMN provider`,
 		`DELETE FROM schema_migration WHERE version >= 12`,
 	} {
@@ -780,6 +783,7 @@ func TestOutcomeWordsAreMigratedToIdentifiers(t *testing.T) {
 		`UPDATE edge SET cond_property = 'Исход', cond_value = 'прошло' WHERE flow_id = '` + flow.ID + `'`,
 		`ALTER TABLE card_comment DROP COLUMN msg`,
 		`ALTER TABLE project DROP COLUMN remote`,
+		`ALTER TABLE project DROP COLUMN server`,
 		`ALTER TABLE project DROP COLUMN provider`,
 		`DELETE FROM schema_migration WHERE version >= 15`,
 	} {

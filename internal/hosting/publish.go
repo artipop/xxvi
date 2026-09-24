@@ -81,7 +81,8 @@ func (s *Service) publish(cardID string) (msg.Msg, error) {
 	} else if status != "" {
 		return msg.Msg{}, msg.Err("publish.dirty", "files", dirtyFiles(status))
 	}
-	target := strings.TrimPrefix(card.Base, "origin/")
+	remoteName := RemoteName(project)
+	target := strings.TrimPrefix(strings.TrimPrefix(card.Base, remoteName+"/"), "origin/")
 	if target == "" || target == "HEAD" {
 		return msg.Msg{}, msg.Err("publish.noBase", "branch", card.Branch)
 	}
@@ -93,7 +94,7 @@ func (s *Service) publish(cardID string) (msg.Msg, error) {
 	if err != nil {
 		return msg.Msg{}, err
 	}
-	if _, err := git(dir, "push", "-u", "origin", card.Branch); err != nil {
+	if _, err := git(dir, "push", "-u", remoteName, card.Branch); err != nil {
 		return msg.Msg{}, msg.Wrap(err, "publish.pushFailed", "branch", card.Branch)
 	}
 
