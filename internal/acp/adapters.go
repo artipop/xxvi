@@ -57,12 +57,12 @@ type adapter struct {
 	// — which is what makes a second visit to a stage a continuation rather
 	// than a stranger asking the same questions again.
 	cliResumeArgs []string
-	// cliMCPArgs hand the CLI a file of MCP servers. A session gets its servers
-	// over the protocol, where session/new has a field for them; a terminal is
-	// the vendor CLI itself and has to be told in its own spelling. This is how
+	// cliTools hands the CLI our MCP server. A session gets its servers over
+	// the protocol, where session/new has a field for them; a terminal is the
+	// vendor CLI itself and has to be told in its own spelling. This is how
 	// «step done» reaches the agent, so a kind without it cannot report — and
 	// therefore cannot work a stage.
-	cliMCPArgs func(configPath string) []string
+	cliTools func(url, token string) (toolsHandoff, error)
 	// cliPromptArgs put the first message on the CLI's own command line, which
 	// is how a stage hands over its brief. Typing it into the pty instead means
 	// writing to a CLI that is not listening yet — and the thing it might be
@@ -109,7 +109,7 @@ var adapters = map[string]adapter{
 		// which has to be installed for that and only that.
 		cliBin:        "claude",
 		cliResumeArgs: []string{"--continue"},
-		cliMCPArgs:    func(path string) []string { return []string{"--mcp-config", path} },
+		cliTools:      claudeTools,
 		// `claude -- «…»` opens the TUI with that as the first message, which is
 		// exactly what a stage needs: interactive from the first frame, with the
 		// brief already in it. The `--` is not decoration — `--mcp-config` is
@@ -131,21 +131,17 @@ var adapters = map[string]adapter{
 		// `codex resume --last` picks up the newest conversation of this folder,
 		// the same rule as claude's --continue.
 		cliResumeArgs: []string{"resume", "--last"},
-		// The CLI takes its servers from ~/.codex/config.toml and from `-c`
-		// overrides, and neither is a file of ours to hand over: the first is
-		// the person's own configuration, which a card must not rewrite, and the
-		// second is a spelling that has changed under us before. Until that is
-		// tried against the CLI itself, codex works a stage as a session and
-		// says so — better than a terminal that opens without the one tool the
-		// stage cannot end without.
-		cliPromptArgs: func(prompt string) []string { return []string{prompt} },
+		cliTools:      codexTools,
+		// The separator for the same reason as claude's: a brief that starts
+		// with a dash must not be read as a flag.
+		cliPromptArgs: func(prompt string) []string { return []string{"--", prompt} },
 	},
 }
 
 // cliFor is the interactive CLI of a kind, and whether there is one.
 func cliFor(kind string) (adapter, bool) {
 	a, ok := adapters[kind]
-	if !ok || a.cliBin == "" || a.cliMCPArgs == nil {
+	if !ok || a.cliBin == "" || a.cliTools == nil {
 		return adapter{}, false
 	}
 	return a, true

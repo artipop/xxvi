@@ -19,7 +19,7 @@ func TestTerminalArgvPutsTheBriefLast(t *testing.T) {
 	if !ok {
 		t.Fatal("у claude должен быть интерактивный CLI")
 	}
-	argv, taken := terminalArgv(cli, "claude", false, "/tmp/mcp.json", "почини вход")
+	argv, taken := terminalArgv(cli, "claude", false, []string{"--mcp-config", "/tmp/mcp.json"}, "почини вход")
 	if !taken {
 		t.Fatal("бриф должен уехать на командную строку")
 	}
@@ -41,7 +41,7 @@ func TestTerminalArgvPutsTheBriefLast(t *testing.T) {
 // combination — so it is typed in afterwards, and the caller has to be told.
 func TestTerminalArgvResumesWithoutTheBrief(t *testing.T) {
 	cli, _ := cliFor(model.KindClaude)
-	argv, taken := terminalArgv(cli, "claude", true, "/tmp/mcp.json", "продолжай")
+	argv, taken := terminalArgv(cli, "claude", true, []string{"--mcp-config", "/tmp/mcp.json"}, "продолжай")
 	if taken {
 		t.Fatal("в продолженный разговор бриф на командной строке не уходит")
 	}
@@ -60,8 +60,39 @@ func TestOnlyKindsWithACLICanBeWorkedInATerminal(t *testing.T) {
 	if _, ok := cliFor(model.KindACP); ok {
 		t.Fatal("у произвольной ACP-команды нет своего терминала")
 	}
-	if _, ok := cliFor(model.KindCodex); ok {
-		t.Fatal("codex нечем отчитаться о шаге — значит, и работать в терминале нечем")
+	if _, ok := cliFor(model.KindCodex); !ok {
+		t.Fatal("у codex есть CLI и способ передать ему инструменты")
+	}
+}
+
+// codex gets the server as overrides of its own config, and the grant rides in
+// the environment: the argv is what ps shows everybody on the machine.
+func TestCodexGetsTheToolsWithoutShowingTheGrant(t *testing.T) {
+	cli, _ := cliFor(model.KindCodex)
+	handoff, err := cli.cliTools("http://127.0.0.1:1/mcp", "секрет")
+	if err != nil {
+		t.Fatalf("передать инструменты: %v", err)
+	}
+	if handoff.file != "" {
+		t.Fatalf("codex обходится без файла: %q", handoff.file)
+	}
+	line := strings.Join(handoff.args, " ")
+	if strings.Contains(line, "секрет") {
+		t.Fatalf("грант не должен попадать в argv: %v", handoff.args)
+	}
+	if !strings.Contains(line, `mcp_servers.xxvi_step.url="http://127.0.0.1:1/mcp"`) {
+		t.Fatalf("адрес сервера — переопределение конфигурации: %v", handoff.args)
+	}
+	// «xxvi» may already be the person's own entry with a command in it, and an
+	// url merged into that is a config codex refuses to load.
+	if strings.Contains(line, "mcp_servers.xxvi.") {
+		t.Fatalf("имя сервера шага не должно совпадать с постоянным: %v", handoff.args)
+	}
+	if !slices.Contains(handoff.env, codexTokenEnv+"=секрет") {
+		t.Fatalf("грант передаётся переменной: %v", handoff.env)
+	}
+	if _, err := cli.cliTools("", "секрет"); err == nil {
+		t.Fatal("без адреса отчитываться некуда")
 	}
 }
 

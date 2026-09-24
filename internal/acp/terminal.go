@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -136,12 +137,14 @@ func (m *Manager) runTerminal(s *session) {
 	})
 	defer tools.Revoke(token)
 
-	config, err := writeMCPConfig(tools.URL(), token)
+	handoff, err := cli.cliTools(tools.URL(), token)
 	if err != nil {
 		m.failTerminal(s, msg.Of(err))
 		return
 	}
-	defer os.Remove(config)
+	if handoff.file != "" {
+		defer os.Remove(handoff.file)
+	}
 
 	// A second visit to the same stage continues the conversation the folder
 	// already holds: the folder is the card's, so «the last conversation here»
@@ -153,9 +156,9 @@ func (m *Manager) runTerminal(s *session) {
 		m.failTerminal(s, msg.New("terminal.binMissing", "bin", cli.cliBin))
 		return
 	}
-	argv, promptTaken := terminalArgv(cli, bin, resume, config, s.prompt)
+	argv, promptTaken := terminalArgv(cli, bin, resume, handoff.args, s.prompt)
 
-	sess, err := terms.Attach(s.id, s.card.ID, s.cwd, argv, terminalEnv(s, cli))
+	sess, err := terms.Attach(s.id, s.card.ID, s.cwd, argv, append(terminalEnv(s, cli), handoff.env...))
 	if err != nil {
 		m.failTerminal(s, msg.Of(clipped(err)))
 		return
@@ -292,7 +295,7 @@ func (m *Manager) workedBefore(s *session) bool {
 // terminalArgv assembles the CLI's command line, and says whether the brief went
 // on it. Nothing is guessed: every flag here is a column of the adapters table,
 // filled in for a CLI somebody has actually run.
-func terminalArgv(cli adapter, bin string, resume bool, config, prompt string) ([]string, bool) {
+func terminalArgv(cli adapter, bin string, resume bool, toolArgs []string, prompt string) ([]string, bool) {
 	// BinPath is deliberately not consulted: for claude and codex it names the
 	// vendor's ACP adapter, which is a different program with no terminal in
 	// it, and running that here would open a window on a process that only
@@ -301,9 +304,7 @@ func terminalArgv(cli adapter, bin string, resume bool, config, prompt string) (
 	if resume {
 		argv = append(argv, cli.cliResumeArgs...)
 	}
-	if config != "" && cli.cliMCPArgs != nil {
-		argv = append(argv, cli.cliMCPArgs(config)...)
-	}
+	argv = append(argv, toolArgs...)
 	// A resumed conversation already has a transcript, and putting a task on
 	// that command line is a flag combination no vendor documents. It is typed
 	// in instead, once the CLI has settled.
@@ -337,6 +338,52 @@ func terminalEnv(s *session, cli adapter) []string {
 		env = append(env, cli.modelEnv+"="+s.agent.Model)
 	}
 	return append(env, spawnEnv(s.agent)...)
+}
+
+// toolsHandoff is our MCP server as one CLI takes it: flags for its command
+// line, variables for its environment, and the file to remove once the step is
+// over.
+type toolsHandoff struct {
+	args []string
+	env  []string
+	file string
+}
+
+func claudeTools(url, token string) (toolsHandoff, error) {
+	path, err := writeMCPConfig(url, token)
+	if err != nil {
+		return toolsHandoff{}, err
+	}
+	return toolsHandoff{args: []string{"--mcp-config", path}, file: path}, nil
+}
+
+// codexStepServer is not stagemcp.ServerName on purpose. codex merges `-c`
+// into ~/.codex/config.toml key by key, even when the whole table is given,
+// and the agents screen suggests registering this app there as «xxvi» with a
+// command. Our url on top of that entry is a server that is both stdio and
+// http, and codex refuses to start at all.
+const codexStepServer = "xxvi_step"
+
+// codexTokenEnv carries the grant. codex reads a bearer token from a variable
+// it is told the name of, which keeps the grant out of the argv that ps shows
+// to every user of the machine.
+const codexTokenEnv = "XXVI_STEP_TOKEN"
+
+// codexTools hands the server over as `-c` overrides: codex has no flag for a
+// file of servers, and its own config.toml is the person's, not a card's to
+// rewrite.
+func codexTools(url, token string) (toolsHandoff, error) {
+	if url == "" || token == "" {
+		return toolsHandoff{}, msg.Err("terminal.noTools")
+	}
+	key := "mcp_servers." + codexStepServer
+	return toolsHandoff{
+		args: []string{
+			"-c", key + ".url=" + strconv.Quote(url),
+			"-c", key + ".bearer_token_env_var=" + strconv.Quote(codexTokenEnv),
+		},
+		env: []string{codexTokenEnv + "=" + token},
+	}, nil
 }
 
 // writeMCPConfig writes the file the CLI is pointed at. It carries the grant,
