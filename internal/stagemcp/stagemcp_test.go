@@ -132,7 +132,7 @@ func TestToolNamesTheValuesItWants(t *testing.T) {
 		{Property: "Вердикт", Required: true},
 		{Property: "Превью"},
 	}})
-	if !strings.Contains(text, "«Вердикт»") || !strings.Contains(text, "обязательно") {
+	if !strings.Contains(text, "«Вердикт»") || !strings.Contains(text, "required") {
 		t.Fatalf("обязательное свойство должно быть названо: %q", text)
 	}
 	if !strings.Contains(text, "«Превью»") {

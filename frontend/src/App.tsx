@@ -1,6 +1,7 @@
 import { onSettled, Show, For } from "solid-js";
 import type { JSX } from "@solidjs/web";
-import { error, loadAll, setError, subscribe } from "./state";
+import { error, loadAll, setError, subscribe, syncNotificationWords } from "./state";
+import { lang, LANGS, setLang, t } from "./i18n";
 import InboxView from "./views/inbox";
 import WorkView from "./views/work";
 import FlowsView from "./views/flows";
@@ -18,6 +19,7 @@ export default function App(): JSX.Element {
   onSettled(() => {
     void loadAll();
     subscribe();
+    syncNotificationWords();
   });
 
   // The ribbon is not a document on a desk, so it does not sit on one: it takes
@@ -46,17 +48,30 @@ export default function App(): JSX.Element {
             <>
               <Show when={item.apart}><div style={{ height: "14px" }} /></Show>
               <button class={`nav ${tab() === item.tab ? "on" : ""}`} onClick={() => setTab(item.tab)}>
-                <span>{item.label}</span>
+                <span>{item.label()}</span>
                 <Show when={item.count && item.count()! > 0}>
                   <span class={`count ${item.alert ? "alert" : ""}`}>{item.count!()}</span>
                 </Show>
                 <Show when={item.mark && item.mark()}>
-                  <span class="mark" title="Есть новая версия" />
+                  <span class="mark" title={t("nav.updateMark")} />
                 </Show>
               </button>
             </>
           )}
         </For>
+        <div class="spacer" />
+        {/* The language is the person's, not the machine's: the system one is
+            the first guess, and this is where it is corrected. */}
+        <div class="langs">
+          <For each={LANGS}>
+            {(l) => (
+              <button class={`btn quiet tiny ${lang() === l ? "on" : ""}`}
+                      onClick={() => { setLang(l); syncNotificationWords(); }}>
+                {l.toUpperCase()}
+              </button>
+            )}
+          </For>
+        </div>
       </aside>
 
       <main class={`main ${openCard() ? "with-panel" : ""}`}>

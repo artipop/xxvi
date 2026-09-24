@@ -24,6 +24,7 @@ import {
 import type { Edge, Flow, Stage, Trigger } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 
 import "@dschz/solid-flow/dist/style.css";
+import { label, propName, propValue, t } from "../i18n";
 
 // The flow as a graph. Pan, zoom and drag are Solid Flow's; the layout is ours.
 //
@@ -305,7 +306,7 @@ const StageBox = (props: NodeProps) => {
       <div class="flowbox__name">
         {data().name || "—"}
         <Show when={data().entry}>
-          <span class="flowbox__entry" title="Входная стадия"> ▸</span>
+          <span class="flowbox__entry" title={t("flows.entryStage")}> ▸</span>
         </Show>
       </div>
       <div class="flowbox__action">
@@ -340,17 +341,15 @@ const StageBox = (props: NodeProps) => {
 
       {/* What the stage leaves on the card, and — where the property has stated
           values — the port a fork is pulled from. This is where the dataflow
-          becomes visible: the arrow asking «Вердикт = fail» is drawn from the
-          thing that produces «Вердикт». */}
+          becomes visible: the arrow asking «Verdict = fail» is drawn from the
+          thing that produces «Verdict». */}
       <Show when={data().writes && data().writes!.length > 0}>
         <div class="flowbox__writes">
           <For each={data().writes}>
             {(w) => (
               <span
                 class={`flowbox__write${w.branchable ? " flowbox__write--branchable" : ""}`}
-                title={w.branchable
-                  ? `«${w.name}» — отсюда можно потянуть развилку`
-                  : `«${w.name}» уезжает на стадии дальше. Чтобы ветвиться по нему, перечислите его значения.`}
+                title={t(w.branchable ? "flows.writeBranchable" : "flows.writeCarried", { name: w.name })}
               >
                 {w.name}
                 <Show when={w.branchable && data().editable}>
@@ -562,19 +561,19 @@ export function connectEdge(
 export function condLabel(edge: Edge): string {
   const cond = edge.if;
   if (!cond) return "";
-  if (cond.commentContains) return `в ответе «${cond.commentContains}»`;
+  if (cond.commentContains) return t("flows.condComment", { text: cond.commentContains });
   // A fork pulled from a data port arrives without its value, and an arrow
-  // captioned «Вердикт = » reads as a bug rather than as a question waiting to
+  // captioned «Verdict = » reads as a bug rather than as a question waiting to
   // be answered.
-  if (!cond.value) return `${cond.property} = ?`;
-  return `${cond.property} = ${cond.value}`;
+  if (!cond.value) return `${propName(cond.property ?? "")} = ?`;
+  return `${propName(cond.property ?? "")} = ${propValue(cond.property ?? "", cond.value)}`;
 }
 
 // stageLabel names what a stage does. Kept short: this is a box on a canvas, not
 // a form field.
 export function stageLabel(stage: Stage): string {
-  if (stage.final) return "финал";
-  return stage.action === "agent" ? "работает агент" : "ждёт события";
+  if (stage.final) return t("flows.final");
+  return stage.action === "agent" ? t("flows.agentWorks") : t("flows.waitsEvent");
 }
 
 export default function FlowCanvas(props: Props) {
@@ -667,12 +666,12 @@ export default function FlowCanvas(props: Props) {
         const cond = answered ? "" : condLabel(edge);
 
         // For card.changed the condition is not a guard on the event, it *is*
-        // the event — «на карточке выбрано» followed by «Исход = не прошло» says
+        // the event — «set on the card» followed by «Outcome = failed» says
         // the same thing twice, in a caption that then fits nowhere.
         if (kind === "event" && !(edge.on === "card.changed" && cond)) {
-          parts.push(props.triggers.find((t) => t.kind === edge.on)?.label || edge.on);
+          parts.push(label("trigger", edge.on));
         }
-        if (cond) parts.push(edge.on === "card.changed" ? cond : `если ${cond}`);
+        if (cond) parts.push(edge.on === "card.changed" ? cond : t("flows.ifCond", { cond }));
 
         const id = edgeId(edge, index);
         const chosen = props.selected?.kind === "edge" && props.selected.id === id;

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/store"
 )
 
@@ -24,9 +25,13 @@ type ScreenView struct {
 	// ID is derived rather than stored, and stable across re-reads: the UI
 	// keys its panes by it, and a pane that loses its identity is an iframe
 	// that reloads and a cursor that jumps out of the notes.
-	ID    string `json:"id"`
-	Kind  string `json:"kind"`
-	Title string `json:"title"`
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+	// Title is what the stage called the screen. Empty when it did not, and on
+	// an agent's own screen, which the UI names by its kind and Agent.
+	Title string `json:"title,omitempty"`
+	// Agent is whose run the screen shows, on an agent's own screen.
+	Agent string `json:"agent,omitempty"`
 	// Ref is what to open, with the card's properties already put in.
 	Ref string `json:"ref,omitempty"`
 	// Waiting names the properties that had no value yet. The screen stands
@@ -37,13 +42,14 @@ type ScreenView struct {
 	SessionID string `json:"sessionId,omitempty"`
 	// Report is what the run said its step came to. A terminal has nowhere
 	// else to show it: the agent hands it over in a tool call, not on screen.
-	Report string `json:"report,omitempty"`
+	Report *msg.Msg `json:"report,omitempty"`
 }
 
 // Notice is a journal entry the strip shows: why the card stands here, or why
 // the step broke.
 type Notice struct {
-	Text   string    `json:"text"`
+	Msg    *msg.Msg  `json:"msg,omitempty"`
+	Text   string    `json:"text,omitempty"`
 	Author string    `json:"author,omitempty"`
 	At     time.Time `json:"at"`
 }
@@ -61,7 +67,7 @@ type Segment struct {
 	StageID   string    `json:"stageId"`
 	StageName string    `json:"stageName"`
 	On        string    `json:"on,omitempty"`
-	Detail    string    `json:"detail,omitempty"`
+	Detail    *msg.Msg  `json:"detail,omitempty"`
 	EnteredAt time.Time `json:"enteredAt"`
 	Current   bool      `json:"current"`
 	// Gone says the stage was removed from the flow while the card was on it.
@@ -208,28 +214,24 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 		// stage, which may have been edited since (docs/system.md §12.2).
 		for _, s := range sessionsIn(sessions, stage.ID, ev.CreatedAt, entryAfter(events, i)) {
 			visitOf[s.ID] = ev.ID
-			kind, title := "agent", "Ход агента · "
+			kind := "agent"
 			if s.Work == model.WorkTerminal {
-				kind, title = "agentTerminal", "Агент · "
+				kind = "agentTerminal"
 			}
 			seg.Screens = append(seg.Screens, ScreenView{
 				ID:        screenID(ev.ID, kind, s.ID),
 				Kind:      kind,
-				Title:     title + s.AgentName,
+				Agent:     s.AgentName,
 				SessionID: s.ID,
 				Report:    lastReport(journal, s.ID),
 			})
 		}
 		for n, sc := range stage.Screens {
 			ref, waiting := model.ResolveRef(sc.Ref, card.Props)
-			title := sc.Title
-			if title == "" {
-				title = model.ScreenKindLabel(sc.Kind)
-			}
 			seg.Screens = append(seg.Screens, ScreenView{
 				ID:      screenID(ev.ID, strconv.Itoa(n), ""),
 				Kind:    sc.Kind,
-				Title:   title,
+				Title:   sc.Title,
 				Ref:     ref,
 				Waiting: waiting,
 			})
@@ -247,7 +249,7 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 	return view, nil
 }
 
-// screenID is «<событие>|<что>[|<чей>]». Derived from the journal row rather
+// screenID is «<event>|<what>[|<whose>]». Derived from the journal row rather
 // than generated, so two reads of an unchanged ribbon produce the same ids and
 // the panes that did not change are not rebuilt.
 func screenID(eventID int64, what, whose string) string {
@@ -284,13 +286,17 @@ func sessionsIn(sessions []store.Session, stageID string, from, until time.Time)
 	return out
 }
 
-func lastReport(journal []model.JournalEntry, sessionID string) string {
+func lastReport(journal []model.JournalEntry, sessionID string) *msg.Msg {
 	for i := len(journal) - 1; i >= 0; i-- {
 		if e := journal[i]; e.Kind == model.EntryReport && e.SessionID == sessionID {
-			return e.Text
+			if e.Msg != nil {
+				return e.Msg
+			}
+			m := msg.New(msg.CodeText, "text", e.Text)
+			return &m
 		}
 	}
-	return ""
+	return nil
 }
 
 // placeProblems hangs each problem on the visit it happened in: by its run when
@@ -333,7 +339,7 @@ func placeProblems(segs []Segment, events []model.FlowEvent, journal []model.Jou
 		if e.SessionID == "" && e.CreatedAt.Before(started[visit]) {
 			continue
 		}
-		segs[i].Problems = append(segs[i].Problems, Notice{Text: e.Text, Author: e.Author, At: e.CreatedAt})
+		segs[i].Problems = append(segs[i].Problems, Notice{Msg: e.Msg, Text: e.Text, Author: e.Author, At: e.CreatedAt})
 	}
 }
 

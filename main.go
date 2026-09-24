@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/artipop/xxvi/internal/app"
 	"github.com/artipop/xxvi/internal/appmcp"
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 //go:embed all:frontend/dist
@@ -55,7 +57,7 @@ func main() {
 
 	core, err := app.Open("", logger)
 	if err != nil {
-		log.Fatalf("не удалось открыть приложение: %v", err)
+		log.Fatalf("could not open the application: %v", err)
 	}
 	defer core.Close()
 	core.Version = appVersion
@@ -73,14 +75,22 @@ func main() {
 		notifier = notifications.New()
 		services = append(services, application.NewService(notifier))
 	} else {
-		logger.Info("системные уведомления выключены", "почему", why)
+		logger.Info("system notifications disabled", "why", why)
 	}
 
 	wails := application.New(application.Options{
 		Name:        "XXVI",
-		Description: "Входящие и флоу с агентами",
+		Description: "Inbox and flows with agents",
 		Services:    services,
-		Assets:      application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
+		// What a refusal sends the window is its message — a code and its
+		// values — and never a sentence: the window words it in the person's
+		// language. An error nobody gave a code travels as its text under
+		// msg.CodeInternal, which the window shows as a detail.
+		MarshalError: func(err error) []byte {
+			b, _ := json.Marshal(msg.Of(err))
+			return b
+		},
+		Assets: application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},

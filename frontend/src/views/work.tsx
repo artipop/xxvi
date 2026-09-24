@@ -2,6 +2,7 @@ import { For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { CardSummary } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
 import { done, guard, inWork, list, loadDone, loadInWork, openCardByID, showRibbon } from "../state";
+import { markTitle, t, waitText } from "../i18n";
 
 // What is moving right now. Every row answers the same question the card screen
 // answers in full: where it stands, and what it is waiting for.
@@ -9,27 +10,27 @@ import { done, guard, inWork, list, loadDone, loadInWork, openCardByID, showRibb
 export default function WorkView() {
   return (
     <>
-      <h1>В работе</h1>
-      <p class="lede">Карточки, едущие по флоу. Нажмите, чтобы открыть.</p>
+      <h1>{t("work.title")}</h1>
+      <p class="lede">{t("work.lede")}</p>
 
-      <Show when={inWork().length > 0} fallback={<div class="empty">Никто никуда не едет.</div>}>
+      <Show when={inWork().length > 0} fallback={<div class="empty">{t("work.empty")}</div>}>
         <For each={inWork()}>{(row) => <WorkRow row={row} />}</For>
       </Show>
 
       <Show when={done().length > 0}>
-        <div class="list-head"><h2>Закрытые</h2><span class="meta">{done().length}</span></div>
+        <div class="list-head"><h2>{t("work.closed")}</h2><span class="meta">{done().length}</span></div>
         <For each={done().slice(0, 20)}>
           {(card) => (
             <div class="card clickable" onClick={() => openCardByID(card.id)}>
               <div class="row">
                 <span class="title">{card.title}</span>
                 <div class="spacer" />
-                <span class="tag ok"><span class="dot" />готово</span>
+                <span class="tag ok"><span class="dot" />{t("work.done")}</span>
                 {/* What the steps left behind — terminals, diffs, notes — is on
                     the strip, not on the card: the card says that it finished,
                     the strip shows what was done. */}
                 <button class="btn quiet tiny" onClick={(e) => { e.stopPropagation(); showRibbon(card.id); }}>
-                  Лента →
+                  {t("common.toRibbon")}
                 </button>
               </div>
             </div>
@@ -53,25 +54,25 @@ function WorkRow(props: { row: CardSummary }) {
         {/* Asking is the one state a card cannot be inferred to be in: it
             happens inside a session nobody may be watching. */}
         <Show when={props.row.asking}>
-          <span class="tag warn"><span class="dot" />ждёт ответа</span>
+          <span class="tag warn"><span class="dot" />{t("work.asking")}</span>
         </Show>
         <Show when={flow()?.running}>
-          <span class="tag accent"><span class="dot" />агент работает</span>
+          <span class="tag accent"><span class="dot" />{t("common.agentWorking")}</span>
         </Show>
         <Show when={flow()?.queued}>
-          <span class="tag"><span class="dot" />ждёт места</span>
+          <span class="tag"><span class="dot" />{t("work.queued")}</span>
         </Show>
         <span class="tag">{flow()?.flowName} · {stage()?.name ?? "—"}</span>
       </div>
 
       <Show when={(flow()?.waitingFor?.length ?? 0) > 0}>
         <div class="meta" style={{ "margin-top": "6px" }}>
-          Ждёт: {flow()!.waitingFor!.join("; ")}
+          {t("work.waits", { what: list(flow()!.waitingFor).map(waitText).join("; ") })}
         </div>
       </Show>
 
       {/* The two answers a waiting stage asks for, in the list rather than only
-          on the card. A row that says «ждёт ответа человека» and gives no way to
+          on the card. A row that says «waits for a person» and gives no way to
           answer it sends somebody into the card to press one of two buttons,
           and this list is where they are looking. */}
       <Show when={list(flow()?.marks).length > 0}>
@@ -80,7 +81,7 @@ function WorkRow(props: { row: CardSummary }) {
             {(mark) => (
               <button
                 class={`btn ${mark.forward ? "primary" : "quiet"}`}
-                title={`Отметить «${mark.value}» — карточка уедет в «${mark.stage}»`}
+                title={markTitle(mark)}
                 onClick={(e) => {
                   // The row itself opens the card; the button answers it. Both
                   // on one element would make the answer a way to open the card

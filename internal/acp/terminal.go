@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/stagemcp"
 	"github.com/artipop/xxvi/internal/store"
 	"github.com/artipop/xxvi/internal/term"
@@ -42,7 +43,7 @@ const terminalQuietFor = 45 * time.Second
 // and promptWait is how long that is waited for. Only for the case where the
 // brief could not go on the command line: writing into a CLI that has not
 // finished starting means answering whatever it is showing — and what it might
-// be showing is «доверяете ли вы файлам в этой папке?», which must not be
+// be showing is «do you trust the files in this folder?», which must not be
 // answered with a task.
 const (
 	promptSettle = 1500 * time.Millisecond
@@ -51,12 +52,12 @@ const (
 
 // terminalStartWindow is how soon after the launch a CLI that closed without
 // reporting still counts as one that failed to start, rather than as a
-// conversation somebody ended. Wide enough for «доверяете ли вы этой папке?»
+// conversation somebody ended. Wide enough for «do you trust this folder?»
 // to be read and answered by whoever is watching (docs/system.md §4.1.1).
 const terminalStartWindow = 30 * time.Second
 
 // errClosedWithoutReport is a CLI that ended while its step was still open.
-var errClosedWithoutReport = errors.New("терминал агента закрылся, а о шаге не отчитался")
+var errClosedWithoutReport = msg.Err("terminal.closedWithoutReport")
 
 // closedByPerson reports whether a step's error is a person ending the
 // conversation rather than the step failing. The difference decides whether
@@ -99,7 +100,7 @@ func (m *Manager) runTerminal(s *session) {
 	defer m.release(s)
 
 	if m.rootCtx.Err() != nil {
-		m.finish(s, store.StatusCancelled, "приложение завершается")
+		m.finish(s, store.StatusCancelled, msg.New("session.appQuitting"))
 		return
 	}
 
@@ -107,12 +108,10 @@ func (m *Manager) runTerminal(s *session) {
 	cli, ok := cliFor(s.agent.Kind)
 	switch {
 	case terms == nil || tools == nil || tools.URL() == "":
-		m.failTerminal(s, "терминалы не запущены — стадию нельзя работать в терминале")
+		m.failTerminal(s, msg.New("terminal.notRunning"))
 		return
 	case !ok:
-		m.failTerminal(s, fmt.Sprintf(
-			"у агента «%s» (тип %s) нет своего CLI — такую стадию можно работать только сессией",
-			s.agent.Name, s.agent.Kind))
+		m.failTerminal(s, msg.New("terminal.noCLI", "agent", s.agent.Name, "kind", s.agent.Kind))
 		return
 	}
 
@@ -125,13 +124,13 @@ func (m *Manager) runTerminal(s *session) {
 		Writes:    s.stage.Writes,
 		Report: func(r stagemcp.Report) error {
 			if missing := missingWrites(s.stage.Writes, r); missing != "" {
-				return fmt.Errorf("шаг не закончен: не хватает %s. Допишите значение и вызовите ещё раз", missing)
+				return fmt.Errorf("the step is not finished: %s missing. Add the value and call again", missing)
 			}
 			select {
 			case reported <- r:
 				return nil
 			default:
-				return fmt.Errorf("этот шаг уже закончен")
+				return errors.New("this step is already finished")
 			}
 		},
 	})
@@ -139,7 +138,7 @@ func (m *Manager) runTerminal(s *session) {
 
 	config, err := writeMCPConfig(tools.URL(), token)
 	if err != nil {
-		m.failTerminal(s, err.Error())
+		m.failTerminal(s, msg.Of(err))
 		return
 	}
 	defer os.Remove(config)
@@ -151,14 +150,14 @@ func (m *Manager) runTerminal(s *session) {
 	resume := m.workedBefore(s)
 	bin, err := terminalBin(cli)
 	if err != nil {
-		m.failTerminal(s, fmt.Sprintf("не найден %s — стадию в терминале запускать нечем", cli.cliBin))
+		m.failTerminal(s, msg.New("terminal.binMissing", "bin", cli.cliBin))
 		return
 	}
 	argv, promptTaken := terminalArgv(cli, bin, resume, config, s.prompt)
 
 	sess, err := terms.Attach(s.id, s.card.ID, s.cwd, argv, terminalEnv(s, cli))
 	if err != nil {
-		m.failTerminal(s, err.Error())
+		m.failTerminal(s, msg.Of(clipped(err)))
 		return
 	}
 	opened := time.Now()
@@ -169,7 +168,7 @@ func (m *Manager) runTerminal(s *session) {
 		cancel()
 	}
 	m.setStatus(s, store.StatusRunning)
-	m.record(s, model.EntryMove, fmt.Sprintf("Агент %s открыл терминал в папке `%s`.", s.agent.Name, s.cwd))
+	m.record(s, model.EntryMove, msg.New("journal.terminalOpened", "agent", s.agent.Name, "dir", s.cwd))
 
 	if !promptTaken {
 		go deliverPrompt(m, s, sess)
@@ -188,23 +187,22 @@ func (m *Manager) runTerminal(s *session) {
 
 	switch {
 	case m.rootCtx.Err() != nil:
-		m.finish(s, store.StatusCancelled, "приложение завершается")
+		m.finish(s, store.StatusCancelled, msg.New("session.appQuitting"))
 	case s.wasCancelled():
-		m.finish(s, store.StatusCancelled, "шаг отменён")
-		m.record(s, model.EntryProblem, "Терминал агента закрыт: шаг отменён.")
+		m.finish(s, store.StatusCancelled, msg.New("session.stepCancelled"))
+		m.record(s, model.EntryProblem, msg.New("journal.terminalCancelled"))
 	case closedByPerson(err, time.Since(opened)):
 		// Somebody ended the conversation. That is an intervention, not an
 		// outcome: the card stays, and where it goes next is theirs to say.
 		s.markCancelled()
-		m.finish(s, store.StatusCancelled, "терминал закрыт без отчёта")
-		m.record(s, model.EntryProblem, "Терминал агента закрыли, а шаг так и не отчитался. "+
-			"Карточка стоит на стадии — куда ей дальше, решает человек.")
+		m.finish(s, store.StatusCancelled, msg.New("terminal.closedWithoutReport"))
+		m.record(s, model.EntryProblem, msg.New("journal.terminalClosedByPerson"))
 	case err != nil:
-		m.finish(s, store.StatusFailed, err.Error())
-		m.record(s, model.EntryProblem, fmt.Sprintf("Шаг в терминале не закончился: %s", truncate(err.Error(), 1500)))
+		m.finish(s, store.StatusFailed, failure(err))
+		m.record(s, model.EntryProblem, msg.New("journal.terminalFailed").Because(clipped(err)))
 	default:
 		// The report is handed to the engine in the shape a session's closing
-		// words would have had: the summary, then one «Свойство: значение» line
+		// words would have had: the summary, then one «Property: value» line
 		// per value. One currency for both modes means one place that reads it
 		// (engine.ParseWrites) rather than two that must agree.
 		s.setFinal(reportText(s.stage.Writes, report))
@@ -212,7 +210,7 @@ func (m *Manager) runTerminal(s *session) {
 		if !report.OK {
 			status = store.StatusFailed
 		}
-		m.finish(s, status, "")
+		m.finish(s, status, msg.Msg{})
 		m.record(s, model.EntryReport, terminalReport(report))
 	}
 }
@@ -269,9 +267,11 @@ func (m *Manager) watchTerminal(
 // failTerminal ends a step that could not be opened at all. It fails rather
 // than waits: a card standing on a stage whose window never appeared would wait
 // for a person who has nothing to look at.
-func (m *Manager) failTerminal(s *session, why string) {
+func (m *Manager) failTerminal(s *session, why msg.Msg) {
 	m.finish(s, store.StatusFailed, why)
-	m.record(s, model.EntryProblem, "Терминал агента не открылся: "+why)
+	notOpened := msg.New("journal.terminalNotOpened")
+	notOpened.Cause = &why
+	m.record(s, model.EntryProblem, notOpened)
 }
 
 // workedBefore reports whether this card has already had a run on this stage,
@@ -345,11 +345,11 @@ func terminalEnv(s *session, cli adapter) []string {
 // clean up and theirs to find in `git status`.
 func writeMCPConfig(url, token string) (string, error) {
 	if url == "" || token == "" {
-		return "", fmt.Errorf("нечем отчитаться о шаге — инструменты агента не поднялись")
+		return "", msg.Err("terminal.noTools")
 	}
 	f, err := os.CreateTemp("", "xxvi-mcp-*.json")
 	if err != nil {
-		return "", fmt.Errorf("записать конфигурацию инструментов: %w", err)
+		return "", fmt.Errorf("write the tools configuration: %w", err)
 	}
 	defer f.Close()
 	err = json.NewEncoder(f).Encode(map[string]any{"mcpServers": map[string]any{
@@ -361,7 +361,7 @@ func writeMCPConfig(url, token string) (string, error) {
 	}})
 	if err != nil {
 		_ = os.Remove(f.Name())
-		return "", fmt.Errorf("записать конфигурацию инструментов: %w", err)
+		return "", fmt.Errorf("write the tools configuration: %w", err)
 	}
 	return f.Name(), nil
 }
@@ -388,7 +388,7 @@ func deliverPrompt(m *Manager, s *session, sess *term.Session) {
 		}
 	}
 	if err := sess.Write([]byte("\x1b[200~" + s.prompt + "\x1b[201~\r")); err != nil {
-		m.log.Warn("не удалось передать бриф в терминал", "session", s.id, "err", err)
+		m.log.Warn("could not type the brief into the terminal", "session", s.id, "err", err)
 	}
 }
 
@@ -437,16 +437,16 @@ func reportText(writes []model.PropertyWrite, r stagemcp.Report) string {
 	return strings.TrimSpace(b.String())
 }
 
-func terminalReport(r stagemcp.Report) string {
+func terminalReport(r stagemcp.Report) msg.Msg {
 	summary := truncate(strings.TrimSpace(r.Summary), 4000)
 	switch {
 	case r.OK && summary == "":
-		return "Агент закончил шаг и ничего о нём не сказал."
+		return msg.New("report.silentStep")
 	case r.OK:
-		return summary
+		return msg.New(msg.CodeText, "text", summary)
 	case summary == "":
-		return "Агент сказал, что шаг не прошёл."
+		return msg.New("report.failedSilent")
 	default:
-		return "Шаг не прошёл.\n\n" + summary
+		return msg.New("report.failed", "text", summary)
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // The running half: agent sessions and their stream, the queue of cards waiting
@@ -46,7 +48,8 @@ type Session struct {
 	Cwd          string        `json:"cwd,omitempty"`
 	StartedAt    time.Time     `json:"startedAt"`
 	FinishedAt   time.Time     `json:"finishedAt,omitempty"`
-	ErrorText    string        `json:"errorText,omitempty"`
+	// Error is why the run ended the way it did, when it did not simply finish.
+	Error *msg.Msg `json:"error,omitempty"`
 }
 
 type sessionRow struct {
@@ -71,7 +74,7 @@ func (r sessionRow) session() Session {
 		AgentName: r.AgentName, AgentKind: r.AgentKind, Work: r.Work, ACPSessionID: r.ACPSessionID,
 		Status: SessionStatus(r.Status), Cwd: r.Cwd,
 		StartedAt: fromMillis(r.StartedAt), FinishedAt: fromNullMillis(r.FinishedAt),
-		ErrorText: r.ErrorText,
+		Error: parsedMsg(r.ErrorText),
 	}
 }
 
@@ -90,7 +93,7 @@ type SessionUpdate struct {
 	Status       *SessionStatus
 	ACPSessionID *string
 	Cwd          *string
-	ErrorText    *string
+	Error        *msg.Msg
 	FinishedAt   *time.Time
 }
 
@@ -110,9 +113,9 @@ func (s *Store) UpdateSession(id string, u SessionUpdate) error {
 		set = append(set, "cwd = ?")
 		args = append(args, *u.Cwd)
 	}
-	if u.ErrorText != nil {
+	if u.Error != nil {
 		set = append(set, "error_text = ?")
-		args = append(args, *u.ErrorText)
+		args = append(args, u.Error.Store())
 	}
 	if u.FinishedAt != nil {
 		set = append(set, "finished_at = ?")
@@ -147,7 +150,7 @@ func (s *Store) AbandonRunningSessions() (int, error) {
 		UPDATE agent_session
 		SET status = ?, finished_at = ?, error_text = ?
 		WHERE status IN (?, ?, ?)`,
-		string(StatusCancelled), millis(time.Now()), "приложение было закрыто во время работы",
+		string(StatusCancelled), millis(time.Now()), msg.New("session.appClosed").Store(),
 		string(StatusQueued), string(StatusRunning), string(StatusAsking))
 	if err != nil {
 		return 0, err
@@ -338,7 +341,7 @@ func (s *Store) Settings() (map[string]string, error) {
 func (s *Store) IsEmpty() (bool, error) {
 	var n int
 	if err := s.db.Get(&n, `SELECT (SELECT COUNT(*) FROM flow) + (SELECT COUNT(*) FROM source) + (SELECT COUNT(*) FROM card)`); err != nil {
-		return false, fmt.Errorf("проверить пустоту базы: %w", err)
+		return false, fmt.Errorf("check whether the database is empty: %w", err)
 	}
 	return n == 0, nil
 }

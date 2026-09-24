@@ -4,12 +4,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // The project registry: where work happens. Rows like any other, in the same
@@ -32,7 +34,7 @@ func (r projectRow) project() model.Project {
 func (s *Store) Projects() ([]model.Project, error) {
 	var rows []projectRow
 	if err := s.db.Select(&rows, `SELECT * FROM project ORDER BY name_key`); err != nil {
-		return nil, fmt.Errorf("прочитать проекты: %w", err)
+		return nil, fmt.Errorf("read projects: %w", err)
 	}
 	out := make([]model.Project, 0, len(rows))
 	for _, r := range rows {
@@ -46,7 +48,7 @@ func (s *Store) Project(id string) (model.Project, error) {
 	var r projectRow
 	err := s.db.Get(&r, `SELECT * FROM project WHERE id = ?`, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.Project{}, fmt.Errorf("проект %q: %w", id, ErrNotFound)
+		return model.Project{}, msg.Tag(ErrNotFound, "project.notFound", "project", id)
 	}
 	if err != nil {
 		return model.Project{}, err
@@ -71,7 +73,7 @@ func (s *Store) SaveProject(p model.Project) (model.Project, error) {
 			return err
 		}
 		if taken != "" && taken != p.ID {
-			return fmt.Errorf("проект «%s» уже есть", p.Name)
+			return msg.Err("project.nameTaken", "project", p.Name)
 		}
 		_, err = tx.Exec(`
 			INSERT INTO project (id, name, name_key, kind, path, created_at)
@@ -99,7 +101,7 @@ func (s *Store) DeleteProject(id string) error {
 		return err
 	}
 	if used > 0 {
-		return fmt.Errorf("проект занят: на него ссылаются карточки (%d)", used)
+		return msg.Err("project.inUse", "count", strconv.Itoa(used))
 	}
 	_, err := s.db.Exec(`DELETE FROM project WHERE id = ?`, id)
 	return err

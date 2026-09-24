@@ -16,6 +16,7 @@
 package term
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -27,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/aymanbagabas/go-pty"
 	"github.com/google/uuid"
 )
@@ -168,10 +170,10 @@ func (m *Manager) KeepIn(dir string) {
 // mean the ribbon holding a second answer to "which terminal is this step".
 func (m *Manager) Attach(id, cardID, dir string, argv, env []string) (*Session, error) {
 	if id == "" {
-		return nil, fmt.Errorf("терминалу нужен идентификатор")
+		return nil, errors.New("a terminal needs an id")
 	}
 	if len(argv) == 0 {
-		return nil, fmt.Errorf("нечего запускать в терминале")
+		return nil, msg.Err("terminal.nothingToRun")
 	}
 	m.mu.Lock()
 	if s, ok := m.byID[id]; ok && s.Alive() {
@@ -226,11 +228,11 @@ func (m *Manager) forget(id string, s *Session) {
 
 func (m *Manager) writeTail(dir, id string, s *Session) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		m.log.Warn("не удалось сохранить хвост терминала", "terminal", id, "err", err)
+		m.log.Warn("could not save the terminal tail", "terminal", id, "err", err)
 		return
 	}
 	if err := os.WriteFile(transcriptPath(dir, id), s.History(), 0o600); err != nil {
-		m.log.Warn("не удалось сохранить хвост терминала", "terminal", id, "err", err)
+		m.log.Warn("could not save the terminal tail", "terminal", id, "err", err)
 	}
 }
 
@@ -302,7 +304,7 @@ func (m *Manager) Close() {
 func start(dir, command string, log *slog.Logger) (*Session, error) {
 	tty, err := pty.New()
 	if err != nil {
-		return nil, fmt.Errorf("открыть терминал: %w", err)
+		return nil, fmt.Errorf("open a terminal: %w", err)
 	}
 
 	shell := loginShell()
@@ -324,7 +326,7 @@ func start(dir, command string, log *slog.Logger) (*Session, error) {
 	)
 	if err := cmd.Start(); err != nil {
 		tty.Close()
-		return nil, fmt.Errorf("запустить %s: %w", shell, err)
+		return nil, fmt.Errorf("start %s: %w", shell, err)
 	}
 
 	return newSession(tty, cmd, log), nil
@@ -358,14 +360,14 @@ func newSession(tty pty.Pty, cmd *pty.Cmd, log *slog.Logger) *Session {
 func startArgv(dir string, argv, env []string, log *slog.Logger) (*Session, error) {
 	tty, err := pty.New()
 	if err != nil {
-		return nil, fmt.Errorf("открыть терминал: %w", err)
+		return nil, fmt.Errorf("open a terminal: %w", err)
 	}
 	cmd := tty.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor")
 	if err := cmd.Start(); err != nil {
 		tty.Close()
-		return nil, fmt.Errorf("запустить %s: %w", argv[0], err)
+		return nil, fmt.Errorf("start %s: %w", argv[0], err)
 	}
 	return newSession(tty, cmd, log), nil
 }

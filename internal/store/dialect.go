@@ -52,7 +52,7 @@ func (d sqliteDialect) Migrations() []string {
 
 // nameKey folds a name for comparison and uniqueness. It is computed here, in
 // Go, rather than by the database's own lower(): SQLite's is ASCII-only, so
-// «Разработка» and «разработка» would be two different flows. Go's ToLower is
+// «Über» and «über» would be two different flows. Go's ToLower is
 // Unicode-aware, and doing it on this side also means the rule is the same
 // whatever dialect is underneath.
 func nameKey(name string) string {

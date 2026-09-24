@@ -5,11 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // Sources turn outside events into cards. Everything entering the pipeline is
@@ -101,10 +103,10 @@ type Rule struct {
 	Then string `json:"then"`
 
 	// Props are card properties, as Go templates over the item:
-	// {"Ссылка": "{{.URL}}"}.
+	// {"Link": "{{.URL}}"}.
 	Props map[string]string `json:"props,omitempty"`
 
-	// SuggestFlow prefills the flow in the «В работу» dialog. It is a
+	// SuggestFlow prefills the flow in the «Take into work» dialog. It is a
 	// suggestion and nothing more: taking a card into work is a person's
 	// decision (docs/system.md §3), so a rule may say which flow it expects
 	// but may not start one.
@@ -202,17 +204,17 @@ func (s Source) Decide(it Item) Decision {
 func ValidateSource(s Source) (Source, error) {
 	s.Name = strings.TrimSpace(s.Name)
 	if s.Name == "" {
-		return Source{}, fmt.Errorf("имя источника не может быть пустым")
+		return Source{}, msg.Err("source.noName")
 	}
 	s.Plugin = strings.TrimSpace(s.Plugin)
 	s.Update = strings.TrimSpace(strings.ToLower(s.Update))
 	switch s.Update {
 	case "", UpdateInPlace, UpdateIgnore:
 	default:
-		return Source{}, fmt.Errorf("неизвестный режим обновления «%s» (допустимо: %s, %s)", s.Update, UpdateInPlace, UpdateIgnore)
+		return Source{}, msg.Err("source.unknownUpdate", "mode", s.Update, "allowed", UpdateInPlace+", "+UpdateIgnore)
 	}
 	if s.IntervalSeconds < 0 {
-		return Source{}, fmt.Errorf("интервал опроса не может быть отрицательным")
+		return Source{}, msg.Err("source.negativeInterval")
 	}
 	for i, r := range s.Rules {
 		r.Name = strings.TrimSpace(r.Name)
@@ -223,15 +225,15 @@ func ValidateSource(s Source) (Source, error) {
 		switch r.Then {
 		case ActionCard, ActionDrop:
 		default:
-			return Source{}, fmt.Errorf("правило %d: неизвестное действие «%s» (допустимо: %s)",
-				i+1, r.Then, strings.Join(RuleActions, ", "))
+			return Source{}, msg.Err("rule.unknownAction",
+				"n", strconv.Itoa(i+1), "action", r.Then, "allowed", strings.Join(RuleActions, ", "))
 		}
 		if err := checkRegexps(r.When); err != nil {
-			return Source{}, fmt.Errorf("правило %d: %w", i+1, err)
+			return Source{}, msg.Wrap(err, "rule.invalid", "n", strconv.Itoa(i+1))
 		}
 		for name, tmpl := range r.Props {
 			if _, err := template.New(name).Parse(tmpl); err != nil {
-				return Source{}, fmt.Errorf("правило %d, свойство «%s»: %w", i+1, name, err)
+				return Source{}, msg.Wrap(err, "rule.badTemplate", "n", strconv.Itoa(i+1), "property", name)
 			}
 		}
 		s.Rules[i] = r
@@ -240,17 +242,17 @@ func ValidateSource(s Source) (Source, error) {
 }
 
 func checkRegexps(m Match) error {
-	for field, expr := range map[string]string{"заголовок": m.Title, "текст": m.Body} {
+	for field, expr := range map[string]string{"title": m.Title, "body": m.Body} {
 		if expr == "" {
 			continue
 		}
 		if _, err := compileMatch(expr); err != nil {
-			return fmt.Errorf("условие по полю «%s»: %w", field, err)
+			return msg.Wrap(err, "rule.badFieldMatch", "field", field)
 		}
 	}
 	for prop, expr := range m.Props {
 		if _, err := compileMatch(expr); err != nil {
-			return fmt.Errorf("условие по свойству «%s»: %w", prop, err)
+			return msg.Wrap(err, "rule.badPropMatch", "property", prop)
 		}
 	}
 	return nil
@@ -302,7 +304,7 @@ func matchRegexp(expr, value string) bool {
 // validation and matching cannot disagree about what it means.
 //
 // Matching ignores case, like every name comparison here: somebody writing
-// «доставк» means the notification that says «Доставка», and a rule that
+// «deliver» means the notification that says «Delivery», and a rule that
 // silently misses it is worse than no rule. The flag is a prefix rather than a
 // wrapper, so a rule that needs case can still say (?-i).
 func compileMatch(expr string) (*regexp.Regexp, error) {

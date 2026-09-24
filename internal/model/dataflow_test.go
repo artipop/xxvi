@@ -3,6 +3,8 @@ package model
 import (
 	"strings"
 	"testing"
+
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // A route that loops: the check sends the card back to the agent. Every question
@@ -91,7 +93,7 @@ func TestOutcomeIsRefusedAsAStageOutput(t *testing.T) {
 	f.Stages[0].Writes = append(f.Stages[0].Writes, PropertyWrite{Property: OutcomeProperty})
 
 	_, err := ValidateFlow(f, []Agent{{Name: "Claude", Kind: KindClaude}})
-	if err == nil || !strings.Contains(err.Error(), OutcomeProperty) {
+	if err == nil || !msg.Is(err, "writes.outcome") {
 		t.Fatalf("исход пишется сам — объявлять его нельзя, получено %v", err)
 	}
 }
@@ -104,7 +106,7 @@ func TestAWaitingStageCannotDeclareOutputs(t *testing.T) {
 	})
 
 	_, err := ValidateFlow(f, []Agent{{Name: "Claude", Kind: KindClaude}})
-	if err == nil || !strings.Contains(err.Error(), "писать на карточку там некому") {
+	if err == nil || !msg.Is(err, "stage.writesWithoutAgent") {
 		t.Fatalf("на стадии, которая ничего не запускает, писать некому, получено %v", err)
 	}
 }
@@ -114,7 +116,7 @@ func TestDuplicateOutputIsRefused(t *testing.T) {
 	f.Stages[1].Writes = append(f.Stages[1].Writes, PropertyWrite{Property: "превью"})
 
 	_, err := ValidateFlow(f, []Agent{{Name: "Claude", Kind: KindClaude}})
-	if err == nil || !strings.Contains(err.Error(), "дважды") {
+	if err == nil || !strings.Contains(err.Error(), "writes.twice") {
 		t.Fatalf("одно свойство дважды — отказ, получено %v", err)
 	}
 }

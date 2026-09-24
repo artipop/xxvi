@@ -10,7 +10,7 @@ import (
 // What a stage leaves on the card, and how it gets there.
 //
 // A stage declares its outputs (model.Stage.Writes) and the brief asks the agent
-// to end its message with one «Свойство: значение» line per output
+// to end its message with one «Property: value» line per output
 // (StageOutputs). This is the reading half of that contract.
 //
 // Closing words rather than a tool call because that is the only channel there
@@ -19,13 +19,13 @@ import (
 // explain rather than two.
 //
 // The values land on the card *before* the outcome moves it, so a conditional
-// edge reading «Вердикт» reads it as it now stands rather than as it was one
+// edge reading «Verdict» reads it as it now stands rather than as it was one
 // stage ago.
 
 // ParseWrites reads a stage's declared outputs out of what the agent said.
 //
 // The scan is backwards, and the first line naming a property wins: the brief
-// asks for the values at the end, and an agent that mentioned «Вердикт» while
+// asks for the values at the end, and an agent that mentioned «Verdict» while
 // thinking out loud must not have that mistaken for its answer. Only declared
 // properties are looked for — nothing an agent writes can invent a field on the
 // card.
@@ -55,7 +55,7 @@ func ParseWrites(text string, writes []model.PropertyWrite) map[string]string {
 	return out
 }
 
-// splitLine reads one «Свойство: значение» line, tolerating the bullet and the
+// splitLine reads one «Property: value» line, tolerating the bullet and the
 // bold a model reaches for when it is asked for a list. Everything after the
 // first colon is the value — a preview address has colons in it.
 func splitLine(line string) (name, value string, ok bool) {
@@ -96,7 +96,7 @@ func describeWrites(writes []model.PropertyWrite, delivered map[string]string) s
 	var parts []string
 	for _, w := range writes {
 		if v, ok := delivered[w.Property]; ok {
-			parts = append(parts, fmt.Sprintf("«%s» = «%s»", w.Property, v))
+			parts = append(parts, fmt.Sprintf("%s = %s", w.Property, v))
 		}
 	}
 	return strings.Join(parts, ", ")

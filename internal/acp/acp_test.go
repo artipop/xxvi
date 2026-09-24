@@ -273,7 +273,7 @@ func TestAdapterStatusesCoverEveryLaunchableKind(t *testing.T) {
 	for _, st := range got {
 		// Whatever the machine has installed, the answer has to be actionable:
 		// either it is ready, or it says what is missing.
-		if !st.Ready && st.Detail == "" {
+		if !st.Ready && st.Detail == nil {
 			t.Fatalf("недоступный адаптер должен объяснять, чего не хватает: %+v", st)
 		}
 	}

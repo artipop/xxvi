@@ -7,7 +7,6 @@
 package model
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -49,17 +48,6 @@ const (
 // Works is every accepted work mode, in the order the editor offers them.
 var Works = []string{WorkTerminal, WorkSession}
 
-// WorkLabel names a mode for a person.
-func WorkLabel(work string) string {
-	switch work {
-	case WorkTerminal:
-		return "в терминале"
-	case WorkSession:
-		return "сессией"
-	}
-	return work
-}
-
 // Screen kinds: what a stage puts in front of the person while a card stands on
 // it (docs/system.md §12.2).
 //
@@ -90,22 +78,6 @@ const (
 // ScreenKinds is every accepted screen kind, in the order the editor offers them.
 var ScreenKinds = []string{ScreenNotes, ScreenTerminal, ScreenBrowser, ScreenDiff}
 
-// ScreenKindLabel names a kind for a person. The editor shows these; the flow
-// stores the constant.
-func ScreenKindLabel(kind string) string {
-	switch kind {
-	case ScreenNotes:
-		return "заметки"
-	case ScreenTerminal:
-		return "терминал"
-	case ScreenBrowser:
-		return "браузер"
-	case ScreenDiff:
-		return "дифф"
-	}
-	return kind
-}
-
 // Edge triggers. The outcome ones are produced by the stage's own session; the
 // last one is a person setting something on the card.
 //
@@ -119,7 +91,7 @@ const (
 	TriggerFailure = "failure"
 
 	// TriggerCardChanged fires when a property is set on the card while it
-	// stands on the stage — a person marking «Одобрено», say. Which property
+	// stands on the stage — a person marking «Approved», say. Which property
 	// and value is the edge's own condition, so the trigger kind stays closed
 	// and the flow decides only the vocabulary.
 	TriggerCardChanged = "card.changed"
@@ -136,9 +108,13 @@ const (
 // The card's own field for how a stage ended, and the two values it takes.
 //
 // It exists because how a stage ended used to be expressible only as *where the
-// card went*: a flow grew a «Не прошло» stage whose whole content was one fact
+// card went*: a flow grew a «Failed» stage whose whole content was one fact
 // about the step before it, and that fact then read as a place where work
 // happens. An outcome belongs to the card, and a stage is for work.
+//
+// The name and the values are identifiers, not words: the UI words them in the
+// person's language, and a flow's conditions and a card's properties store
+// these, so they read the same whichever language the flow was built in.
 //
 // Written by the engine for every stage without anybody declaring it — which is
 // what makes it the app's own field rather than one of the stage's outputs, and
@@ -147,12 +123,12 @@ const (
 //
 // Binary, and a third value was tried and taken out. What the card carries here
 // is whether the step worked, and every question anybody asks of it is that
-// question. «Заблокировано» is not a third answer to it — it is a reason, and
-// the reason is a sentence in the card's comments, where it can be one.
+// question. «Blocked» is not a third answer to it — it is a reason, and the
+// reason is a sentence in the card's comments, where it can be one.
 const (
-	OutcomeProperty = "Исход"
-	OutcomePassed   = "прошло"
-	OutcomeFailed   = "не прошло"
+	OutcomeProperty = "Outcome"
+	OutcomePassed   = "passed"
+	OutcomeFailed   = "failed"
 )
 
 // OutcomeValues is the closed set, for the editor and for anything checking a
@@ -180,18 +156,18 @@ func IsOutcomeProperty(name string) bool {
 }
 
 // Trigger describes one edge trigger. The list doubles as the editor's
-// dropdown, so the UI can never offer a trigger the engine does not implement.
+// dropdown, so the UI can never offer a trigger the engine does not implement;
+// what it is called is the UI's, keyed by Kind.
 type Trigger struct {
 	Kind   string `json:"kind"`
 	Source string `json:"source"`
-	Label  string `json:"label"`
 }
 
 // Triggers is the closed set, in the order the editor shows them.
 var Triggers = []Trigger{
-	{Kind: TriggerSuccess, Source: SourceOutcome, Label: "шаг прошёл"},
-	{Kind: TriggerFailure, Source: SourceOutcome, Label: "шаг упал"},
-	{Kind: TriggerCardChanged, Source: SourceHuman, Label: "на карточке выбрано"},
+	{Kind: TriggerSuccess, Source: SourceOutcome},
+	{Kind: TriggerFailure, Source: SourceOutcome},
+	{Kind: TriggerCardChanged, Source: SourceHuman},
 }
 
 // TriggerByKind looks a trigger up in the closed set.
@@ -202,14 +178,6 @@ func TriggerByKind(kind string) (Trigger, bool) {
 		}
 	}
 	return Trigger{}, false
-}
-
-// TriggerLabel is the human phrasing used in comments and on edges.
-func TriggerLabel(kind string) string {
-	if t, ok := TriggerByKind(kind); ok {
-		return t.Label
-	}
-	return kind
 }
 
 // IsOutcome reports whether the trigger is produced by the stage's own session.
@@ -269,7 +237,7 @@ type Stage struct {
 
 	// Writes are the properties this stage leaves on the card — its declared
 	// outputs, and what makes a transition on a property deterministic rather
-	// than hopeful: the edge that asks about «Вердикт» points at the stage that
+	// than hopeful: the edge that asks about «Verdict» points at the stage that
 	// must produce it.
 	//
 	// A session delivers them in its closing words, in the shape the brief asks
@@ -311,7 +279,7 @@ type Stage struct {
 // it, and what it points at — a file path, a command line or an address,
 // depending on the kind.
 //
-// Ref may name card properties as «{Превью}». That is the same currency as a
+// Ref may name card properties as «{Preview}». That is the same currency as a
 // stage's declared inputs (docs/system.md §4.3): the stage that writes the
 // preview address is the stage the browser screen below it opens.
 type Screen struct {
@@ -350,7 +318,7 @@ type Cond struct {
 	Value    string `json:"value,omitempty"`
 
 	// CommentContains: the agent's closing words contain this text — how a
-	// stage lets the agent itself route the card («ГОТОВО К ДЕПЛОЮ»).
+	// stage lets the agent itself route the card («READY TO DEPLOY»).
 	CommentContains string `json:"commentContains,omitempty"`
 }
 
@@ -365,18 +333,6 @@ func (c *Cond) Holds(props map[string]string, agentText string) bool {
 		return containsFold(agentText, c.CommentContains)
 	}
 	return strings.EqualFold(strings.TrimSpace(PropValue(props, c.Property)), strings.TrimSpace(c.Value))
-}
-
-// Describe is the condition in the reader's language, for edge captions and
-// card comments.
-func (c *Cond) Describe() string {
-	if c == nil {
-		return ""
-	}
-	if c.CommentContains != "" {
-		return fmt.Sprintf("в ответе агента есть «%s»", c.CommentContains)
-	}
-	return fmt.Sprintf("«%s» = «%s»", c.Property, c.Value)
 }
 
 // IsZero reports a condition that asks nothing.
@@ -475,7 +431,7 @@ func (f Flow) HasEdge(stageID, on string) bool {
 }
 
 // WatchesProperty reports whether the stage has a card.changed edge naming this
-// property. Setting «Приоритет» must not wake a stage waiting on «Одобрено»,
+// property. Setting «Priority» must not wake a stage waiting on «Approved»,
 // and must not leave a "nothing matched" comment either — the change was simply
 // not addressed to it.
 func (f Flow) WatchesProperty(stageID, property string) bool {
@@ -488,20 +444,22 @@ func (f Flow) WatchesProperty(stageID, property string) bool {
 	return false
 }
 
-// WaitDescriptions is what a parked card says it is waiting on, conditions
-// included — «на карточке выбрано «Одобрено» = «Да»», not just the kind. Stage
+// Wait is one thing a parked card is waiting for: the event, and the condition
+// that makes it the one — «Approved» = «Yes», not just "a property changed".
+type Wait struct {
+	On string `json:"on"`
+	If *Cond  `json:"if,omitempty"`
+}
+
+// Waits is what a parked card says it is waiting on, conditions included. Stage
 // outcomes are left out: a card is not "waiting" for its own session.
-func (f Flow) WaitDescriptions(stageID string) []string {
-	var out []string
+func (f Flow) Waits(stageID string) []Wait {
+	var out []Wait
 	for _, e := range f.Edges {
 		if e.From != stageID || IsOutcome(e.On) {
 			continue
 		}
-		label := TriggerLabel(e.On)
-		if desc := e.If.Describe(); desc != "" {
-			label += " " + desc
-		}
-		out = append(out, label)
+		out = append(out, Wait{On: e.On, If: e.If})
 	}
 	return out
 }
@@ -614,7 +572,7 @@ func (f Flow) UnwrittenConditions() []string {
 }
 
 // ScreenRefs is every property name a screen reference names, in the order they
-// are met. «{Превью}» is one; the braces are the whole syntax, because anything
+// are met. «{Preview}» is one; the braces are the whole syntax, because anything
 // richer would be a script and nothing stored here is interpreted as one.
 func ScreenRefs(ref string) []string {
 	var out []string
@@ -701,7 +659,7 @@ type Mark struct {
 
 // MarksFrom is what a person can say from this stage: the flow's own
 // card.changed edges that ask about the outcome field, named by where they lead.
-// Only those — an edge waiting on somebody's «Одобрено» is this flow's own
+// Only those — an edge waiting on somebody's «Approved» is this flow's own
 // vocabulary and is answered on the card, and an edge on a stage's own outcome
 // belongs to whatever runs there.
 func (f Flow) MarksFrom(stageID string) []Mark {

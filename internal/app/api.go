@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"github.com/artipop/xxvi/internal/gitdiff"
 	"github.com/artipop/xxvi/internal/inbox"
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/store"
 )
 
@@ -112,7 +112,7 @@ func (s *API) Card(cardID string) (CardView, error) {
 func (s *API) SetProp(cardID, name, value string) (CardView, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return CardView{}, fmt.Errorf("у свойства нет названия")
+		return CardView{}, msg.Err("prop.noName")
 	}
 	if _, err := s.app.Store.UpdateCard(cardID, store.CardEdit{Props: map[string]string{name: value}}); err != nil {
 		return CardView{}, err
@@ -124,8 +124,8 @@ func (s *API) SetProp(cardID, name, value string) (CardView, error) {
 	return s.Card(cardID)
 }
 
-// MarkOutcome is a person answering for a stage that runs nothing: «прошло» or
-// «не прошло», put on the card so the flow sees it and moves.
+// MarkOutcome is a person answering for a stage that runs nothing: passed or
+// failed, put on the card so the flow sees it and moves.
 //
 // It goes through SetProp rather than straight to the store, and that is the
 // point: the engine's own write of the outcome is silent, because the machine
@@ -134,7 +134,7 @@ func (s *API) SetProp(cardID, name, value string) (CardView, error) {
 func (s *API) MarkOutcome(cardID, value string) (CardView, error) {
 	value = strings.TrimSpace(value)
 	if value != model.OutcomePassed && value != model.OutcomeFailed {
-		return CardView{}, fmt.Errorf("исход бывает «%s» или «%s»", model.OutcomePassed, model.OutcomeFailed)
+		return CardView{}, msg.Err("outcome.unknown", "value", value)
 	}
 	return s.SetProp(cardID, model.OutcomeProperty, value)
 }
@@ -245,7 +245,7 @@ func (s *API) ReadDoc(cardID, name string) (string, error) {
 		return "", nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("прочитать «%s»: %w", name, err)
+		return "", msg.Wrap(err, "doc.readFailed", "name", name)
 	}
 	return string(data), nil
 }
@@ -257,10 +257,10 @@ func (s *API) WriteDoc(cardID, name, text string) error {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("создать папку для «%s»: %w", name, err)
+		return msg.Wrap(err, "doc.folderFailed", "name", name)
 	}
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
-		return fmt.Errorf("сохранить «%s»: %w", name, err)
+		return msg.Wrap(err, "doc.saveFailed", "name", name)
 	}
 	return nil
 }
@@ -271,7 +271,7 @@ func (s *API) WriteDoc(cardID, name, text string) error {
 // only where it is declared is a boundary until somebody edits the database.
 func (s *API) docPath(cardID, name string) (string, error) {
 	if strings.TrimSpace(name) == "" {
-		return "", fmt.Errorf("не сказано, какой файл открывать")
+		return "", msg.Err("doc.noName")
 	}
 	dir, err := s.app.Agents.WorkDir(cardID)
 	if err != nil {
@@ -328,7 +328,7 @@ type TerminalHandle struct {
 func (s *API) OpenTerminal(cardID, screenID, command string) (TerminalHandle, error) {
 	endpoint := s.app.Terminals.Endpoint()
 	if endpoint == "" {
-		return TerminalHandle{}, fmt.Errorf("терминалы выключены: не удалось открыть локальный порт")
+		return TerminalHandle{}, msg.Err("terminal.disabled")
 	}
 	session, err := s.app.Terminals.Open(cardID, screenID, command)
 	if err != nil {
@@ -347,10 +347,10 @@ func (s *API) OpenTerminal(cardID, screenID, command string) (TerminalHandle, er
 func (s *API) AgentTerminal(sessionID string) (TerminalHandle, error) {
 	endpoint := s.app.Terminals.Endpoint()
 	if endpoint == "" {
-		return TerminalHandle{}, fmt.Errorf("терминалы выключены: не удалось открыть локальный порт")
+		return TerminalHandle{}, msg.Err("terminal.disabled")
 	}
 	if sessionID == "" {
-		return TerminalHandle{}, fmt.Errorf("не сказано, чей терминал")
+		return TerminalHandle{}, errors.New("no session named")
 	}
 	return TerminalHandle{ID: sessionID, URL: endpoint + sessionID}, nil
 }
@@ -419,15 +419,16 @@ type StageCard struct {
 }
 
 // Vocabulary is the closed sets the editor offers. Sent from here so the UI can
-// never offer a trigger or an action the engine does not implement.
+// never offer a trigger or an action the engine does not implement. Only the
+// members are sent: what each is called is the UI's to say.
 type Vocabulary struct {
 	Triggers []model.Trigger `json:"triggers"`
 	Actions  []string        `json:"actions"`
 	// Where an agent stage runs — the terminal somebody sits at, or a session
 	// nobody watches (docs/system.md §4.1.1).
-	Works []ScreenKind `json:"works"`
-	Kinds []string     `json:"kinds"`
-	Rules []string     `json:"ruleActions"`
+	Works []string `json:"works"`
+	Kinds []string `json:"kinds"`
+	Rules []string `json:"ruleActions"`
 	// The card's own field for how a stage ended, and the two values it takes.
 	// Sent so the editor can keep it out of what a stage declares — the engine
 	// writes it for every stage — while still offering it to a condition, which
@@ -437,17 +438,12 @@ type Vocabulary struct {
 	// What kinds of screen a stage may declare — the same closed set the
 	// ribbon knows how to render, so the editor cannot offer a window nothing
 	// can open (docs/system.md §12.2).
-	ScreenKinds []ScreenKind `json:"screenKinds"`
+	ScreenKinds []string `json:"screenKinds"`
 	// What kinds of place work can happen in. One for now — a folder — and the
 	// room for the rest is the same room the triggers keep for git.
-	ProjectKinds []ScreenKind `json:"projectKinds"`
-}
-
-// ScreenKind is one screen kind with the name a person reads. The constant is
-// what the flow stores; the label is what the editor shows.
-type ScreenKind struct {
-	Kind  string `json:"kind"`
-	Label string `json:"label"`
+	ProjectKinds []string `json:"projectKinds"`
+	// WorkModes are how a card may work in a repository (model/workmode.go).
+	WorkModes []string `json:"workModes"`
 }
 
 // Vocabulary returns those sets.
@@ -455,39 +451,16 @@ func (s *API) Vocabulary() Vocabulary {
 	return Vocabulary{
 		Triggers: model.Triggers,
 		Actions:  model.Actions,
-		Works:    works(),
+		Works:    model.Works,
 		Kinds:    model.Kinds,
 		Rules:    model.RuleActions,
 
 		OutcomeProperty: model.OutcomeProperty,
 		OutcomeValues:   model.OutcomeValues,
-		ScreenKinds:     screenKinds(),
-		ProjectKinds:    projectKinds(),
+		ScreenKinds:     model.ScreenKinds,
+		ProjectKinds:    model.ProjectKinds,
+		WorkModes:       model.WorkModes,
 	}
-}
-
-func projectKinds() []ScreenKind {
-	out := make([]ScreenKind, 0, len(model.ProjectKinds))
-	for _, k := range model.ProjectKinds {
-		out = append(out, ScreenKind{Kind: k, Label: model.ProjectKindLabel(k)})
-	}
-	return out
-}
-
-func works() []ScreenKind {
-	out := make([]ScreenKind, 0, len(model.Works))
-	for _, w := range model.Works {
-		out = append(out, ScreenKind{Kind: w, Label: model.WorkLabel(w)})
-	}
-	return out
-}
-
-func screenKinds() []ScreenKind {
-	out := make([]ScreenKind, 0, len(model.ScreenKinds))
-	for _, k := range model.ScreenKinds {
-		out = append(out, ScreenKind{Kind: k, Label: model.ScreenKindLabel(k)})
-	}
-	return out
 }
 
 // ---- sources ----
@@ -533,10 +506,10 @@ func (s *API) AddItem(sourceName, title, body string) ([]model.InboxGroup, error
 		return nil, err
 	}
 	if src.Plugin != inbox.PluginDemo {
-		return nil, fmt.Errorf("источник «%s» не принимает элементы вручную", src.Name)
+		return nil, msg.Err("source.noManualItems", "source", src.Name)
 	}
 	if strings.TrimSpace(title) == "" {
-		return nil, fmt.Errorf("у элемента нет заголовка")
+		return nil, msg.Err("item.noTitle")
 	}
 	if err := inbox.AppendItem(inbox.DemoPath(src), model.Item{Title: title, Body: body}); err != nil {
 		return nil, err
@@ -567,7 +540,7 @@ func (s *API) AddCard(sourceName, title, body string) (model.Card, error) {
 func (s *API) StartTask(text, projectID, workMode, agent, flowID string) (CardView, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
-		return CardView{}, fmt.Errorf("задача пустая — напишите, что сделать")
+		return CardView{}, msg.Err("task.empty")
 	}
 	if err := s.checkWorkMode(projectID, workMode); err != nil {
 		return CardView{}, err
@@ -627,7 +600,7 @@ func (s *API) SaveProject(p model.Project) (model.Project, error) {
 	}
 	info, err := os.Stat(checked.Path)
 	if err != nil || !info.IsDir() {
-		return model.Project{}, fmt.Errorf("папка не найдена: %s", checked.Path)
+		return model.Project{}, msg.Err("project.folderNotFound", "path", checked.Path)
 	}
 	saved, err := s.app.Store.SaveProject(checked)
 	if err != nil {
@@ -644,14 +617,16 @@ func (s *API) SaveProject(p model.Project) (model.Project, error) {
 // their project is knows it as a place they can point at, not as a string they
 // can spell — and a typo in a path is a project that refuses to save with a
 // sentence about a folder that is not there.
-func (s *API) PickFolder(from string) (string, error) {
+//
+// The dialog's title is the UI's, like every other word on the screen.
+func (s *API) PickFolder(title, from string) (string, error) {
 	s.app.uiMu.RLock()
 	chooser := s.app.chooser
 	s.app.uiMu.RUnlock()
 	if chooser == nil {
-		return "", fmt.Errorf("выбор папки доступен только в окне приложения")
+		return "", msg.Err("folder.noWindow")
 	}
-	return chooser.Folder("Папка проекта", from)
+	return chooser.Folder(title, from)
 }
 
 // DeleteProject removes one, refusing while a card still names it.
@@ -672,7 +647,7 @@ func (s *API) SetCardProject(cardID, projectID string) (CardView, error) {
 		return CardView{}, err
 	}
 	if card.Branch != "" && projectID != card.Project {
-		return CardView{}, fmt.Errorf("работа по карточке уже идёт в ветке `%s` — проект у неё не меняется", card.Branch)
+		return CardView{}, msg.Err("card.projectLocked", "branch", card.Branch)
 	}
 	if projectID != "" {
 		if _, err := s.app.Store.Project(projectID); err != nil {
@@ -707,7 +682,7 @@ func (s *API) SetCardWorkMode(cardID, mode string) (CardView, error) {
 		return s.Card(cardID)
 	}
 	if card.Branch != "" {
-		return CardView{}, fmt.Errorf("работа по карточке уже идёт в ветке `%s` — способ работы с папкой у неё не меняется", card.Branch)
+		return CardView{}, msg.Err("card.workModeLocked", "branch", card.Branch)
 	}
 	if err := s.checkWorkMode(card.Project, mode); err != nil {
 		return CardView{}, err
@@ -719,7 +694,7 @@ func (s *API) SetCardWorkMode(cardID, mode string) (CardView, error) {
 	return s.Card(cardID)
 }
 
-// RemoveCardWorktree answers «удалить» to a closed card's working tree: the tree
+// RemoveCardWorktree answers «remove» to a closed card's working tree: the tree
 // goes, the branch stays. Discard is the person having been told the tree holds
 // uncommitted changes and removing it anyway.
 func (s *API) RemoveCardWorktree(cardID string, discard bool) (CardView, error) {
@@ -730,7 +705,7 @@ func (s *API) RemoveCardWorktree(cardID string, discard bool) (CardView, error) 
 	return s.Card(cardID)
 }
 
-// KeepCardWorktree answers «оставить»: the tree stays, and is not asked about
+// KeepCardWorktree answers «keep»: the tree stays, and is not asked about
 // again.
 func (s *API) KeepCardWorktree(cardID string) (CardView, error) {
 	if err := s.app.Agents.KeepWorktree(cardID); err != nil {
@@ -747,7 +722,7 @@ func (s *API) checkWorkMode(projectID, mode string) error {
 	}
 	if projectID == "" {
 		if mode != model.WorkModeFolder {
-			return fmt.Errorf("«%s» — про папку проекта, а у карточки проект не выбран", model.WorkModeLabel(mode))
+			return msg.Err("workMode.noProject", "mode", mode)
 		}
 		return nil
 	}
@@ -756,7 +731,7 @@ func (s *API) checkWorkMode(projectID, mode string) error {
 		return err
 	}
 	if mode != model.WorkModeFolder && !acp.IsRepo(project.Path) {
-		return fmt.Errorf("папка проекта «%s» — не git-репозиторий: «%s» для неё невозможно", project.Name, model.WorkModeLabel(mode))
+		return msg.Err("workMode.notRepo", "project", project.Name, "mode", mode)
 	}
 	return nil
 }
@@ -798,8 +773,7 @@ func (s *API) DeleteAgent(name string) error {
 		return err
 	}
 	if len(used) > 0 {
-		return fmt.Errorf("агент «%s» указан в составе стадий: %s — сначала уберите его оттуда",
-			name, strings.Join(used, ", "))
+		return msg.Err("agent.inUse", "agent", name, "stages", strings.Join(used, ", "))
 	}
 	if err := s.app.Store.DeleteAgent(name); err != nil {
 		return err
@@ -814,6 +788,16 @@ func (s *API) DeleteAgent(name string) error {
 // question, a silent terminal, a closed card's working tree.
 func (s *API) Attention() []acp.Attention { return s.app.Agents.Attention() }
 
+// SetNotificationWords hands over what a system notification says around an
+// agent's question, in the language the UI is showing. Called by the UI when it
+// starts and whenever the language changes.
+func (s *API) SetNotificationWords(words NotificationWords) {
+	s.app.uiMu.RLock()
+	n := s.app.notifier
+	s.app.uiMu.RUnlock()
+	n.SetWords(words)
+}
+
 // Answer delivers a person's answer to an agent's question.
 func (s *API) Answer(questionID string, answer acp.Answer) error {
 	return s.app.Agents.Answer(questionID, answer)
@@ -822,7 +806,7 @@ func (s *API) Answer(questionID string, answer acp.Answer) error {
 // CancelCard stops whatever is running for a card. A cancelled session produces
 // no outcome: the person who stopped it decides what happens next.
 func (s *API) CancelCard(cardID string) error {
-	s.app.Agents.Cancel(cardID, "остановлено вручную")
+	s.app.Agents.Cancel(cardID, msg.New("cancel.byHand"))
 	return nil
 }
 

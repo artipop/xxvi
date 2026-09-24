@@ -11,6 +11,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // A flow is saved whole: the editor hands over the entire graph, it is checked
@@ -20,13 +21,13 @@ import (
 // same change with its own bugs.
 
 // ErrNotFound is what every lookup by id or name returns for something absent.
-var ErrNotFound = errors.New("не найдено")
+var ErrNotFound = errors.New("not found")
 
 // Flows returns every flow with its stages and edges, by name.
 func (s *Store) Flows() ([]model.Flow, error) {
 	var rows []flowRow
 	if err := s.db.Select(&rows, `SELECT * FROM flow ORDER BY name_key`); err != nil {
-		return nil, fmt.Errorf("прочитать флоу: %w", err)
+		return nil, fmt.Errorf("read flows: %w", err)
 	}
 	out := make([]model.Flow, 0, len(rows))
 	for _, r := range rows {
@@ -44,7 +45,7 @@ func (s *Store) Flow(id string) (model.Flow, error) {
 	var r flowRow
 	err := s.db.Get(&r, `SELECT * FROM flow WHERE id = ?`, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.Flow{}, fmt.Errorf("флоу %q: %w", id, ErrNotFound)
+		return model.Flow{}, msg.Tag(ErrNotFound, "flow.notFound", "flow", id)
 	}
 	if err != nil {
 		return model.Flow{}, err
@@ -57,7 +58,7 @@ func (s *Store) FlowByName(name string) (model.Flow, error) {
 	var r flowRow
 	err := s.db.Get(&r, `SELECT * FROM flow WHERE name_key = ?`, nameKey(name))
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.Flow{}, fmt.Errorf("флоу «%s»: %w", name, ErrNotFound)
+		return model.Flow{}, msg.Tag(ErrNotFound, "flow.notFound", "flow", name)
 	}
 	if err != nil {
 		return model.Flow{}, err
@@ -71,7 +72,7 @@ func (s *Store) FlowForStage(stageID string) (model.Flow, error) {
 	var flowID string
 	err := s.db.Get(&flowID, `SELECT flow_id FROM stage WHERE id = ?`, stageID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.Flow{}, fmt.Errorf("стадия %q: %w", stageID, ErrNotFound)
+		return model.Flow{}, msg.Tag(ErrNotFound, "stage.notFound", "stage", stageID)
 	}
 	if err != nil {
 		return model.Flow{}, err
@@ -99,7 +100,7 @@ func (s *Store) SaveFlow(f model.Flow) (model.Flow, error) {
 		var clash string
 		err := tx.Get(&clash, `SELECT id FROM flow WHERE name_key = ? AND id <> ?`, nameKey(f.Name), f.ID)
 		if err == nil {
-			return fmt.Errorf("флоу с именем «%s» уже существует", f.Name)
+			return msg.Err("flow.nameTaken", "flow", f.Name)
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return err
@@ -175,7 +176,7 @@ func (s *Store) DeleteFlow(id string) error {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("флоу %q: %w", id, ErrNotFound)
+		return msg.Tag(ErrNotFound, "flow.notFound", "flow", id)
 	}
 	return nil
 }
@@ -199,8 +200,7 @@ func checkStageIDsAreFree(tx *sqlx.Tx, f model.Flow) error {
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("идентификатор стадии «%s» уже занят флоу «%s» — он должен быть уникальным среди всех флоу",
-			st.ID, owner)
+		return msg.Err("stage.idTaken", "id", st.ID, "flow", owner)
 	}
 	return nil
 }
@@ -271,7 +271,7 @@ func (s *Store) loadGraph(r flowRow) (model.Flow, error) {
 
 	var stages []stageRow
 	if err := s.db.Select(&stages, `SELECT * FROM stage WHERE flow_id = ? ORDER BY ord`, r.ID); err != nil {
-		return model.Flow{}, fmt.Errorf("прочитать стадии флоу «%s»: %w", r.Name, err)
+		return model.Flow{}, fmt.Errorf("read stages of flow %q: %w", r.Name, err)
 	}
 	crews, err := s.crews(r.ID)
 	if err != nil {
@@ -290,7 +290,7 @@ func (s *Store) loadGraph(r flowRow) (model.Flow, error) {
 
 	var edges []edgeRow
 	if err := s.db.Select(&edges, `SELECT * FROM edge WHERE flow_id = ? ORDER BY ord`, r.ID); err != nil {
-		return model.Flow{}, fmt.Errorf("прочитать переходы флоу «%s»: %w", r.Name, err)
+		return model.Flow{}, fmt.Errorf("read edges of flow %q: %w", r.Name, err)
 	}
 	for _, e := range edges {
 		edge := model.Edge{ID: e.ID, From: e.FromStage, To: e.ToStage, On: e.OnTrigger}
@@ -314,7 +314,7 @@ func (s *Store) crews(flowID string) (map[string][]string, error) {
 		JOIN stage s ON s.id = sa.stage_id
 		WHERE s.flow_id = ?
 		ORDER BY sa.stage_id, sa.ord`, flowID); err != nil {
-		return nil, fmt.Errorf("прочитать составы стадий: %w", err)
+		return nil, fmt.Errorf("read stage crews: %w", err)
 	}
 	out := map[string][]string{}
 	for _, r := range rows {

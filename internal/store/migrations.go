@@ -16,8 +16,8 @@ func migrations(d Dialect) []string {
 		// 1. Registries: sources with their rules, and agents.
 		`
 -- name_key is the name folded for comparison, computed in Go rather than by
--- lower(): SQLite's own lower() is ASCII-only, so «Разработка» and
--- «разработка» would be two different sources. Every case-insensitive lookup
+-- lower(): SQLite's own lower() is ASCII-only, so «Über» and
+-- «über» would be two different sources. Every case-insensitive lookup
 -- and every uniqueness rule in this schema goes through such a column.
 CREATE TABLE source (
 	name             TEXT PRIMARY KEY,
@@ -327,9 +327,26 @@ ALTER TABLE card ADD COLUMN base_ref  TEXT NOT NULL DEFAULT '';
 ALTER TABLE card ADD COLUMN worktree  TEXT NOT NULL DEFAULT '';`,
 
 		// 14. A closed card's working tree is removed only when a person says
-		// so, and «оставить» is an answer too: remembered, or the question
+		// so, and «keep» is an answer too: remembered, or the question
 		// would come back every time the list is read.
 		`
 ALTER TABLE card ADD COLUMN keep_worktree INTEGER NOT NULL DEFAULT 0;`,
+
+		// 15. The application stops speaking in sentences: what it writes to a
+		// card's journal is a code the UI words in the person's language, kept
+		// beside the text an agent or a person wrote. Its own field for how a
+		// stage ended and the field a source's rule suggests a flow in are
+		// identifiers from now on rather than Russian words, so every card and
+		// every condition that named them by the old words is renamed with them.
+		// The old spellings are the data being migrated, not anything shown.
+		`
+ALTER TABLE card_comment ADD COLUMN msg TEXT NOT NULL DEFAULT '';
+UPDATE card_prop SET value = 'passed' WHERE name IN ('Исход', 'исход') AND value = 'прошло';
+UPDATE card_prop SET value = 'failed' WHERE name IN ('Исход', 'исход') AND value = 'не прошло';
+UPDATE OR REPLACE card_prop SET name = 'Outcome' WHERE name IN ('Исход', 'исход');
+UPDATE OR REPLACE card_prop SET name = 'Flow' WHERE name = 'Флоу';
+UPDATE edge SET cond_value = 'passed' WHERE cond_property IN ('Исход', 'исход') AND cond_value = 'прошло';
+UPDATE edge SET cond_value = 'failed' WHERE cond_property IN ('Исход', 'исход') AND cond_value = 'не прошло';
+UPDATE edge SET cond_property = 'Outcome' WHERE cond_property IN ('Исход', 'исход');`,
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // CardState is where a card is in its life. Exactly four, and a card in state
@@ -89,7 +91,11 @@ type JournalEntry struct {
 	// Author is who spoke: an agent's name, a source's name, or empty for the
 	// application itself.
 	Author string `json:"author,omitempty"`
-	Text   string `json:"text"`
+	// Msg is what the application itself says, for the UI to word. Text is
+	// words somebody else wrote — an agent's report, a person's answer — and
+	// the entries from before the application spoke in codes.
+	Msg  *msg.Msg `json:"msg,omitempty"`
+	Text string   `json:"text,omitempty"`
 	// SessionID is the agent run the entry was written for, when there was
 	// one. It ties a step's report and its failure to their own screen: a
 	// report is written the moment before the card moves on, in the same
@@ -147,7 +153,7 @@ type FlowEvent struct {
 	FromStage string    `json:"fromStage,omitempty"`
 	ToStage   string    `json:"toStage"`
 	On        string    `json:"on,omitempty"`
-	Detail    string    `json:"detail,omitempty"`
+	Detail    *msg.Msg  `json:"detail,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 

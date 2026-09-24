@@ -1,9 +1,9 @@
 package model
 
 import (
-	"errors"
-	"fmt"
 	"strings"
+
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // Who picks a card up on a stage. This is a pure decision — given the stage's
@@ -13,7 +13,7 @@ import (
 
 // ErrCrewBusy is not a failure: every member of the stage's crew is already
 // working, so the card waits for a free one instead of taking its failure edge.
-var ErrCrewBusy = errors.New("состав стадии занят")
+var ErrCrewBusy = msg.Err("crew.busy")
 
 // TakenByHumanError is why a stage did not start: the card is somebody's.
 // It is not a failure — the work is being done, only not by us — so the card
@@ -23,7 +23,7 @@ type TakenByHumanError struct {
 }
 
 func (e TakenByHumanError) Error() string {
-	return fmt.Sprintf("карточка назначена на %s", e.Who)
+	return "card is assigned to " + e.Who
 }
 
 // PickAgent decides who runs a stage's session for a card.
@@ -71,13 +71,11 @@ func PickAgent(card Card, crew []string, agents []Agent, busy map[string]bool) (
 
 	switch len(agents) {
 	case 0:
-		return Agent{}, fmt.Errorf("не зарегистрирован ни один агент")
+		return Agent{}, msg.Err("agent.noneRegistered")
 	case 1:
 		return agents[0], nil
 	default:
-		return Agent{}, fmt.Errorf(
-			"не удалось выбрать агента: назначьте агента исполнителем карточки или задайте состав стадии (доступно: %s)",
-			AgentNames(agents))
+		return Agent{}, msg.Err("agent.cannotPick", "agents", AgentNames(agents))
 	}
 }
 
@@ -99,8 +97,7 @@ func CrewOf(crew []string, agents []Agent) ([]Agent, error) {
 		}
 	}
 	if len(roster) == 0 {
-		return nil, fmt.Errorf("состав стадии (%s) не найден в реестре агентов (%s)",
-			strings.Join(crew, ", "), AgentNames(agents))
+		return nil, msg.Err("crew.notFound", "crew", strings.Join(crew, ", "), "agents", AgentNames(agents))
 	}
 	return roster, nil
 }

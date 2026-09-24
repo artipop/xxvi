@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/updater/providers/endpoint"
 
 	"github.com/artipop/xxvi/internal/app"
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // How this application replaces itself.
@@ -35,7 +35,7 @@ import (
 //
 // **The framework's own window is not used** (updater.WindowNone): it is
 // hard-coded English, and everything a person reads here is Russian. The
-// «Обновление» screen draws the whole thing off one event of ours.
+// «Update» screen draws the whole thing off one event of ours.
 
 //go:embed build/updater.key.pub
 var updaterPublicKey []byte
@@ -47,7 +47,7 @@ var updaterPublicKey []byte
 // files are kept is then a decision that can be revisited every release, and
 // this line cannot.
 //
-// Nothing answering, or a 404, is read as «нечего обновлять», so a bucket that
+// Nothing answering, or a 404, is read as «nothing to update», so a bucket that
 // is not there yet costs a line in the log rather than an error on the screen.
 //
 // One const per line, no block: the release workflow reads these with sed, so
@@ -62,7 +62,7 @@ const updateChannel = "stable"
 
 // updateCheckInterval is our own timer rather than updater.Config.CheckInterval:
 // Init may be called once and StopPeriodicCheck cannot be undone, so the
-// framework's timer would make «проверять самому» a switch that takes effect at
+// framework's timer would make «check by itself» a switch that takes effect at
 // the next launch. This one is read on every tick.
 const updateCheckInterval = 6 * time.Hour
 
@@ -78,13 +78,13 @@ const updateFirstCheckDelay = time.Minute
 // lives in a field of the running Updater and dies with the process.
 type updateSettings struct {
 	// Enabled is a pointer so that a file written before this field existed
-	// reads as «не отвечали», not as «выключили».
+	// reads as «did not answer», not as «turned off».
 	Enabled *bool `json:"enabled,omitempty"`
 	// SkippedVersion is the release a person said no to. Restored into the
-	// Updater at startup, or «пропустить» would mean «до перезапуска».
+	// Updater at startup, or «skip» would mean «until restart».
 	SkippedVersion string `json:"skippedVersion,omitempty"`
-	// LastCheckedAt is RFC 3339, and exists so the screen can answer «когда оно
-	// вообще смотрело» without looking again.
+	// LastCheckedAt is RFC 3339, and exists so the screen can answer «when did it
+	// last look» without looking again.
 	LastCheckedAt string `json:"lastCheckedAt,omitempty"`
 }
 
@@ -100,12 +100,12 @@ func readUpdateSettings(path string, log *slog.Logger) updateSettings {
 		return updateSettings{}
 	}
 	if err != nil {
-		log.Warn("не удалось прочитать настройки обновления", "path", path, "err", err)
+		log.Warn("could not read the update settings", "path", path, "err", err)
 		return updateSettings{}
 	}
 	var s updateSettings
 	if err := json.Unmarshal(data, &s); err != nil {
-		log.Warn("настройки обновления испорчены", "path", path, "err", err)
+		log.Warn("update settings are corrupt", "path", path, "err", err)
 		return updateSettings{}
 	}
 	return s
@@ -147,7 +147,7 @@ func newUpdateController(wails *application.App, core *app.App, log *slog.Logger
 
 	feed, err := endpoint.New(endpoint.Config{URL: updateManifestURL, Channel: updateChannel})
 	if err != nil {
-		log.Warn("обновление выключено: не удалось настроить ленту релизов", "err", err)
+		log.Warn("updates disabled: could not set up the release feed", "err", err)
 		return nil
 	}
 	if err := wails.Updater.Init(updater.Config{
@@ -158,7 +158,7 @@ func newUpdateController(wails *application.App, core *app.App, log *slog.Logger
 		// below.
 		Window: updater.WindowNone,
 	}); err != nil {
-		log.Warn("обновление выключено", "err", err)
+		log.Warn("updates disabled", "err", err)
 		return nil
 	}
 	if settings.SkippedVersion != "" {
@@ -184,7 +184,7 @@ func newUpdateController(wails *application.App, core *app.App, log *slog.Logger
 	}
 	c.listen(wails)
 	go c.poll()
-	log.Info("обновление включено", "версия", appVersion, "лента", updateManifestURL)
+	log.Info("updates enabled", "version", appVersion, "feed", updateManifestURL)
 	return c
 }
 
@@ -251,7 +251,7 @@ func (c *updateController) listen(wails *application.App) {
 			c.publish(nil)
 			return
 		}
-		c.log.Warn("обновление не получилось", "шаг", string(info.Stage), "err", info.Message)
+		c.log.Warn("update failed", "stage", string(info.Stage), "err", info.Message)
 		c.publish(func(s *app.UpdateState) {
 			s.Error, s.ErrorStage = info.Message, string(info.Stage)
 		})
@@ -321,7 +321,7 @@ func (c *updateController) checked() {
 	settings := c.settings
 	c.mu.Unlock()
 	if err := writeUpdateSettings(c.path, settings); err != nil {
-		c.log.Warn("не удалось записать настройки обновления", "err", err)
+		c.log.Warn("could not write the update settings", "err", err)
 	}
 }
 
@@ -356,7 +356,7 @@ func (c *updateController) Skip() error {
 	version := c.state.AvailableVersion
 	c.mu.Unlock()
 	if version == "" {
-		return errors.New("нечего пропускать: обновление не найдено")
+		return msg.Err("update.nothingToSkip")
 	}
 
 	c.up.SkipVersion(version)
@@ -379,7 +379,7 @@ func (c *updateController) Skip() error {
 }
 
 // Check asks the feed. It returns as soon as the request is under way: the
-// answer arrives as the event, so the screen draws «ищу» from the same state
+// answer arrives as the event, so the screen draws «checking» from the same state
 // machine that draws everything else rather than from a promise.
 func (c *updateController) Check() error {
 	go func() {
@@ -407,7 +407,7 @@ func (c *updateController) Install() error {
 // download, a download already running — and without this they would be a line
 // in a log nobody has open and a button that appeared to do nothing.
 func (c *updateController) failed(stage updater.Stage, err error) {
-	c.log.Warn("обновление не получилось", "шаг", string(stage), "err", err)
+	c.log.Warn("update failed", "stage", string(stage), "err", err)
 	c.publish(func(s *app.UpdateState) {
 		s.Error, s.ErrorStage = err.Error(), string(stage)
 	})
@@ -419,7 +419,7 @@ func (c *updateController) failed(stage updater.Stage, err error) {
 // updater.HandleHelperMode before anything else.
 func (c *updateController) Restart() error {
 	if err := c.up.Restart(context.Background()); err != nil {
-		return fmt.Errorf("не удалось перезапустить: %w", err)
+		return msg.Wrap(err, "update.restartFailed")
 	}
 	return nil
 }

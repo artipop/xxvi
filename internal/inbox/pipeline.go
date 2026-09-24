@@ -9,13 +9,13 @@
 package inbox
 
 import (
-	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/store"
 )
 
@@ -74,7 +74,7 @@ func (p *Pipeline) Ingest(sourceName string, items []model.Item) ([]Result, erro
 		return nil, err
 	}
 	if !src.Enabled {
-		return nil, fmt.Errorf("источник «%s» выключен", src.Name)
+		return nil, msg.Err("source.disabled", "source", src.Name)
 	}
 
 	p.mu.Lock()
@@ -85,7 +85,7 @@ func (p *Pipeline) Ingest(sourceName string, items []model.Item) ([]Result, erro
 	for _, item := range items {
 		res, err := p.one(src, item.WithFallbackID())
 		if err != nil {
-			p.log.Warn("элемент источника не обработан", "source", src.Name, "item", item.ExternalID, "err", err)
+			p.log.Warn("source item not handled", "source", src.Name, "item", item.ExternalID, "err", err)
 			continue
 		}
 		if res.Outcome == OutcomeCreated || res.Outcome == OutcomeUpdated {
@@ -164,9 +164,10 @@ func (p *Pipeline) update(src model.Source, card model.Card, item model.Item, re
 	if _, err := p.store.UpdateCard(card.ID, store.CardEdit{Title: &title, Body: &body, URL: &url}); err != nil {
 		return Result{}, err
 	}
+	itemChanged := msg.New("journal.itemChanged", "source", src.Name)
 	if _, err := p.store.Record(model.JournalEntry{
 		CardID: card.ID, Kind: model.EntrySource, Author: src.Name,
-		Text: fmt.Sprintf("Источник «%s»: элемент изменился, карточка обновлена.", src.Name),
+		Msg: &itemChanged,
 	}); err != nil {
 		return Result{}, err
 	}
@@ -203,7 +204,7 @@ func (p *Pipeline) existingCard(source, externalID string) (model.Card, bool, er
 // the inbox directly.
 func (p *Pipeline) AddManual(source, title, body string, props map[string]string) (model.Card, error) {
 	if strings.TrimSpace(title) == "" {
-		return model.Card{}, fmt.Errorf("у карточки нет заголовка")
+		return model.Card{}, msg.Err("card.noTitle")
 	}
 	card, err := p.store.CreateCard(model.Card{
 		Source: strings.TrimSpace(source), Title: strings.TrimSpace(title),
@@ -243,21 +244,26 @@ func mergeProps(item, rule map[string]string, suggestFlow string) map[string]str
 }
 
 // PropSuggestedFlow is where a rule's suggestion lands on the card. It is an
-// ordinary property so that nothing special has to know about it: the «В
-// работу» dialog reads it to preselect a flow, and a person can change or
-// remove it like any other.
-const PropSuggestedFlow = "Флоу"
+// ordinary property so that nothing special has to know about it: the «Take
+// into work» dialog reads it to preselect a flow, and a person can change or
+// remove it like any other. An identifier rather than a word, like the outcome
+// field: the UI words it.
+const PropSuggestedFlow = "Flow"
 
 func itemTitle(item model.Item) string {
 	if title := strings.TrimSpace(item.Title); title != "" {
 		return title
 	}
 	// An item with no title still has to become something readable, and its
-	// first line is the best guess anybody has.
+	// first line is the best guess anybody has — then what the source calls
+	// it, which is at least the same every time the item comes back.
 	if line, _, _ := strings.Cut(strings.TrimSpace(item.Body), "\n"); line != "" {
 		return line
 	}
-	return "Без заголовка"
+	if id := strings.TrimSpace(item.ExternalID); id != "" {
+		return id
+	}
+	return "—"
 }
 
 func itemTime(item model.Item) time.Time {

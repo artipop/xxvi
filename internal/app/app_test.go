@@ -59,7 +59,7 @@ func TestExamplesUseEveryTrigger(t *testing.T) {
 	}
 	for _, tr := range model.Triggers {
 		if !used[tr.Kind] {
-			t.Fatalf("ни один пример не использует событие «%s»", tr.Label)
+			t.Fatalf("ни один пример не использует событие «%s»", tr.Kind)
 		}
 	}
 }
@@ -74,7 +74,7 @@ func TestSeedingHappensOnceOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("первый запуск: %v", err)
 	}
-	if err := first.Store.DeleteFlow(mustFlow(t, first, "Разработка").ID); err != nil {
+	if err := first.Store.DeleteFlow(mustFlow(t, first, "Development").ID); err != nil {
 		t.Fatalf("удалить флоу: %v", err)
 	}
 	first.Close()
@@ -125,12 +125,12 @@ func TestRibbonOpensOnTheScreensTheExampleDeclares(t *testing.T) {
 	flows, _ := a.Store.Flows()
 	var dev model.Flow
 	for _, f := range flows {
-		if f.Name == "Разработка" {
+		if f.Name == "Development" {
 			dev = f
 		}
 	}
 	if dev.ID == "" {
-		t.Fatal("пример «Разработка» не создан")
+		t.Fatal("пример «Development» не создан")
 	}
 
 	card, err := api.AddCard("", "Починить форму входа", "")
@@ -161,7 +161,7 @@ func TestRibbonOpensOnTheScreensTheExampleDeclares(t *testing.T) {
 		t.Fatalf("терминал агента — первый экран его сегмента: %+v", screens)
 	}
 	notes := screens[1]
-	if notes.Kind != model.ScreenNotes || notes.Ref != "план.md" {
+	if notes.Kind != model.ScreenNotes || notes.Ref != "plan.md" {
 		t.Fatalf("первый шаг показывает план, который ведёт агент: %+v", notes)
 	}
 	if view.FocusID != screens[0].ID {
@@ -266,23 +266,23 @@ func TestACardWorksInItsProjectFolder(t *testing.T) {
 
 	// The notes screen writes through the same working folder the agent gets,
 	// so this is the whole resolution tested at once.
-	if err := api.WriteDoc(card.ID, "план.md", "# план"); err != nil {
+	if err := api.WriteDoc(card.ID, "plan.md", "# план"); err != nil {
 		t.Fatalf("записать заметки: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(folder, "план.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(folder, "plan.md")); err != nil {
 		t.Fatalf("заметки должны лечь в папку проекта: %v", err)
 	}
 
 	// And without a project the card keeps a folder of its own, which is the
 	// right answer for work that starts from a blank page.
 	other, _ := api.AddCard("", "С чистого листа", "")
-	if err := api.WriteDoc(other.ID, "план.md", "# план"); err != nil {
+	if err := api.WriteDoc(other.ID, "plan.md", "# план"); err != nil {
 		t.Fatalf("записать заметки: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(folder, "план.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(folder, "plan.md")); err != nil {
 		t.Fatal("папка проекта не должна была измениться")
 	}
-	if _, err := os.Stat(filepath.Join(a.DataDir, "work", other.ID, "план.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(a.DataDir, "work", other.ID, "plan.md")); err != nil {
 		t.Fatalf("карточка без проекта работает в своей папке: %v", err)
 	}
 }
@@ -309,7 +309,7 @@ func TestAMissingProjectFolderIsAnError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := api.WriteDoc(card.ID, "план.md", "# план"); err == nil {
+	if err := api.WriteDoc(card.ID, "plan.md", "# план"); err == nil {
 		t.Fatal("исчезнувшая папка проекта должна быть отказом, а не тихой подменой места")
 	}
 }
@@ -357,7 +357,7 @@ func TestAProjectInUseIsNotDeleted(t *testing.T) {
 // one thing that cannot.
 func TestPickingAFolderNeedsAWindow(t *testing.T) {
 	api := NewAPI(open(t))
-	if _, err := api.PickFolder(""); err == nil {
+	if _, err := api.PickFolder("", ""); err == nil {
 		t.Fatal("без окна выбор папки невозможен и должен об этом сказать")
 	}
 }
@@ -370,7 +370,7 @@ func TestAPickedFolderBecomesTheProjectPath(t *testing.T) {
 	folder := t.TempDir()
 	a.SetChooser(fakeChooser{folder: folder})
 
-	got, err := api.PickFolder("")
+	got, err := api.PickFolder("", "")
 	if err != nil || got != folder {
 		t.Fatalf("выбранная папка должна вернуться как есть: %q (%v)", got, err)
 	}
@@ -379,7 +379,7 @@ func TestAPickedFolderBecomesTheProjectPath(t *testing.T) {
 	}
 
 	a.SetChooser(fakeChooser{})
-	if got, err := api.PickFolder(""); err != nil || got != "" {
+	if got, err := api.PickFolder("", ""); err != nil || got != "" {
 		t.Fatalf("закрытый диалог — это пусто, а не ошибка: %q (%v)", got, err)
 	}
 }
@@ -443,7 +443,7 @@ func TestTheDiffScreenReadsTheCardsProject(t *testing.T) {
 	if err := api.WriteDoc(card.ID, "форма.txt", "стало\n"); err != nil {
 		t.Fatalf("правка: %v", err)
 	}
-	if err := api.WriteDoc(card.ID, "план.md", "# план\n"); err != nil {
+	if err := api.WriteDoc(card.ID, "plan.md", "# план\n"); err != nil {
 		t.Fatalf("новый файл: %v", err)
 	}
 
@@ -458,7 +458,7 @@ func TestTheDiffScreenReadsTheCardsProject(t *testing.T) {
 	for _, f := range diff.Files {
 		seen[f.Path] = f.Status
 	}
-	if seen["форма.txt"] != gitdiff.StatusModified || seen["план.md"] != gitdiff.StatusAdded {
+	if seen["форма.txt"] != gitdiff.StatusModified || seen["plan.md"] != gitdiff.StatusAdded {
 		t.Fatalf("дифф должен назвать, что с каждым файлом: %+v", seen)
 	}
 }
@@ -486,7 +486,7 @@ func TestTheDiffScreenSaysWhenThereIsNoRepository(t *testing.T) {
 func TestStartTaskGoesStraightToWork(t *testing.T) {
 	a := open(t)
 	api := NewAPI(a)
-	dev := mustFlow(t, a, "Разработка")
+	dev := mustFlow(t, a, "Development")
 	proj, err := api.SaveProject(model.Project{Name: "Тут", Kind: model.ProjectFolder, Path: t.TempDir()})
 	if err != nil {
 		t.Fatalf("проект: %v", err)
@@ -579,7 +579,7 @@ func TestWorkModeIsARepositoryQuestionAnsweredOnce(t *testing.T) {
 		t.Fatal("ветка уже есть — проект не меняется")
 	}
 
-	if _, err := api.StartTask("Ещё", plain.ID, model.WorkModeWorktree, "Claude", mustFlow(t, a, "Разработка").ID); err == nil {
+	if _, err := api.StartTask("Ещё", plain.ID, model.WorkModeWorktree, "Claude", mustFlow(t, a, "Development").ID); err == nil {
 		t.Fatal("задача с деревом в папке без git — отказ до создания")
 	}
 }

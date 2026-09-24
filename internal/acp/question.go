@@ -2,7 +2,6 @@ package acp
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // A question is an agent asking the person whose card it is working, and
@@ -114,7 +114,7 @@ func (m *Manager) ask(ctx context.Context, s *session, q Question) Answer {
 	m.record(s, model.EntryAsk, questionEntry(q))
 	m.setStatus(s, statusAsking)
 	m.emitAttention(q.attention())
-	m.log.Info("агент спрашивает", "session", s.id, "card", q.CardID, "kind", q.Kind, "tool", q.Tool)
+	m.log.Info("agent asks", "session", s.id, "card", q.CardID, "kind", q.Kind, "tool", q.Tool)
 
 	var answer Answer
 	select {
@@ -153,7 +153,7 @@ func (m *Manager) Answer(id string, ans Answer) error {
 	pending, ok := m.questions[id]
 	m.questionsMu.Unlock()
 	if !ok {
-		return fmt.Errorf("вопрос уже неактуален")
+		return msg.Err("question.gone")
 	}
 	select {
 	case pending.reply <- ans:
@@ -161,7 +161,7 @@ func (m *Manager) Answer(id string, ans Answer) error {
 	default:
 		// Buffered by one and removed by the asker, so a full channel means an
 		// answer is already on its way.
-		return fmt.Errorf("на этот вопрос уже отвечают")
+		return msg.Err("question.beingAnswered")
 	}
 }
 
@@ -222,21 +222,24 @@ func (m *Manager) QuestionForCard(cardID string) *Question {
 //
 // A **silent terminal** is the other one, and it is not answerable from here on
 // purpose: the agent asked inside its own interface, where the question was
-// never ours to carry (docs/system.md §4.1.1). What the row says is «сходи
-// посмотри», and the answer is typed where it was asked.
+// never ours to carry (docs/system.md §4.1.1). What the row says is «go and
+// look», and the answer is typed where it was asked.
 //
 // It is a separate shape from Question so that the panel and the mark on a card
 // read the same list — one bookkeeping of the fact, not two.
 type Attention struct {
-	Key        string           `json:"key"`
-	QuestionID string           `json:"questionId"`
-	CardID     string           `json:"cardId,omitempty"`
-	CardTitle  string           `json:"cardTitle,omitempty"`
-	Agent      string           `json:"agent,omitempty"`
-	Tool       string           `json:"tool,omitempty"`
-	Text       string           `json:"text,omitempty"`
-	Options    []QuestionOption `json:"options,omitempty"`
-	FreeText   bool             `json:"freeText,omitempty"`
+	Key        string `json:"key"`
+	QuestionID string `json:"questionId"`
+	CardID     string `json:"cardId,omitempty"`
+	CardTitle  string `json:"cardTitle,omitempty"`
+	Agent      string `json:"agent,omitempty"`
+	// Kind is which question it is, on a question: a permission is worded
+	// around the tool it is for, a form around the agent's own message.
+	Kind     QuestionKind     `json:"kind,omitempty"`
+	Tool     string           `json:"tool,omitempty"`
+	Text     string           `json:"text,omitempty"`
+	Options  []QuestionOption `json:"options,omitempty"`
+	FreeText bool             `json:"freeText,omitempty"`
 	// Awaiting is false in an event that says a wait ended; the list only ever
 	// carries true.
 	Awaiting bool      `json:"awaiting"`
@@ -256,7 +259,7 @@ type Attention struct {
 func (q Question) attention() Attention {
 	return Attention{
 		Key: "q:" + q.ID, QuestionID: q.ID, CardID: q.CardID, CardTitle: q.CardTitle,
-		Agent: q.Agent, Tool: q.Tool, Text: q.Text, Options: q.Options, FreeText: q.FreeText,
+		Agent: q.Agent, Kind: q.Kind, Tool: q.Tool, Text: q.Text, Options: q.Options, FreeText: q.FreeText,
 		Awaiting: true, Since: q.AskedAt,
 	}
 }
@@ -291,7 +294,6 @@ func (m *Manager) raiseQuiet(s *session) {
 		CardID:    s.card.ID,
 		CardTitle: s.card.Title,
 		Agent:     s.agent.Name,
-		Text:      "Терминал агента молчит — посмотрите, не ждёт ли он ответа",
 		Awaiting:  true,
 		Since:     time.Now(),
 	}
@@ -301,7 +303,7 @@ func (m *Manager) raiseQuiet(s *session) {
 
 	m.setStatus(s, statusAsking)
 	m.emitAttention(a)
-	m.log.Info("терминал стадии молчит", "session", s.id, "card", s.card.ID)
+	m.log.Info("stage terminal is quiet", "session", s.id, "card", s.card.ID)
 }
 
 // clearQuiet takes the mark off — the CLI drew something, or the step ended.
@@ -320,26 +322,28 @@ func (m *Manager) clearQuiet(s *session) {
 	m.emitAttention(a)
 }
 
-func questionEntry(q Question) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Агент %s спрашивает:\n\n%s", q.Agent, q.Text)
+// questionEntry is the question for the journal. The options are the agent's
+// own words and go in as they are, one line each.
+func questionEntry(q Question) msg.Msg {
+	var options strings.Builder
 	for _, opt := range q.Options {
-		b.WriteString("\n- " + opt.Label)
+		options.WriteString("\n- " + opt.Label)
 		if opt.Description != "" {
-			b.WriteString(" — " + opt.Description)
+			options.WriteString(" — " + opt.Description)
 		}
 	}
-	return b.String()
+	return msg.New("journal.asked", "agent", q.Agent, "kind", string(q.Kind), "tool", q.Tool,
+		"text", q.Text, "options", strings.TrimPrefix(options.String(), "\n"))
 }
 
-func answerEntry(q Question, ans Answer) string {
+func answerEntry(q Question, ans Answer) msg.Msg {
 	switch {
 	case ans.Declined || ans.empty():
-		return fmt.Sprintf("Вопрос агента %s остался без ответа — работа продолжена без него.", q.Agent)
+		return msg.New("journal.unanswered", "agent", q.Agent)
 	case ans.Text != "":
-		return fmt.Sprintf("Ответ агенту %s: %s", q.Agent, ans.Text)
+		return msg.New("journal.answered", "agent", q.Agent, "answer", ans.Text)
 	default:
-		return fmt.Sprintf("Ответ агенту %s: %s", q.Agent, optionLabel(q, ans.OptionID))
+		return msg.New("journal.answered", "agent", q.Agent, "answer", optionLabel(q, ans.OptionID))
 	}
 }
 

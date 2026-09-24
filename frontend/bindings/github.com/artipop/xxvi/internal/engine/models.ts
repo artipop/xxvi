@@ -4,6 +4,9 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as model$0 from "../model/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as msg$0 from "../msg/models.js";
 
 /**
  * CardFlow is the whole answer for one card.
@@ -16,10 +19,10 @@ export interface CardFlow {
     "since": string;
 
     /**
-     * WaitingFor is what the stage is waiting on, in a person's words and with
-     * the conditions spelled out. Empty on a stage that runs something.
+     * WaitingFor is what the stage is waiting on: the events, and the conditions
+     * that make them the ones. Empty on a stage that runs something.
      */
-    "waitingFor"?: string[] | null;
+    "waitingFor"?: model$0.Wait[] | null;
 
     /**
      * waiting for a place on the stage
@@ -70,7 +73,8 @@ export interface FlowOverview {
  * the step broke.
  */
 export interface Notice {
-    "text": string;
+    "msg"?: msg$0.Msg | null;
+    "text"?: string;
     "author"?: string;
     "at": string;
 }
@@ -116,7 +120,17 @@ export interface ScreenView {
      */
     "id": string;
     "kind": string;
-    "title": string;
+
+    /**
+     * Title is what the stage called the screen. Empty when it did not, and on
+     * an agent's own screen, which the UI names by its kind and Agent.
+     */
+    "title"?: string;
+
+    /**
+     * Agent is whose run the screen shows, on an agent's own screen.
+     */
+    "agent"?: string;
 
     /**
      * Ref is what to open, with the card's properties already put in.
@@ -139,7 +153,7 @@ export interface ScreenView {
      * Report is what the run said its step came to. A terminal has nowhere
      * else to show it: the agent hands it over in a tool call, not on screen.
      */
-    "report"?: string;
+    "report"?: msg$0.Msg | null;
 }
 
 /**
@@ -162,7 +176,7 @@ export interface Segment {
     "stageId": string;
     "stageName": string;
     "on"?: string;
-    "detail"?: string;
+    "detail"?: msg$0.Msg | null;
     "enteredAt": string;
     "current": boolean;
 

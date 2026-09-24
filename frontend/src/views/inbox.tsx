@@ -2,6 +2,7 @@ import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Card, InboxGroup } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import { applyCard, flows, guard, inbox, list, loadInbox, openCardByID, projects, setInbox, showRibbon, sources } from "../state";
+import { propName, propValue, t } from "../i18n";
 
 // The inbox: what the sources brought, grouped by what brought it. A card here
 // does nothing until somebody takes it into work — that decision is the whole
@@ -9,7 +10,7 @@ import { applyCard, flows, guard, inbox, list, loadInbox, openCardByID, projects
 
 /** SUGGESTED is the property a source's rule fills in to prefill this dialog.
  *  It is an ordinary property, so nothing special has to know about it. */
-const SUGGESTED = "Флоу";
+const SUGGESTED = "Flow";
 
 export default function InboxView() {
   const [own, setOwn] = createSignal(false);
@@ -17,25 +18,23 @@ export default function InboxView() {
   return (
     <>
       <div class="row">
-        <h1>Входящие</h1>
+        <h1>{t("inbox.title")}</h1>
         <div class="spacer" />
         {/* A task a person thought of is not an item somebody sent: it belongs
             to nobody's stream and has no rules to meet. Until this button it
             had to pretend to be one — typed into a source's file and filtered
             by rules written about other people's mail. */}
         <button class="btn" onClick={() => setOwn(!own())}>
-          {own() ? "Отмена" : "Своя задача"}
+          {own() ? t("common.cancel") : t("inbox.own")}
         </button>
       </div>
-      <p class="lede">
-        Задачи, которые ещё не взяли в работу. Ничего не происходит, пока карточку не взяли.
-      </p>
+      <p class="lede">{t("inbox.lede")}</p>
 
       <Show when={own()}>
         <AddOwn onDone={() => setOwn(false)} />
       </Show>
       <Show when={inbox().length > 0} fallback={
-        <div class="empty">Пусто. Заведите задачу кнопкой «Своя задача».</div>
+        <div class="empty">{t("inbox.empty")}</div>
       }>
         <For each={inbox()}>{(group) => <Group group={group} />}</For>
       </Show>
@@ -45,7 +44,7 @@ export default function InboxView() {
 
 function Group(props: { group: InboxGroup }) {
   const [adding, setAdding] = createSignal(false);
-  const name = () => props.group.source || "Без источника";
+  const name = () => props.group.source || t("inbox.noSource");
 
   const poll = async () => {
     const groups = await guard(() => API.PollSource(props.group.source));
@@ -59,9 +58,9 @@ function Group(props: { group: InboxGroup }) {
         <span class="meta">{list(props.group.cards).length}</span>
         <div class="spacer" />
         <Show when={props.group.source}>
-          <button class="btn quiet" onClick={poll}>Прочитать сейчас</button>
+          <button class="btn quiet" onClick={poll}>{t("inbox.poll")}</button>
           <button class="btn quiet" onClick={() => setAdding(!adding())}>
-            {adding() ? "Отмена" : "Добавить элемент"}
+            {adding() ? t("common.cancel") : t("inbox.addItem")}
           </button>
         </Show>
       </div>
@@ -76,7 +75,7 @@ function Group(props: { group: InboxGroup }) {
 }
 
 // A card straight into the inbox: no source, no rules, nothing to match. It is
-// grouped under «Без источника», which is what a card nobody sent is.
+// grouped under «No source», which is what a card nobody sent is.
 function AddOwn(props: { onDone: () => void }) {
   const [title, setTitle] = createSignal("");
   const [body, setBody] = createSignal("");
@@ -92,17 +91,17 @@ function AddOwn(props: { onDone: () => void }) {
   return (
     <div class="card">
       <label class="field">
-        <span>Что нужно сделать</span>
+        <span>{t("inbox.whatToDo")}</span>
         <input type="text" value={title()} onInput={(e) => setTitle(e.currentTarget.value)} />
       </label>
       <label class="field">
-        <span>Подробности</span>
+        <span>{t("inbox.details")}</span>
         <textarea value={body()} onInput={(e) => setBody(e.currentTarget.value)} />
       </label>
       <div class="row">
-        <span class="meta">Карточка заводится сразу и ничьих правил не проходит.</span>
+        <span class="meta">{t("inbox.ownNote")}</span>
         <div class="spacer" />
-        <button class="btn primary" onClick={submit}>Завести</button>
+        <button class="btn primary" onClick={submit}>{t("inbox.create")}</button>
       </div>
     </div>
   );
@@ -124,11 +123,11 @@ function AddItem(props: { source: string; onDone: () => void }) {
   return (
     <div class="card">
       <label class="field">
-        <span>Заголовок</span>
+        <span>{t("inbox.itemTitle")}</span>
         <input type="text" value={title()} onInput={(e) => setTitle(e.currentTarget.value)} />
       </label>
       <label class="field">
-        <span>Текст</span>
+        <span>{t("inbox.itemBody")}</span>
         <textarea value={body()} onInput={(e) => setBody(e.currentTarget.value)} />
       </label>
       {/* A noisy source drops whatever no rule matched, and that is right for a
@@ -136,16 +135,13 @@ function AddItem(props: { source: string; onDone: () => void }) {
           source, and typing a task into this one would lose it without a word.
           A rule here is a subscription; saying so is cheaper than the silence. */}
       <Show when={noisy()}>
-        <div class="warn-note">
-          Источник «{props.source}» помечен шумным: всё, что не совпало ни с одним его
-          правилом, отбрасывается молча. Свою задачу лучше завести кнопкой «Своя задача».
-        </div>
+        <div class="warn-note">{t("inbox.noisy", { source: props.source })}</div>
       </Show>
 
       <div class="row">
-        <span class="meta">Элемент дописывается в файл источника и проходит его правила.</span>
+        <span class="meta">{t("inbox.itemNote")}</span>
         <div class="spacer" />
-        <button class="btn primary" onClick={submit}>Добавить</button>
+        <button class="btn primary" onClick={submit}>{t("common.add")}</button>
       </div>
     </div>
   );
@@ -162,7 +158,7 @@ function InboxCard(props: { card: Card }) {
     return byName?.id ?? flows()[0]?.id ?? "";
   };
 
-  // «Сделай» is one gesture: the card goes onto the flow and the ribbon that
+  // «Do it» is one gesture: the card goes onto the flow and the ribbon that
   // shows it opens. Taking a card into work and watching it start are the same
   // moment, and making them two clicks would be making them two decisions.
   // Where and by which route, answered in one gesture. The project is a
@@ -189,7 +185,7 @@ function InboxCard(props: { card: Card }) {
               style={{ cursor: "pointer" }}>{props.card.title}</span>
         <div class="spacer" />
         <For each={Object.entries(props.card.props ?? {})}>
-          {([name, value]) => <Show when={name !== SUGGESTED}><span class="tag">{name}: {value}</span></Show>}
+          {([name, value]) => <Show when={name !== SUGGESTED}><span class="tag">{propName(name)}: {propValue(name, value ?? "")}</span></Show>}
         </For>
       </div>
 
@@ -203,17 +199,17 @@ function InboxCard(props: { card: Card }) {
         </select>
         <Show when={projects().length > 0}>
           <select value={projectID()} onChange={(e) => setProjectID(e.currentTarget.value)}
-                  style={{ width: "auto" }} title="Где делать">
-            <option value="">своя папка</option>
+                  style={{ width: "auto" }} title={t("inbox.where")}>
+            <option value="">{t("common.ownFolder")}</option>
             <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
           </select>
         </Show>
-        <button class="btn primary" onClick={take} disabled={flows().length === 0}>Сделай</button>
+        <button class="btn primary" onClick={take} disabled={flows().length === 0}>{t("inbox.doIt")}</button>
         <Show when={suggested()}>
-          <span class="meta">источник предлагает «{suggested()}»</span>
+          <span class="meta">{t("inbox.suggests", { flow: suggested() })}</span>
         </Show>
         <div class="spacer" />
-        <button class="btn quiet" onClick={drop}>Отбросить</button>
+        <button class="btn quiet" onClick={drop}>{t("common.drop")}</button>
       </div>
     </div>
   );

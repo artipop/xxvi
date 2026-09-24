@@ -13,8 +13,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/jmoiron/sqlx"
 	_ "modernc.org/sqlite" // pure-Go driver: no cgo, so the build cross-compiles
 )
@@ -30,25 +32,25 @@ type Store struct {
 func Open(path string) (*Store, error) {
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, fmt.Errorf("создать папку для базы: %w", err)
+			return nil, fmt.Errorf("create database folder: %w", err)
 		}
 	}
 	d := sqliteDialect{}
 	db, err := sqlx.Open(d.Name(), d.DSN(path))
 	if err != nil {
-		return nil, fmt.Errorf("открыть базу: %w", err)
+		return nil, fmt.Errorf("open database: %w", err)
 	}
 	// SQLite takes one writer at a time; more connections buy contention, not
 	// throughput, and WAL already keeps readers out of the writer's way.
 	db.SetMaxOpenConns(1)
 	if err := db.Ping(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("база не отвечает: %w", err)
+		return nil, fmt.Errorf("database does not answer: %w", err)
 	}
 	for _, stmt := range d.Setup() {
 		if _, err := db.Exec(stmt); err != nil {
 			db.Close()
-			return nil, fmt.Errorf("подготовить соединение (%s): %w", stmt, err)
+			return nil, fmt.Errorf("prepare connection (%s): %w", stmt, err)
 		}
 	}
 	s := &Store{db: db, d: d}
@@ -90,33 +92,33 @@ func (s *Store) migrate() error {
 		version    INTEGER PRIMARY KEY,
 		applied_at INTEGER NOT NULL
 	)`); err != nil {
-		return fmt.Errorf("таблица миграций: %w", err)
+		return fmt.Errorf("migrations table: %w", err)
 	}
 	var applied int
 	if err := s.db.Get(&applied, `SELECT COALESCE(MAX(version), 0) FROM schema_migration`); err != nil {
-		return fmt.Errorf("прочитать версию схемы: %w", err)
+		return fmt.Errorf("read schema version: %w", err)
 	}
 	steps := s.d.Migrations()
 	if applied > len(steps) {
-		return fmt.Errorf("база собрана более новой версией приложения (схема %d, известно %d)", applied, len(steps))
+		return msg.Err("store.newerSchema", "applied", strconv.Itoa(applied), "known", strconv.Itoa(len(steps)))
 	}
 	for i := applied; i < len(steps); i++ {
 		version := i + 1
 		tx, err := s.db.Begin()
 		if err != nil {
-			return fmt.Errorf("миграция %d: %w", version, err)
+			return fmt.Errorf("migration %d: %w", version, err)
 		}
 		if _, err := tx.Exec(steps[i]); err != nil {
 			tx.Rollback()
-			return fmt.Errorf("миграция %d: %w", version, err)
+			return fmt.Errorf("migration %d: %w", version, err)
 		}
 		if _, err := tx.Exec(`INSERT INTO schema_migration (version, applied_at) VALUES (?, ?)`,
 			version, millis(time.Now())); err != nil {
 			tx.Rollback()
-			return fmt.Errorf("миграция %d: отметка о применении: %w", version, err)
+			return fmt.Errorf("migration %d: mark applied: %w", version, err)
 		}
 		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("миграция %d: %w", version, err)
+			return fmt.Errorf("migration %d: %w", version, err)
 		}
 	}
 	return nil

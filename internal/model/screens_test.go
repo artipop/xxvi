@@ -123,17 +123,17 @@ func TestScreensAreRefusedWhenTheyCouldNotBeShown(t *testing.T) {
 		screens []Screen
 		says    string
 	}{
-		{"неизвестный вид", []Screen{{Kind: "хрусталь", Ref: "x"}}, "вид экрана"},
-		{"браузеру нечего открыть", []Screen{{Kind: ScreenBrowser}}, "что показывать"},
-		{"заметкам нечего открыть", []Screen{{Kind: ScreenNotes}}, "что показывать"},
-		{"путь к заметкам абсолютный", []Screen{{Kind: ScreenNotes, Ref: "/etc/passwd"}}, "относительным"},
-		{"путь к заметкам уходит вверх", []Screen{{Kind: ScreenNotes, Ref: "../../секрет"}}, "выходит из папки"},
-		{"обход через середину пути", []Screen{{Kind: ScreenNotes, Ref: "docs/../../секрет"}}, "выходит из папки"},
-		{"дифф сравнивает не с ревизией", []Screen{{Kind: ScreenDiff, Ref: "--exec=rm"}}, "не ревизия"},
+		{"неизвестный вид", []Screen{{Kind: "хрусталь", Ref: "x"}}, "screen.unknownKind"},
+		{"браузеру нечего открыть", []Screen{{Kind: ScreenBrowser}}, "screen.noRef"},
+		{"заметкам нечего открыть", []Screen{{Kind: ScreenNotes}}, "screen.noRef"},
+		{"путь к заметкам абсолютный", []Screen{{Kind: ScreenNotes, Ref: "/etc/passwd"}}, "notes.absolute"},
+		{"путь к заметкам уходит вверх", []Screen{{Kind: ScreenNotes, Ref: "../../секрет"}}, "notes.escapes"},
+		{"обход через середину пути", []Screen{{Kind: ScreenNotes, Ref: "docs/../../секрет"}}, "notes.escapes"},
+		{"дифф сравнивает не с ревизией", []Screen{{Kind: ScreenDiff, Ref: "--exec=rm"}}, "diff.notRevision"},
 		{"два одинаковых экрана", []Screen{
 			{Kind: ScreenBrowser, Ref: "{Превью}"},
 			{Kind: ScreenBrowser, Ref: "{Превью}"},
-		}, "дважды"},
+		}, "screen.twice"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

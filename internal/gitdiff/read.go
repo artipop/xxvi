@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // Limits. A diff nobody can scroll to the end of is not more useful than one
@@ -25,15 +27,15 @@ const (
 	maxUntrackedBytes = 256 << 10
 )
 
-// ErrNoRepo is the folder having no git in it. It is a sentence to the person
+// ErrNoRepo is the folder having no git in it. It is news for the person
 // rather than a failure of the screen: a card whose project is not a repository
 // is an ordinary card, and the diff screen says so and stays.
-var ErrNoRepo = errors.New("в рабочей папке карточки нет git-репозитория")
+var ErrNoRepo = msg.Err("diff.noRepo")
 
-// ErrNoGit is git missing from the machine. The sentence says why installing it
+// ErrNoGit is git missing from the machine. What the UI says makes installing it
 // is the whole fix: the screen has no comparison of its own to fall back on,
 // and that is a decision rather than a gap — see docs/system.md §12.7.
-var ErrNoGit = errors.New("git не найден на этой машине: дифф не сравнивает файлы сам, он показывает то, что скажет git")
+var ErrNoGit = msg.Err("diff.noGit")
 
 // Diff is everything one diff screen shows.
 type Diff struct {
@@ -50,7 +52,7 @@ type Diff struct {
 	Branch  string `json:"branch,omitempty"`
 	Base    string `json:"base,omitempty"`
 	Commits int    `json:"commits,omitempty"`
-	Files []File `json:"files"`
+	Files   []File `json:"files"`
 	// Truncated says the patch was bigger than the screen keeps. The counts on
 	// each file stay true regardless: they are what a person decides by.
 	Truncated bool `json:"truncated,omitempty"`
@@ -74,7 +76,7 @@ type Diff struct {
 // run `git add` yet would hide exactly the change most worth looking at.
 func Read(ctx context.Context, dir, ref, base string) (Diff, error) {
 	if strings.TrimSpace(dir) == "" {
-		return Diff{}, fmt.Errorf("не задана папка, в которой смотреть изменения")
+		return Diff{}, errors.New("no folder to look for changes in")
 	}
 	revs, err := revisions(ref)
 	if err != nil {
@@ -82,7 +84,7 @@ func Read(ctx context.Context, dir, ref, base string) (Diff, error) {
 	}
 	base = strings.TrimSpace(base)
 	if strings.HasPrefix(base, "-") {
-		return Diff{}, fmt.Errorf("«%s» — это не ревизия: основа карточки — ветка, от которой её отрезали", base)
+		return Diff{}, msg.Err("diff.baseNotRevision", "rev", base)
 	}
 	root, err := repoRoot(ctx, dir)
 	if err != nil {
@@ -147,7 +149,7 @@ type forkPoint struct {
 func forkOf(ctx context.Context, root, base string) (forkPoint, error) {
 	out, err := run(ctx, root, "merge-base", base, "HEAD")
 	if err != nil {
-		return forkPoint{}, fmt.Errorf("не нашли, где ветка задачи отошла от «%s»: %w", base, err)
+		return forkPoint{}, msg.Wrap(err, "diff.noForkPoint", "base", base)
 	}
 	fork := forkPoint{commit: strings.TrimSpace(out)}
 	if out, err := run(ctx, root, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
@@ -176,7 +178,7 @@ func revisions(ref string) ([]string, error) {
 	out := strings.Fields(ref)
 	for _, r := range out {
 		if strings.HasPrefix(r, "-") {
-			return nil, fmt.Errorf("«%s» — это не ревизия: ссылка экрана говорит, что с чем сравнить", r)
+			return nil, msg.Err("diff.notRevision", "rev", r)
 		}
 	}
 	return out, nil
@@ -188,7 +190,7 @@ func repoRoot(ctx context.Context, dir string) (string, error) {
 		return "", ErrNoGit
 	}
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-		return "", fmt.Errorf("рабочей папки карточки нет: %s", dir)
+		return "", msg.Err("diff.noFolder", "path", dir)
 	}
 	out, err := run(ctx, dir, "rev-parse", "--show-toplevel")
 	if err != nil {

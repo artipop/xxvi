@@ -20,6 +20,7 @@ package appmcp
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -33,6 +34,7 @@ import (
 
 	"github.com/artipop/xxvi/internal/engine"
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/store"
 )
 
@@ -100,17 +102,17 @@ func New(deps Deps, log *slog.Logger) *Server {
 func (s *Server) Listen() error {
 	token, err := s.deps.Store.Setting(tokenSetting, "")
 	if err != nil {
-		return fmt.Errorf("прочитать токен инструментов приложения: %w", err)
+		return fmt.Errorf("read the application tools token: %w", err)
 	}
 	if strings.TrimSpace(token) == "" {
 		token = uuid.NewString()
 		if err := s.deps.Store.SetSetting(tokenSetting, token); err != nil {
-			return fmt.Errorf("записать токен инструментов приложения: %w", err)
+			return fmt.Errorf("write the application tools token: %w", err)
 		}
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return fmt.Errorf("открыть порт инструментов приложения: %w", err)
+		return fmt.Errorf("open the application tools port: %w", err)
 	}
 	srv := &http.Server{Handler: s.handler()}
 
@@ -120,7 +122,7 @@ func (s *Server) Listen() error {
 
 	go func() {
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-			s.log.Error("сервер инструментов приложения остановлен", "err", err)
+			s.log.Error("application tools server stopped", "err", err)
 		}
 	}()
 	return nil
@@ -177,7 +179,7 @@ func (s *Server) handler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.allowed(r) {
-			http.Error(w, "неверный токен", http.StatusForbidden)
+			http.Error(w, "wrong token", http.StatusForbidden)
 			return
 		}
 		inner.ServeHTTP(w, r)
@@ -187,16 +189,16 @@ func (s *Server) handler() http.Handler {
 // instructions is what a session reads before it calls anything: the shape of
 // the application in the smallest number of sentences that still makes the
 // tools predictable.
-const instructions = `Это XXVI — входящие и флоу. Задача живёт карточкой: она лежит во входящих,
-человек или ты ставишь её на флоу (take_into_work), и дальше она едет по стадиям.
+const instructions = `This is XXVI — an inbox and flows. A task lives as a card: it sits in the inbox,
+a person or you put it on a flow (take_into_work), and from there it travels through stages.
 
-Стадия — единственное место, где карточка стоит. Шаг на ней кончается отчётом
-(finish_step): исход шага плюс значения, которые стадия обязалась оставить на
-карточке. Куда карточка поедет после отчёта, решает флоу, а не вызывающий, —
-поэтому «перейти к следующему шагу» здесь и есть finish_step с исходом done.
+A stage is the only place a card stands. A step on it ends with a report
+(finish_step): the step's outcome plus the values the stage promised to leave on
+the card. Where the card goes after the report is the flow's decision, not the
+caller's — so "go to the next step" here is exactly finish_step with the outcome done.
 
-Стадия, на которой ничего не выполняется, ждёт ответа: там finish_step ставит
-«Исход», а любое другое ожидаемое значение ставится set_property.`
+A stage where nothing runs waits for an answer: there finish_step sets
+"` + model.OutcomeProperty + `", and any other value it waits for is set with set_property.`
 
 // mcp is the tool set. Built per request rather than once: the server is
 // stateless, and a tool set holding nothing per-call costs nothing to build.
@@ -207,35 +209,36 @@ func (s *Server) mcp() *mcp.Server {
 	)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "flows",
-		Description: "Какие есть флоу: стадии, что на них происходит, какие значения они оставляют на карточке и по каким рёбрам карточка едет дальше.",
+		Description: "The flows there are: their stages, what happens on them, which values they leave on the card and along which edges the card moves on.",
 	}, s.flows)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "cards",
-		Description: "Карточки: во входящих, в работе или закрытые. Для тех, что в работе, сказано, на какой стадии стоят и чего ждут.",
+		Description: "Cards: in the inbox, in work or closed. For those in work, the stage they stand on and what they wait for.",
 	}, s.cards)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "card",
-		Description: "Одна карточка целиком: текст, свойства, стадия, чего она ждёт, рабочая папка и последние записи в её истории.",
+		Description: "One card in full: text, properties, stage, what it waits for, working folder and the latest entries of its history.",
 	}, s.card)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "add_card",
-		Description: "Завести карточку во входящих. Она никуда не едет, пока её не поставят на флоу.",
+		Description: "Add a card to the inbox. It goes nowhere until it is put on a flow.",
 	}, s.addCard)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "take_into_work",
-		Description: "Поставить карточку из входящих на входную стадию флоу. Это единственный способ начать движение.",
+		Description: "Put a card from the inbox on the entry stage of a flow. This is the only way to start it moving.",
 	}, s.takeIntoWork)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "finish_step",
-		Description: "Сказать, что текущий шаг карточки закончен, и чем — и тем самым перейти к следующему. " +
-			"На агентской стадии это отчёт о работе: исход done или failed плюс объявленные значения. " +
-			"На стадии, где ничего не выполняется, это ответ за неё: done ставит «Исход» = «прошло», failed — «не прошло». " +
-			"Куда поедет карточка, решает флоу.",
+		Description: "Say that the card's current step is finished, and how — and so move on to the next one. " +
+			"On an agent stage this is the work report: outcome done or failed plus the declared values. " +
+			"On a stage where nothing runs it answers for it: done sets «" + model.OutcomeProperty + "» = «" + model.OutcomePassed +
+			"», failed sets «" + model.OutcomeFailed + "». " +
+			"Where the card goes is the flow's decision.",
 	}, s.finishStep)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "set_property",
-		Description: "Поставить свойство карточки. Если стадия ждёт именно это значение, карточка поедет дальше; " +
-			"любое другое свойство просто ляжет на карточку.",
+		Description: "Set a property of a card. If the stage waits for exactly this value, the card moves on; " +
+			"any other property is simply put on the card.",
 	}, s.setProperty)
 	return srv
 }
@@ -250,7 +253,7 @@ func (s *Server) flows(_ context.Context, _ *mcp.CallToolRequest, _ noInput) (*m
 		return errorf("%v", err), nil, nil
 	}
 	if len(flows) == 0 {
-		return text("Флоу пока нет."), nil, nil
+		return text("There are no flows yet."), nil, nil
 	}
 	var b strings.Builder
 	for i, f := range flows {
@@ -263,7 +266,7 @@ func (s *Server) flows(_ context.Context, _ *mcp.CallToolRequest, _ noInput) (*m
 }
 
 type cardsInput struct {
-	State string `json:"state,omitempty" jsonschema:"какие карточки: work — в работе на флоу (по умолчанию), inbox — во входящих, done — закрытые"`
+	State string `json:"state,omitempty" jsonschema:"which cards: work — in work on a flow (the default), inbox — in the inbox, done — closed"`
 }
 
 func (s *Server) cards(_ context.Context, _ *mcp.CallToolRequest, in cardsInput) (*mcp.CallToolResult, any, error) {
@@ -277,27 +280,27 @@ func (s *Server) cards(_ context.Context, _ *mcp.CallToolRequest, in cardsInput)
 	case "dropped":
 		state = model.StateDropped
 	default:
-		return errorf("«%s» — не состояние карточки. Есть work, inbox, done и dropped.", in.State), nil, nil
+		return errorf("«%s» is not a card state. There are work, inbox, done and dropped.", in.State), nil, nil
 	}
 	cards, err := s.deps.Store.CardsInState(state)
 	if err != nil {
 		return errorf("%v", err), nil, nil
 	}
 	if len(cards) == 0 {
-		return text("Таких карточек нет."), nil, nil
+		return text("There are no such cards."), nil, nil
 	}
 	var b strings.Builder
 	for _, c := range cards {
 		fmt.Fprintf(&b, "- «%s» [%s]", c.Title, c.ID)
 		if place, err := s.deps.Engine.CardFlowFor(c.ID); err == nil && place != nil {
-			fmt.Fprintf(&b, " — флоу «%s», стадия «%s»", place.FlowName, stageName(*place))
+			fmt.Fprintf(&b, " — flow «%s», stage «%s»", place.FlowName, stageName(*place))
 			switch {
 			case place.Running:
-				b.WriteString(", шаг работает агент приложения")
+				b.WriteString(", an application agent is working the step")
 			case place.Queued:
-				b.WriteString(", ждёт места на стадии")
+				b.WriteString(", waiting for room on the stage")
 			case len(place.WaitingFor) > 0:
-				fmt.Fprintf(&b, ", ждёт: %s", strings.Join(place.WaitingFor, "; "))
+				fmt.Fprintf(&b, ", waiting for: %s", describeWaits(place.WaitingFor))
 			}
 		}
 		b.WriteString("\n")
@@ -306,7 +309,7 @@ func (s *Server) cards(_ context.Context, _ *mcp.CallToolRequest, in cardsInput)
 }
 
 type cardInput struct {
-	Card string `json:"card" jsonschema:"карточка: её id или заголовок"`
+	Card string `json:"card" jsonschema:"the card: its id or title"`
 }
 
 func (s *Server) card(_ context.Context, _ *mcp.CallToolRequest, in cardInput) (*mcp.CallToolResult, any, error) {
@@ -318,26 +321,26 @@ func (s *Server) card(_ context.Context, _ *mcp.CallToolRequest, in cardInput) (
 }
 
 type addCardInput struct {
-	Title string `json:"title" jsonschema:"заголовок — то, что нужно сделать"`
-	Body  string `json:"body,omitempty" jsonschema:"подробности: что известно о задаче"`
+	Title string `json:"title" jsonschema:"the title — what has to be done"`
+	Body  string `json:"body,omitempty" jsonschema:"details: what is known about the task"`
 }
 
 func (s *Server) addCard(_ context.Context, _ *mcp.CallToolRequest, in addCardInput) (*mcp.CallToolResult, any, error) {
 	if s.deps.Filer == nil {
-		return errorf("карточки сейчас заводить нечем — входящие не подняты"), nil, nil
+		return errorf("cards cannot be added right now — the inbox is not up"), nil, nil
 	}
 	card, err := s.deps.Filer.AddManual("", in.Title, in.Body, nil)
 	if err != nil {
 		return errorf("%v", err), nil, nil
 	}
-	return text(fmt.Sprintf("Карточка «%s» [%s] лежит во входящих. Чтобы она поехала, поставьте её на флоу (take_into_work).",
+	return text(fmt.Sprintf("The card «%s» [%s] is in the inbox. To get it moving, put it on a flow (take_into_work).",
 		card.Title, card.ID)), nil, nil
 }
 
 type takeInput struct {
-	Card   string `json:"card" jsonschema:"карточка: её id или заголовок"`
-	Flow   string `json:"flow" jsonschema:"флоу: его название или id"`
-	Worker string `json:"worker,omitempty" jsonschema:"кто работает шаги: имя агента из реестра приложения — и тогда его запускает приложение; любое другое имя — и приложение не запускает никого, шаги работает тот, кто зовёт эти инструменты"`
+	Card   string `json:"card" jsonschema:"the card: its id or title"`
+	Flow   string `json:"flow" jsonschema:"the flow: its name or id"`
+	Worker string `json:"worker,omitempty" jsonschema:"who works the steps: the name of an agent in the application registry — then the application starts it; any other name — then the application starts nobody, and the steps are worked by whoever calls these tools"`
 }
 
 func (s *Server) takeIntoWork(_ context.Context, _ *mcp.CallToolRequest, in takeInput) (*mcp.CallToolResult, any, error) {
@@ -365,10 +368,10 @@ func (s *Server) takeIntoWork(_ context.Context, _ *mcp.CallToolRequest, in take
 }
 
 type finishInput struct {
-	Card       string            `json:"card" jsonschema:"карточка: её id или заголовок"`
-	Outcome    string            `json:"outcome" jsonschema:"как кончился шаг: done или failed"`
-	Summary    string            `json:"summary" jsonschema:"что сделано, в нескольких предложениях — это ложится в историю карточки и это читает следующая стадия"`
-	Properties map[string]string `json:"properties,omitempty" jsonschema:"значения, которые стадия обязалась оставить на карточке, по имени свойства"`
+	Card       string            `json:"card" jsonschema:"the card: its id or title"`
+	Outcome    string            `json:"outcome" jsonschema:"how the step ended: done or failed"`
+	Summary    string            `json:"summary" jsonschema:"what was done, in a few sentences — it goes into the card's history and is what the next stage reads"`
+	Properties map[string]string `json:"properties,omitempty" jsonschema:"the values the stage promised to leave on the card, by property name"`
 }
 
 // finishStep ends the step a card stands on. Which of the engine's roads that
@@ -385,7 +388,7 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 		ok = true
 	case "failed", "failure", "fail":
 	default:
-		return errorf("«%s» — не исход шага. Ожидается done или failed.", in.Outcome), nil, nil
+		return errorf("«%s» is not a step outcome. Expected done or failed.", in.Outcome), nil, nil
 	}
 
 	st, onFlow, err := s.deps.Store.FlowState(card.ID)
@@ -393,7 +396,7 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 		return errorf("%v", err), nil, nil
 	}
 	if !onFlow {
-		return errorf("карточка «%s» не в работе (%s) — шага, который можно закончить, у неё нет. Поставьте её на флоу: take_into_work.",
+		return errorf("the card «%s» is not in work (%s) — it has no step to finish. Put it on a flow: take_into_work.",
 			card.Title, card.State), nil, nil
 	}
 	flow, err := s.deps.Store.Flow(st.FlowID)
@@ -402,22 +405,22 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 	}
 	stage, found := flow.Stage(st.StageID)
 	if !found {
-		return errorf("стадия карточки исчезла из флоу «%s» — переставьте карточку в приложении", flow.Name), nil, nil
+		return errorf("the card's stage is gone from the flow «%s» — move the card in the application", flow.Name), nil, nil
 	}
 	if s.running(card.ID) {
-		return errorf("этот шаг работает агент приложения — отчёт придёт от него. " +
-			"Если шаг нужно забрать себе, отмените его в приложении."), nil, nil
+		return errorf("an application agent is working this step — the report will come from it. " +
+			"To take the step over, cancel it in the application."), nil, nil
 	}
 
 	if stage.Action == model.ActionAgent {
 		if missing := missingRequired(stage.Writes, ok, in.Properties); missing != "" {
-			return errorf("шаг не закончен: не хватает %s. Допишите значение и позовите ещё раз.", missing), nil, nil
+			return errorf("the step is not finished: %s missing. Add the value and call again.", missing), nil, nil
 		}
 		on := model.TriggerSuccess
 		if !ok {
 			on = model.TriggerFailure
 		}
-		s.deps.Engine.Finished(card.ID, on, "отчёт через MCP", reportText(stage.Writes, in.Summary, in.Properties))
+		s.deps.Engine.Finished(card.ID, on, msg.New("outcome.reported"), reportText(stage.Writes, in.Summary, in.Properties))
 		return text(s.moved(card, flow, stage)), nil, nil
 	}
 
@@ -426,19 +429,19 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 	// the stage is not waiting for it, because a value nothing reads is a
 	// caller left believing the card will move.
 	if !flow.WatchesProperty(stage.ID, model.OutcomeProperty) {
-		waits := flow.WaitDescriptions(stage.ID)
+		waits := flow.Waits(stage.ID)
 		if len(waits) == 0 {
-			return errorf("стадия «%s» не ждёт ответа — отсюда карточку двигают в приложении.", stage.Name), nil, nil
+			return errorf("the stage «%s» does not wait for an answer — from here the card is moved in the application.", stage.Name), nil, nil
 		}
-		return errorf("стадия «%s» ждёт не исхода шага, а %s. Поставьте это значение: set_property.",
-			stage.Name, strings.Join(waits, "; ")), nil, nil
+		return errorf("the stage «%s» waits not for a step outcome but for %s. Set that value: set_property.",
+			stage.Name, describeWaits(waits)), nil, nil
 	}
 	if err := s.putProps(card.ID, in.Properties); err != nil {
 		return errorf("%v", err), nil, nil
 	}
 	if summary := strings.TrimSpace(in.Summary); summary != "" {
 		if _, err := s.deps.Store.Record(model.JournalEntry{CardID: card.ID, Kind: model.EntryReport, Text: summary}); err != nil {
-			s.log.Warn("не удалось записать итог шага", "card", card.ID, "err", err)
+			s.log.Warn("could not record the step summary", "card", card.ID, "err", err)
 		}
 	}
 	value := model.OutcomePassed
@@ -456,9 +459,9 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 }
 
 type propInput struct {
-	Card     string `json:"card" jsonschema:"карточка: её id или заголовок"`
-	Property string `json:"property" jsonschema:"название свойства, как его спрашивает флоу"`
-	Value    string `json:"value" jsonschema:"значение"`
+	Card     string `json:"card" jsonschema:"the card: its id or title"`
+	Property string `json:"property" jsonschema:"the property name, as the flow asks for it"`
+	Value    string `json:"value" jsonschema:"the value"`
 }
 
 func (s *Server) setProperty(_ context.Context, _ *mcp.CallToolRequest, in propInput) (*mcp.CallToolResult, any, error) {
@@ -468,7 +471,7 @@ func (s *Server) setProperty(_ context.Context, _ *mcp.CallToolRequest, in propI
 	}
 	name := strings.TrimSpace(in.Property)
 	if name == "" {
-		return errorf("у свойства нет названия"), nil, nil
+		return errorf("the property has no name"), nil, nil
 	}
 	if _, err := s.deps.Store.UpdateCard(card.ID, store.CardEdit{Props: map[string]string{name: in.Value}}); err != nil {
 		return errorf("%v", err), nil, nil
@@ -493,16 +496,16 @@ func (s *Server) moved(card model.Card, flow model.Flow, from model.Stage) strin
 	place, _ := s.deps.Engine.CardFlowFor(card.ID)
 	switch {
 	case fresh.State == model.StateDone:
-		fmt.Fprintf(&b, "Шаг записан. Карточка «%s»: «%s» → флоу «%s» пройден, карточка закрыта.", fresh.Title, from.Name, flow.Name)
+		fmt.Fprintf(&b, "Step recorded. Card «%s»: «%s» → the flow «%s» is complete, the card is closed.", fresh.Title, from.Name, flow.Name)
 	case place == nil:
-		fmt.Fprintf(&b, "Шаг записан. Карточка «%s» больше не на флоу (%s).", fresh.Title, fresh.State)
+		fmt.Fprintf(&b, "Step recorded. The card «%s» is no longer on a flow (%s).", fresh.Title, fresh.State)
 	case place.StageID == from.ID:
-		fmt.Fprintf(&b, "Шаг записан, но карточка «%s» осталась на «%s».", fresh.Title, from.Name)
+		fmt.Fprintf(&b, "Step recorded, but the card «%s» stayed on «%s».", fresh.Title, from.Name)
 	default:
-		fmt.Fprintf(&b, "Шаг записан. Карточка «%s»: «%s» → «%s».", fresh.Title, from.Name, stageName(*place))
+		fmt.Fprintf(&b, "Step recorded. Card «%s»: «%s» → «%s».", fresh.Title, from.Name, stageName(*place))
 	}
-	if outcome := fresh.Props[model.OutcomeProperty]; outcome != "" {
-		fmt.Fprintf(&b, " Исход: %s.", outcome)
+	if outcome := fresh.Prop(model.OutcomeProperty); outcome != "" {
+		fmt.Fprintf(&b, " %s: %s.", model.OutcomeProperty, outcome)
 	}
 	if last := s.lastEntries(card.ID, 2); last != "" {
 		b.WriteString("\n\n")
@@ -515,33 +518,33 @@ func (s *Server) moved(card model.Card, flow model.Flow, from model.Stage) strin
 // where it is, and what the stage it is on expects.
 func (s *Server) describeCard(card model.Card) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "«%s» [%s]\nСостояние: %s", card.Title, card.ID, card.State)
+	fmt.Fprintf(&b, "«%s» [%s]\nState: %s", card.Title, card.ID, card.State)
 	if card.Assignee != "" {
-		fmt.Fprintf(&b, ", работает: %s", card.Assignee)
+		fmt.Fprintf(&b, ", worked by: %s", card.Assignee)
 	}
 	b.WriteString("\n")
 	if body := strings.TrimSpace(card.Body); body != "" {
 		fmt.Fprintf(&b, "\n%s\n", body)
 	}
 	if len(card.Props) > 0 {
-		b.WriteString("\nСвойства:\n")
+		b.WriteString("\nProperties:\n")
 		for _, name := range sortedKeys(card.Props) {
 			fmt.Fprintf(&b, "- «%s» = «%s»\n", name, card.Props[name])
 		}
 	}
 	if s.deps.Folders != nil {
 		if dir, err := s.deps.Folders.WorkDir(card.ID); err == nil {
-			fmt.Fprintf(&b, "\nРабочая папка: %s\n", dir)
+			fmt.Fprintf(&b, "\nWorking folder: %s\n", dir)
 		}
 	}
 	place, err := s.deps.Engine.CardFlowFor(card.ID)
 	if err == nil && place != nil {
-		fmt.Fprintf(&b, "\nФлоу «%s», стадия «%s»", place.FlowName, stageName(*place))
+		fmt.Fprintf(&b, "\nFlow «%s», stage «%s»", place.FlowName, stageName(*place))
 		switch {
 		case place.Running:
-			b.WriteString(" — шаг работает агент приложения, отчёт придёт от него")
+			b.WriteString(" — an application agent is working the step, the report will come from it")
 		case place.Queued:
-			b.WriteString(" — ждёт места на стадии")
+			b.WriteString(" — waiting for room on the stage")
 		}
 		b.WriteString("\n")
 		if flow, err := s.deps.Store.Flow(place.FlowID); err == nil {
@@ -550,11 +553,11 @@ func (s *Server) describeCard(card model.Card) string {
 			}
 		}
 		if len(place.WaitingFor) > 0 {
-			fmt.Fprintf(&b, "  Ждёт: %s\n", strings.Join(place.WaitingFor, "; "))
+			fmt.Fprintf(&b, "  Waiting for: %s\n", describeWaits(place.WaitingFor))
 		}
 	}
 	if last := s.lastEntries(card.ID, 5); last != "" {
-		b.WriteString("\nПоследнее в журнале:\n")
+		b.WriteString("\nLatest in the journal:\n")
 		b.WriteString(last)
 	}
 	return b.String()
@@ -564,7 +567,7 @@ func (s *Server) describeCard(card model.Card) string {
 // what they do and owe, then the arrows with their conditions.
 func describeFlow(f model.Flow) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Флоу «%s» [%s]\n", f.Name, f.ID)
+	fmt.Fprintf(&b, "Flow «%s» [%s]\n", f.Name, f.ID)
 	if d := strings.TrimSpace(f.Description); d != "" {
 		fmt.Fprintf(&b, "%s\n", d)
 	}
@@ -572,16 +575,16 @@ func describeFlow(f model.Flow) string {
 		fmt.Fprintf(&b, "- «%s» [%s]", st.Name, st.ID)
 		switch {
 		case st.Final:
-			b.WriteString(" — финал: сюда карточка приезжает закрытой")
+			b.WriteString(" — final: a card arriving here is closed")
 		case st.Action == model.ActionAgent:
-			fmt.Fprintf(&b, " — работает агент (%s)", model.WorkLabel(st.Work))
+			fmt.Fprintf(&b, " — an agent works it (%s)", workName(st.Work))
 			if st.ID == f.EntryStage {
-				b.WriteString(", входная")
+				b.WriteString(", entry")
 			}
 		default:
-			b.WriteString(" — ничего не выполняется, стадия ждёт ответа")
+			b.WriteString(" — nothing runs, the stage waits for an answer")
 			if st.ID == f.EntryStage {
-				b.WriteString(", входная")
+				b.WriteString(", entry")
 			}
 		}
 		b.WriteString("\n")
@@ -590,9 +593,9 @@ func describeFlow(f model.Flow) string {
 	for _, e := range f.Edges {
 		from, _ := f.Stage(e.From)
 		to, _ := f.Stage(e.To)
-		fmt.Fprintf(&b, "→ «%s» —%s→ «%s»", from.Name, model.TriggerLabel(e.On), to.Name)
-		if desc := e.If.Describe(); desc != "" {
-			fmt.Fprintf(&b, " при %s", desc)
+		fmt.Fprintf(&b, "→ «%s» —%s→ «%s»", from.Name, triggerName(e.On), to.Name)
+		if desc := describeCond(e.If); desc != "" {
+			fmt.Fprintf(&b, " when %s", desc)
 		}
 		b.WriteString("\n")
 	}
@@ -603,23 +606,23 @@ func describeFlow(f model.Flow) string {
 // owes the card, and the screens a person will be looking at while it works.
 //
 // With a card's properties in hand the screens are named as that card will see
-// them — «{Страница}» is the address the browser actually opens, and a caller
+// them — «{Page}» is the address the browser actually opens, and a caller
 // that has to produce it is better off reading it resolved than guessing what
 // the placeholder becomes.
 func describeStage(f model.Flow, st model.Stage, indent string, props map[string]string) string {
 	var b strings.Builder
 	if p := strings.TrimSpace(st.Prompt); p != "" {
-		fmt.Fprintf(&b, "%sЗадание стадии: %s\n", indent, p)
+		fmt.Fprintf(&b, "%sStage task: %s\n", indent, p)
 	}
 	for _, w := range st.Writes {
-		fmt.Fprintf(&b, "%sОставляет на карточке: «%s»", indent, w.Property)
+		fmt.Fprintf(&b, "%sLeaves on the card: «%s»", indent, w.Property)
 		if w.Required {
-			b.WriteString(" — обязательно, без него шаг не закончится")
+			b.WriteString(" — required, the step does not finish without it")
 		}
 		b.WriteString("\n")
 	}
 	for _, sc := range st.Screens {
-		fmt.Fprintf(&b, "%sЭкран: %s", indent, model.ScreenKindLabel(sc.Kind))
+		fmt.Fprintf(&b, "%sScreen: %s", indent, sc.Kind)
 		if sc.Title != "" {
 			fmt.Fprintf(&b, " «%s»", sc.Title)
 		}
@@ -629,13 +632,13 @@ func describeStage(f model.Flow, st model.Stage, indent string, props map[string
 			// Only where there is a card to be waiting: without one the
 			// placeholder is the answer, not a value that is missing.
 			if props != nil && len(waiting) > 0 {
-				fmt.Fprintf(&b, " (ждёт значения: %s)", strings.Join(waiting, ", "))
+				fmt.Fprintf(&b, " (waiting for values: %s)", strings.Join(waiting, ", "))
 			}
 		}
 		b.WriteString("\n")
 	}
 	for _, m := range f.MarksFrom(st.ID) {
-		fmt.Fprintf(&b, "%sОтвет «%s» ведёт на «%s»\n", indent, m.Value, m.Stage)
+		fmt.Fprintf(&b, "%sThe answer «%s» leads to «%s»\n", indent, m.Value, m.Stage)
 	}
 	return b.String()
 }
@@ -647,7 +650,7 @@ func describeStage(f model.Flow, st model.Stage, indent string, props map[string
 func (s *Server) resolveCard(ref string) (model.Card, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		return model.Card{}, fmt.Errorf("не сказано, какая карточка")
+		return model.Card{}, errors.New("no card named")
 	}
 	if card, err := s.deps.Store.Card(ref); err == nil {
 		return card, nil
@@ -666,12 +669,12 @@ func (s *Server) resolveCard(ref string) (model.Card, error) {
 	}
 	switch len(found) {
 	case 0:
-		return model.Card{}, fmt.Errorf("карточка «%s» не найдена — посмотрите список: cards", ref)
+		return model.Card{}, fmt.Errorf("the card «%s» was not found — see the list: cards", ref)
 	case 1:
 		return found[0], nil
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "карточек с заголовком «%s» несколько, назовите id:", ref)
+	fmt.Fprintf(&b, "there are several cards titled «%s», name the id:", ref)
 	for _, c := range found {
 		fmt.Fprintf(&b, " %s (%s)", c.ID, c.State)
 	}
@@ -681,7 +684,7 @@ func (s *Server) resolveCard(ref string) (model.Card, error) {
 func (s *Server) resolveFlow(ref string) (model.Flow, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		return model.Flow{}, fmt.Errorf("не сказано, какое флоу")
+		return model.Flow{}, errors.New("no flow named")
 	}
 	if flow, err := s.deps.Store.Flow(ref); err == nil {
 		return flow, nil
@@ -689,7 +692,7 @@ func (s *Server) resolveFlow(ref string) (model.Flow, error) {
 	if flow, err := s.deps.Store.FlowByName(ref); err == nil {
 		return flow, nil
 	}
-	return model.Flow{}, fmt.Errorf("флоу «%s» не найдено — посмотрите список: flows", ref)
+	return model.Flow{}, fmt.Errorf("the flow «%s» was not found — see the list: flows", ref)
 }
 
 // reread is the card as it is now. Every tool answers with the state after its
@@ -744,7 +747,13 @@ func (s *Server) lastEntries(cardID string, n int) string {
 	}
 	var b strings.Builder
 	for _, e := range entries {
-		fmt.Fprintf(&b, "- %s\n", strings.TrimSpace(e.Text))
+		line := strings.TrimSpace(e.Text)
+		if e.Msg != nil {
+			// The application's own entries are codes the UI words for a
+			// person; an agent reads the code and its values as they are.
+			line = e.Msg.String()
+		}
+		fmt.Fprintf(&b, "- %s\n", line)
 	}
 	return b.String()
 }
@@ -815,9 +824,54 @@ func sortedKeys(m map[string]string) []string {
 	return out
 }
 
+// describeWaits, describeCond, triggerName and workName word the flow for an
+// agent. The UI words the same things for a person in the person's language;
+// every tool here answers in English.
+func describeWaits(waits []model.Wait) string {
+	parts := make([]string, 0, len(waits))
+	for _, w := range waits {
+		part := triggerName(w.On)
+		if desc := describeCond(w.If); desc != "" {
+			part += " " + desc
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func describeCond(c *model.Cond) string {
+	switch {
+	case c.IsZero():
+		return ""
+	case c.CommentContains != "":
+		return fmt.Sprintf("the agent's answer contains «%s»", c.CommentContains)
+	default:
+		return fmt.Sprintf("«%s» = «%s»", c.Property, c.Value)
+	}
+}
+
+func triggerName(on string) string {
+	switch on {
+	case model.TriggerSuccess:
+		return "step passed"
+	case model.TriggerFailure:
+		return "step failed"
+	case model.TriggerCardChanged:
+		return "set on the card"
+	}
+	return on
+}
+
+func workName(work string) string {
+	if work == model.WorkSession {
+		return "as a session"
+	}
+	return "in a terminal"
+}
+
 func text(s string) *mcp.CallToolResult {
 	if strings.TrimSpace(s) == "" {
-		s = "(пусто)"
+		s = "(empty)"
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: s}}}
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // What an agent is told, composed in one place so the runner has nothing to
@@ -32,26 +33,26 @@ func ComposePrompt(card model.Card, flow model.Flow, stage model.Stage, agent mo
 	write(agent.Prompt)
 	write(stage.Prompt)
 
-	fmt.Fprintf(&b, "Задача: %s\n", strings.TrimSpace(card.Title))
+	fmt.Fprintf(&b, "Task: %s\n", strings.TrimSpace(card.Title))
 	if body := strings.TrimSpace(card.Body); body != "" {
 		b.WriteString("\n")
 		b.WriteString(body)
 		b.WriteString("\n")
 	}
 	if url := strings.TrimSpace(card.URL); url != "" {
-		fmt.Fprintf(&b, "\nИсточник: %s\n", url)
+		fmt.Fprintf(&b, "\nSource: %s\n", url)
 	}
 	if props := describeProps(card.Props); props != "" {
-		fmt.Fprintf(&b, "\nСвойства карточки:\n%s", props)
+		fmt.Fprintf(&b, "\nCard properties:\n%s", props)
 	}
 
 	// A card with a branch of its own is already on it when the agent starts:
 	// the application made it. An agent that cut another one — which a stage
-	// asking for «Ветка» invites — would leave the work where nothing looks.
+	// asking for «Branch» invites — would leave the work where nothing looks.
 	if card.WorkMode != model.WorkModeFolder {
-		b.WriteString("\nТы уже на ветке этой задачи — новую ветку не заводи и не переключайся, коммить сюда.")
+		b.WriteString("\nYou are already on this task's branch — do not create another one or switch away; commit here.")
 		if card.Branch != "" {
-			fmt.Fprintf(&b, " Ветка: %s.", card.Branch)
+			fmt.Fprintf(&b, " Branch: %s.", card.Branch)
 		}
 		b.WriteString("\n")
 	}
@@ -126,9 +127,9 @@ func outcomeHint(flow model.Flow, stage model.Stage) string {
 		return ""
 	}
 	return fmt.Sprintf(
-		"Дальнейший маршрут карточки зависит от твоего последнего сообщения: "+
-			"закончи его словами %s, если это так — иначе карточка поедет по другой ветке.\n",
-		strings.Join(phrases, " или "))
+		"Where the card goes next depends on your last message: "+
+			"end it with the words %s if that is the case — otherwise the card takes another branch.\n",
+		strings.Join(phrases, " or "))
 }
 
 // StageInputs is the stage's reads, valued: what an earlier stage wrote onto the
@@ -145,7 +146,7 @@ func StageInputs(card model.Card, flow model.Flow, stage model.Stage) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("С карточки:")
+	b.WriteString("From the card:")
 	for _, name := range reads {
 		fmt.Fprintf(&b, "\n- %s: %s", name, model.PropValue(card.Props, name))
 	}
@@ -157,7 +158,7 @@ func StageInputs(card model.Card, flow model.Flow, stage model.Stage) string {
 // The agent has no tool to put a value on the card here — it has its closing
 // words, which is already how a stage lets the agent route the card
 // (outcomeHint). So the contract is stated in the same currency: end the message
-// with one `Свойство: значение` line per declared output, and the engine reads
+// with one `Property: value` line per declared output, and the engine reads
 // them off before the flow decides anything.
 //
 // Saying it at all is the point. An agent asked for a verdict it was never told
@@ -168,11 +169,11 @@ func StageOutputs(stage model.Stage) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("Эта стадия должна записать на карточку. Закончи сообщение строками вида «Свойство: значение», по одной на каждое:")
+	b.WriteString("This stage has to put values on the card. End your message with lines of the form «Property: value», one for each:")
 	for _, w := range stage.Writes {
 		fmt.Fprintf(&b, "\n- %s", w.Property)
 		if w.Required {
-			b.WriteString(" (обязательно — без него шаг не будет закончен)")
+			b.WriteString(" (required — the step does not finish without it)")
 		}
 	}
 	return b.String()
@@ -198,12 +199,65 @@ func ArrivalNote(flow model.Flow, event model.FlowEvent, revisit bool) string {
 	if !ok {
 		return ""
 	}
-	detail := strings.TrimSpace(event.Detail)
-	if detail == "" {
-		detail = model.TriggerLabel(event.On)
-	}
+	detail := DescribeMove(event.Detail, event.On)
 	if revisit {
-		return fmt.Sprintf("Карточка вернулась сюда со стадии «%s»: %s. Учти это в работе.", from.Name, detail)
+		return fmt.Sprintf("The card came back here from the stage «%s»: %s. Take this into account.", from.Name, detail)
 	}
-	return fmt.Sprintf("Карточка пришла со стадии «%s»: %s. Учти это в работе.", from.Name, detail)
+	return fmt.Sprintf("The card came from the stage «%s»: %s. Take this into account.", from.Name, detail)
+}
+
+// DescribeMove is why a card moved, for an agent to read. The UI words the same
+// message in the person's language; an agent is told in English, which is what
+// every prompt here is written in, so the codes a move can carry are spelled out
+// once more here rather than borrowed from a screen.
+func DescribeMove(m *msg.Msg, on string) string {
+	if m == nil || m.IsZero() {
+		return describeTrigger(on)
+	}
+	var text string
+	switch m.Code {
+	case "move.taken":
+		text = "taken into work"
+	case "move.byHand":
+		text = "moved by hand"
+	case "move.cardChanged":
+		text = fmt.Sprintf("«%s» was set to «%s» on the card", m.Arg("property"), m.Arg("value"))
+	case "move.on":
+		text = describeTrigger(m.Arg("on"))
+	case "outcome.agentDone":
+		text = "the agent finished its work"
+	case "outcome.terminalFailed":
+		text = "the step in the terminal failed"
+	case "outcome.sessionFailed":
+		text = "the agent's session failed"
+	case "outcome.reported":
+		text = "the step was reported"
+	case "outcome.notStarted":
+		text = "the step could not be started"
+	case "outcome.requiredMissing":
+		text = "required values were not written: " + m.Arg("properties")
+	case msg.CodeText:
+		text = m.Arg("text")
+	default:
+		text = describeTrigger(on)
+	}
+	switch {
+	case m.Arg("ifComment") != "":
+		text += fmt.Sprintf(", the agent's answer contains «%s»", m.Arg("ifComment"))
+	case m.Arg("ifProperty") != "":
+		text += fmt.Sprintf(", «%s» = «%s»", m.Arg("ifProperty"), m.Arg("ifValue"))
+	}
+	return text
+}
+
+func describeTrigger(on string) string {
+	switch on {
+	case model.TriggerSuccess:
+		return "the step passed"
+	case model.TriggerFailure:
+		return "the step failed"
+	case model.TriggerCardChanged:
+		return "a value was set on the card"
+	}
+	return on
 }

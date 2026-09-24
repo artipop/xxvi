@@ -392,7 +392,7 @@ func TestAReportStaysUnderItsOwnRun(t *testing.T) {
 
 	view := ribbonOf(t, f, card.ID)
 	work, qa := view.Segments[0], view.Segments[1]
-	if got := work.Screens[0].Report; got != "Форма починена." {
+	if got := work.Screens[0].Report; got == nil || got.Arg("text") != "Форма починена." {
 		t.Fatalf("итог шага — под экраном его агента: %+v", work.Screens[0])
 	}
 	if len(work.Problems) != 1 || len(qa.Problems) != 0 {

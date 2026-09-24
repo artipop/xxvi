@@ -29,7 +29,7 @@ import (
 func (m *Manager) Listen() error {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return fmt.Errorf("открыть порт для терминалов: %w", err)
+		return fmt.Errorf("open the terminals port: %w", err)
 	}
 	m.mu.Lock()
 	m.token = uuid.NewString()
@@ -39,7 +39,7 @@ func (m *Manager) Listen() error {
 	server := &http.Server{Handler: http.HandlerFunc(m.serve)}
 	go func() {
 		if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
-			m.log.Error("сокет терминалов остановлен", "err", err)
+			m.log.Error("terminals socket stopped", "err", err)
 		}
 	}()
 	return nil
@@ -78,7 +78,7 @@ func (m *Manager) serve(w http.ResponseWriter, r *http.Request) {
 			m.replay(w, r, tail)
 			return
 		}
-		http.Error(w, "терминал не найден", http.StatusNotFound)
+		http.Error(w, "terminal not found", http.StatusNotFound)
 		return
 	}
 
@@ -151,7 +151,7 @@ func (m *Manager) pipe(conn *websocket.Conn, s *Session) {
 				}
 				if msg.Type == "resize" {
 					if err := s.Resize(msg.Cols, msg.Rows); err != nil {
-						m.log.Warn("не удалось изменить размер терминала", "terminal", s.ID, "err", err)
+						m.log.Warn("could not resize the terminal", "terminal", s.ID, "err", err)
 					}
 				}
 			}

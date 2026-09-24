@@ -11,6 +11,8 @@ import { QuestionForm } from "./attention";
 import { JournalOf } from "./journal";
 import { Compose } from "./compose";
 import { NAV } from "../nav";
+import { entryText, label, markTitle, propName, questionText, say, t } from "../i18n";
+import type { Msg } from "../../bindings/github.com/artipop/xxvi/internal/msg/models";
 
 // The emulator is a large chunk and most screens are not terminals, so it
 // arrives only when one is opened.
@@ -176,7 +178,7 @@ export default function Ribbon(): JSX.Element {
     },
   );
 
-  // Asked for from outside — «Сделай», «Лента →» on a closed card — a strip is
+  // Asked for from outside — «Do it», «Ribbon →» on a closed card — a strip is
   // opened by name, and the stack has to be standing on it. Keyed on where it
   // is in the stack as well, because the one asked for may arrive a read later.
   createEffect(
@@ -361,7 +363,7 @@ export default function Ribbon(): JSX.Element {
       <header class="ribbon-bar" style={{ "--wails-draggable": "drag" }}>
         <Sections open={menu()} setOpen={setMenu} />
         <span class="ribbon-where">
-          <Show when={openRibbon() === DRAFT || ribbons.length === 0}>Новая задача</Show>
+          <Show when={openRibbon() === DRAFT || ribbons.length === 0}>{t("ribbon.newTask")}</Show>
           {current()?.title}
           <Show when={current()?.stageName}>
             <span class="ribbon-stage"> · {current()!.stageName}</span>
@@ -369,13 +371,13 @@ export default function Ribbon(): JSX.Element {
           {/* A finished job visited for its results: nothing on it moves any
               more, and the bar says so rather than leaving a stage name off. */}
           <Show when={current() && current()!.id === closedRibbon()}>
-            <span class="ribbon-stage"> · закрыта</span>
+            <span class="ribbon-stage"> · {t("ribbon.closed")}</span>
           </Show>
         </span>
         <div class="spacer" />
         <Show when={ribbons.length > 0}>
           <button class="btn quiet tiny" style={{ "--wails-draggable": "no-drag" }}
-                  onClick={newTask} title="Новая задача (N)">+ Задача</button>
+                  onClick={newTask} title={t("ribbon.newTaskKey")}>{t("ribbon.addTask")}</button>
         </Show>
         <Show when={current()}>
           <CardMenu
@@ -393,7 +395,7 @@ export default function Ribbon(): JSX.Element {
             style={{ "--wails-draggable": "no-drag" }}
             onClick={() => { setPinned(false); flyTo(current()!.focusId ?? ""); }}
           >
-            Дальше →
+            {t("ribbon.next")}
           </button>
         </Show>
       </header>
@@ -431,7 +433,7 @@ export default function Ribbon(): JSX.Element {
                               screen={screen}
                               cardId={view.cardId}
                               id={screen.id}
-                              title={screen.title}
+                              title={screenTitle(screen)}
                               first={i() === 0}
                               width={widthOf(screen.id)}
                               focused={focus() === screen.id}
@@ -453,8 +455,8 @@ export default function Ribbon(): JSX.Element {
               <div class="band">
                 <section class="screen on draft">
                   <header class="screen-head">
-                    <span class="tag accent">Новая задача</span>
-                    <span class="screen-title">Enter — начать, Shift+Enter — новая строка</span>
+                    <span class="tag accent">{t("ribbon.newTask")}</span>
+                    <span class="screen-title">{t("ribbon.draftKeys")}</span>
                   </header>
                   <div class="screen-body">
                     <Compose
@@ -475,9 +477,9 @@ export default function Ribbon(): JSX.Element {
             {(cardId) => (
               <aside class="ribbon-journal">
                 <header class="row">
-                  <h3>Журнал</h3>
+                  <h3>{t("card.journal")}</h3>
                   <div class="spacer" />
-                  <button class="btn quiet tiny" onClick={() => setJournal(false)} title="J или Esc">Закрыть</button>
+                  <button class="btn quiet tiny" onClick={() => setJournal(false)} title={t("ribbon.journalKeys")}>{t("common.close")}</button>
                 </header>
                 <JournalOf cardId={cardId} />
               </aside>
@@ -522,7 +524,7 @@ function Sections(props: { open: boolean; setOpen: (v: boolean) => void }): JSX.
 
   return (
     <div class="sections" ref={box} style={{ "--wails-draggable": "no-drag" }}>
-      <button class="chevron" onClick={() => props.setOpen(!props.open)} title="Разделы (Esc — во входящие)">
+      <button class="chevron" onClick={() => props.setOpen(!props.open)} title={t("ribbon.sections")}>
         XXVI <span class={`caret ${props.open ? "up" : ""}`}>⌄</span>
       </button>
       <Show when={props.open}>
@@ -535,12 +537,12 @@ function Sections(props: { open: boolean; setOpen: (v: boolean) => void }): JSX.
                   class={item.tab === "ribbon" ? "on" : ""}
                   onClick={() => { props.setOpen(false); setTab(item.tab); }}
                 >
-                  <span>{item.label}</span>
+                  <span>{item.label()}</span>
                   <Show when={item.count && item.count()! > 0}>
                     <span class={`count ${item.alert ? "alert" : ""}`}>{item.count!()}</span>
                   </Show>
                   <Show when={item.mark && item.mark()}>
-                    <span class="mark" title="Есть новая версия" />
+                    <span class="mark" title={t("nav.updateMark")} />
                   </Show>
                 </button>
               </>
@@ -577,26 +579,35 @@ function CardMenu(props: { cardId: string; closed: boolean; onJournal: () => voi
 
   return (
     <div class="card-menu" ref={box} style={{ "--wails-draggable": "no-drag" }}>
-      <button class="btn quiet tiny" onClick={() => { setOpen(!open()); setSure(false); }} title="Карточка">⋯</button>
+      <button class="btn quiet tiny" onClick={() => { setOpen(!open()); setSure(false); }} title={t("attention.card")}>⋯</button>
       <Show when={open()}>
         <div class="menu">
           <button onClick={() => { setOpen(false); props.onJournal(); }}>
-            <span>Журнал</span><span class="count">J</span>
+            <span>{t("card.journal")}</span><span class="count">J</span>
           </button>
           <Show when={!props.closed}>
             <hr />
-            <button onClick={() => run(() => API.RemoveFromFlow(props.cardId))}>Снять с флоу</button>
+            <button onClick={() => run(() => API.RemoveFromFlow(props.cardId))}>{t("card.removeFromFlow")}</button>
             <button
               class={sure() ? "danger" : ""}
               onClick={() => (sure() ? run(() => API.DropCard(props.cardId)) : setSure(true))}
             >
-              {sure() ? "Точно отбросить?" : "Отбросить"}
+              {sure() ? t("ribbon.sureDrop") : t("common.drop")}
             </button>
           </Show>
         </div>
       </Show>
     </div>
   );
+}
+
+/** screenTitle is what a pane is called: the stage's own title for it, or —
+ *  when it gave none, and on an agent's own screen — its kind. */
+function screenTitle(screen: ScreenView): string {
+  if (screen.title) return screen.title;
+  if (screen.kind === "agent") return t("ribbon.agentRun", { agent: screen.agent });
+  if (screen.kind === "agentTerminal") return t("ribbon.agentTerminal", { agent: screen.agent });
+  return label("screen", screen.kind);
 }
 
 function Pane(props: {
@@ -629,15 +640,15 @@ function Pane(props: {
           <span class={`tag ${props.segment.current ? "accent" : ""}`}>{props.segment.stageName}</span>
         </Show>
         <span class="screen-title">{props.title}</span>
-        {/* How the card got here — «вернулась: не прошло» reads differently
-            from «взята в работу», and it is the one line of the journal that is
+        {/* How the card got here — «came back: failed» reads differently from
+            «taken into work», and it is the one line of the journal that is
             about the whole segment. */}
         <Show when={props.first && props.segment.detail}>
-          <span class="screen-why" title={props.segment.detail}>{props.segment.detail}</span>
+          <span class="screen-why" title={say(props.segment.detail)}>{say(props.segment.detail)}</span>
         </Show>
         <Show when={props.captured}>
-          <span class="tag warn" title="Клавиши уходят сюда. Нажмите на заголовок, чтобы вернуть их ленте">
-            клавиши здесь
+          <span class="tag warn" title={t("ribbon.keysHereTitle")}>
+            {t("ribbon.keysHere")}
           </span>
         </Show>
         <div class="spacer" />
@@ -651,7 +662,7 @@ function Pane(props: {
             {(mark) => (
               <button
                 class={`btn tiny ${mark.forward ? "primary" : "quiet"}`}
-                title={`Отметить «${mark.value}» — карточка уедет в «${mark.stage}»`}
+                title={markTitle(mark)}
                 onClick={(e) => {
                   e.stopPropagation();
                   void guard(() => API.MarkOutcome(props.cardId ?? "", mark.value));
@@ -663,7 +674,7 @@ function Pane(props: {
           </For>
         </Show>
         <Show when={props.screen?.kind === "browser" && waiting().length === 0}>
-          <a class="btn quiet tiny" href={props.screen!.ref} target="_blank" rel="noreferrer" title="Открыть снаружи">↗</a>
+          <a class="btn quiet tiny" href={props.screen!.ref} target="_blank" rel="noreferrer" title={t("ribbon.openOutside")}>↗</a>
         </Show>
       </header>
 
@@ -671,7 +682,7 @@ function Pane(props: {
           without it a stopped strip looks exactly like a working one. */}
       <Show when={props.first && list(props.segment.problems).length > 0}>
         <div class={`screen-problems ${props.segment.current ? "now" : ""}`}>
-          <For each={list(props.segment.problems)}>{(p) => <p>{p.text}</p>}</For>
+          <For each={list(props.segment.problems)}>{(p) => <p>{entryText(p)}</p>}</For>
         </div>
       </Show>
 
@@ -682,25 +693,25 @@ function Pane(props: {
               empty. */}
           <Match when={props.segment.gone}>
             <div class="screen-note">
-              Стадия «{props.segment.stageId}» убрана из флоу. Шаг остаётся в ленте.
+              {t("ribbon.stageGone", { stage: props.segment.stageId })}
             </div>
           </Match>
           <Match when={!props.screen}>
-            <div class="screen-note">Этот шаг ничего не показывает.</div>
+            <div class="screen-note">{t("ribbon.nothingShown")}</div>
           </Match>
           {/* A screen whose address is not on the card yet says which property
               it is waiting for. Opening a blank page and staying silent would be
               the same screen with the reason taken out. */}
           <Match when={waiting().length > 0}>
             <div class="screen-note">
-              Ждёт, пока стадия запишет на карточку {waiting().map((n) => `«${n}»`).join(", ")}.
+              {t("ribbon.waitingFor", { properties: waiting().map((n) => `«${propName(n)}»`).join(", ") })}
             </div>
           </Match>
         </Switch>
       </div>
 
       <Show when={props.screen?.report}>
-        <Report text={props.screen!.report!} />
+        <Report report={props.screen!.report!} />
       </Show>
     </section>
   );
@@ -708,26 +719,26 @@ function Pane(props: {
 
 // Folded to one line: the screen above is the step, and this is what the agent
 // said about it — read after the work, not instead of it.
-function Report(props: { text: string }): JSX.Element {
+function Report(props: { report: Msg }): JSX.Element {
   const [open, setOpen] = createSignal(false);
   return (
     <div class={`screen-report ${open() ? "open" : ""}`} onClick={() => setOpen(!open())}>
-      <span class="meta">Итог:</span> {props.text}
+      <span class="meta">{t("ribbon.result")}</span> {say(props.report)}
     </div>
   );
 }
 
 function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
   return (
-    <Switch fallback={<div class="screen-note">Неизвестный вид экрана «{props.screen.kind}».</div>}>
+    <Switch fallback={<div class="screen-note">{t("ribbon.unknownScreen", { kind: props.screen.kind })}</div>}>
       {/* The agent's own screen, and which one it is was decided when the step
           ran: a stage worked in a terminal shows that terminal, a session shows
           the stream it left behind (docs/system.md §12.2). */}
       <Match when={props.screen.kind === "agentTerminal"}>
-        <Loading fallback={<div class="screen-note">Терминал агента открывается…</div>}>
+        <Loading fallback={<div class="screen-note">{t("ribbon.agentTerminalOpening")}</div>}>
           <TerminalPane
             open={() => API.AgentTerminal(props.screen.sessionId ?? "")}
-            ended="шаг в этом терминале закончен"
+            ended={t("ribbon.stepEnded")}
           />
         </Loading>
       </Match>
@@ -741,12 +752,12 @@ function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
         <BrowserPane url={props.screen.ref ?? ""} />
       </Match>
       <Match when={props.screen.kind === "diff"}>
-        <Loading fallback={<div class="screen-note">Читаем изменения…</div>}>
+        <Loading fallback={<div class="screen-note">{t("diff.reading")}</div>}>
           <DiffPane cardId={props.cardId} rev={props.screen.ref ?? ""} />
         </Loading>
       </Match>
       <Match when={props.screen.kind === "terminal"}>
-        <Loading fallback={<div class="screen-note">Терминал открывается…</div>}>
+        <Loading fallback={<div class="screen-note">{t("ribbon.terminalOpening")}</div>}>
           <TerminalPane
             open={() => API.OpenTerminal(props.cardId, props.screen.id, props.screen.ref ?? "")}
           />
@@ -809,22 +820,15 @@ function AgentPane(props: { sessionId: string }): JSX.Element {
 
   return (
     <div class="stream" ref={box}>
-      <Show when={rows().length > 0} fallback={<div class="screen-note">Агент ещё ничего не сказал.</div>}>
+      <Show when={rows().length > 0} fallback={<div class="screen-note">{t("ribbon.silentYet")}</div>}>
         <For each={rows()}>{(e) => <StreamLine event={e} statuses={statuses()} />}</For>
       </Show>
     </div>
   );
 }
 
-// The words the protocol uses, in the words a person reads. A status nobody
-// translated is a status nobody can act on.
-const STATUS: Record<string, string> = {
-  pending: "ждёт", in_progress: "идёт", completed: "готово", failed: "не вышло",
-};
-const DECISION: Record<string, string> = {
-  allow_once: "разрешено", allow_always: "разрешено всегда",
-  reject_once: "отказано", reject_always: "отказано всегда",
-};
+// The words the protocol uses, in the words a person reads (the «toolStatus.»
+// and «decision.» keys). A status nobody translated is a status nobody can act on.
 
 function StreamLine(props: { event: SessionEvent; statuses: Record<string, string> }): JSX.Element {
   const data = createMemo<Record<string, any>>(() => {
@@ -846,32 +850,34 @@ function StreamLine(props: { event: SessionEvent; statuses: Record<string, strin
       <Match when={props.event.kind === "tool_call"}>
         <p class={`stream-tool ${status() === "completed" ? "dim" : ""}`}>
           <span class={`tag ${status() === "failed" ? "warn" : ""}`}>
-            {STATUS[status()] ?? "вызов"}
+            {status() ? label("toolStatus", status()) : t("stream.call")}
           </span>{" "}
-          {data().title || "инструмент"}
+          {data().title || t("stream.tool")}
         </p>
       </Match>
       <Match when={props.event.kind === "permission"}>
         <p class="stream-tool dim">
-          <span class={`tag ${data().decision?.startsWith("allow") ? "ok" : "warn"}`}>доступ</span>{" "}
-          {data().tool} — {DECISION[data().decision] ?? data().decision}
+          <span class={`tag ${data().decision?.startsWith("allow") ? "ok" : "warn"}`}>{t("stream.access")}</span>{" "}
+          {data().tool} — {label("decision", data().decision ?? "")}
         </p>
       </Match>
       <Match when={props.event.kind === "answer"}>
         <p class="stream-tool dim">
-          <span class={`tag ${data().declined ? "warn" : "ok"}`}>ответ</span>{" "}
-          {data().declined ? "без ответа" : data().text || data().label || data().optionId}
+          <span class={`tag ${data().declined ? "warn" : "ok"}`}>{t("stream.answer")}</span>{" "}
+          {data().declined ? t("stream.noAnswer") : data().text || data().label || data().optionId}
         </p>
       </Match>
       <Match when={props.event.kind === "question"}>
         <Show
           when={open()}
-          fallback={<p class="stream-tool dim"><span class="tag">вопрос</span> {data().text}</p>}
+          fallback={<p class="stream-tool dim"><span class="tag">{t("stream.question")}</span> {questionText(data().kind, data().tool, data().text)}</p>}
         >
           <div class="stream-tool">
-            <span class="tag warn">вопрос</span>
+            <span class="tag warn">{t("stream.question")}</span>
             <QuestionForm
               questionId={open()!.questionId}
+              kind={open()!.kind}
+              tool={open()!.tool}
               text={open()!.text ?? data().text ?? ""}
               options={open()!.options ?? []}
               freeText={open()!.freeText ?? false}
@@ -922,7 +928,7 @@ function NotesPane(props: { cardId: string; path: string }): JSX.Element {
         onInput={(e) => edit(e.currentTarget.value)}
         spellcheck={false}
       />
-      <div class="meta">{props.path} · {saved() ? "сохранено" : "…"}</div>
+      <div class="meta">{props.path} · {saved() ? t("notes.saved") : "…"}</div>
     </div>
   );
 }
@@ -938,7 +944,7 @@ function BrowserPane(props: { url: string }): JSX.Element {
       <div class="browser-bar row">
         <span class="mono">{props.url}</span>
         <div class="spacer" />
-        <button class="btn quiet tiny" onClick={() => setNonce((n) => n + 1)} title="Обновить">↻</button>
+        <button class="btn quiet tiny" onClick={() => setNonce((n) => n + 1)} title={t("browser.reload")}>↻</button>
       </div>
       {/* Reloading is asked for, never incidental: the frame is rebuilt only
           when the button says so. Numbers compare by value, so a re-read of the

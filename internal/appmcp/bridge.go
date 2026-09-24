@@ -42,7 +42,7 @@ type Handoff struct {
 // carries the token.
 func WriteHandoff(dataDir, url, token string) error {
 	if url == "" || token == "" {
-		return fmt.Errorf("нечего записывать: инструменты приложения не поднялись")
+		return errors.New("nothing to write: the application tools did not start")
 	}
 	body, err := json.MarshalIndent(Handoff{URL: url, Token: token, PID: os.Getpid()}, "", "  ")
 	if err != nil {
@@ -53,7 +53,7 @@ func WriteHandoff(dataDir, url, token string) error {
 
 // RemoveHandoff takes the address away when the application stops. An address
 // that outlives its listener is a bridge failing with a connection error
-// instead of with "приложение не запущено".
+// instead of with "the application is not running".
 func RemoveHandoff(dataDir string) {
 	_ = os.Remove(filepath.Join(dataDir, HandoffFile))
 }
@@ -63,16 +63,16 @@ func ReadHandoff(dataDir string) (Handoff, error) {
 	body, err := os.ReadFile(filepath.Join(dataDir, HandoffFile))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Handoff{}, fmt.Errorf("XXVI не запущен: инструменты приложения живут внутри него, откройте приложение")
+			return Handoff{}, errors.New("XXVI is not running: the application tools live inside it, open the application")
 		}
 		return Handoff{}, err
 	}
 	var h Handoff
 	if err := json.Unmarshal(body, &h); err != nil {
-		return Handoff{}, fmt.Errorf("не удалось прочитать %s: %w", HandoffFile, err)
+		return Handoff{}, fmt.Errorf("could not read %s: %w", HandoffFile, err)
 	}
 	if h.URL == "" || h.Token == "" {
-		return Handoff{}, fmt.Errorf("в %s нет адреса инструментов — перезапустите приложение", HandoffFile)
+		return Handoff{}, fmt.Errorf("%s holds no tools address — restart the application", HandoffFile)
 	}
 	return h, nil
 }
@@ -118,13 +118,13 @@ func Bridge(ctx context.Context, h Handoff, transport mcp.Transport) error {
 		HTTPClient: &http.Client{Transport: bearer{token: h.Token}},
 	}, nil)
 	if err != nil {
-		return fmt.Errorf("не удалось подключиться к XXVI: %w", err)
+		return fmt.Errorf("could not connect to XXVI: %w", err)
 	}
 	defer upstream.Close()
 
 	tools, err := upstream.ListTools(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("не удалось прочитать инструменты XXVI: %w", err)
+		return fmt.Errorf("could not read the XXVI tools: %w", err)
 	}
 	srv := mcp.NewServer(
 		&mcp.Implementation{Name: ServerName, Title: "XXVI", Version: "1"},

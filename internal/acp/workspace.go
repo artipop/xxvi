@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // A card's workspace in a repository: what its work mode (model/workmode.go)
@@ -45,8 +46,7 @@ func (m *Manager) claimWorkspace(card model.Card, project model.Project) (string
 	card = fresh
 	folder := project.Path
 	if !isRepo(folder) {
-		return "", fmt.Errorf("папка проекта «%s» — не git-репозиторий: «%s» для неё невозможно, выберите «%s»",
-			project.Name, model.WorkModeLabel(card.WorkMode), model.WorkModeLabel(model.WorkModeFolder))
+		return "", msg.Err("workMode.notRepo", "project", project.Name, "mode", card.WorkMode)
 	}
 
 	switch card.WorkMode {
@@ -68,9 +68,9 @@ func (m *Manager) claimWorktree(card model.Card, project model.Project) (string,
 		// back, and prune first, or git remembers the old one and refuses.
 		_, _ = git(folder, "worktree", "prune")
 		if _, err := git(folder, "worktree", "add", card.Worktree, card.Branch); err != nil {
-			return "", fmt.Errorf("не удалось вернуть рабочее дерево карточки: %w", err)
+			return "", msg.Wrap(err, "worktree.restoreFailed")
 		}
-		m.note(card.ID, fmt.Sprintf("Рабочее дерево карточки восстановлено из ветки `%s`: `%s`.", card.Branch, card.Worktree))
+		m.note(card.ID, msg.New("journal.worktreeRestored", "branch", card.Branch, "path", card.Worktree))
 		return card.Worktree, nil
 	}
 
@@ -81,19 +81,19 @@ func (m *Manager) claimWorktree(card model.Card, project model.Project) (string,
 	base := baseBranch(folder)
 	path := filepath.Join(m.worktreeRoot(), fmt.Sprintf("%s-%s", filepath.Base(folder), shortID(card.ID)))
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return "", fmt.Errorf("создать папку для рабочих деревьев: %w", err)
+		return "", fmt.Errorf("create the working trees folder: %w", err)
 	}
 	args := []string{"worktree", "add", "-b", branch, path, base}
 	if branchExists(folder, branch) {
 		args = []string{"worktree", "add", path, branch}
 	}
 	if _, err := git(folder, args...); err != nil {
-		return "", fmt.Errorf("не удалось создать рабочее дерево: %w", err)
+		return "", msg.Wrap(err, "worktree.createFailed")
 	}
 	if err := m.store.SetCardWorkspace(card.ID, branch, base, path); err != nil {
 		return "", err
 	}
-	m.note(card.ID, fmt.Sprintf("Карточка работает в отдельном рабочем дереве `%s`, на ветке `%s` от `%s`.", path, branch, base))
+	m.note(card.ID, msg.New("journal.worktreeCreated", "path", path, "branch", branch, "base", base))
 	return path, nil
 }
 
@@ -106,8 +106,7 @@ func (m *Manager) claimBranch(card model.Card, project model.Project) (string, e
 	if held {
 		// Says what will end it, because that is the one thing a person
 		// reading it can act on.
-		return "", fmt.Errorf("папка «%s» занята карточкой «%s» (ветка `%s`) — освободится, когда та будет готова или отброшена; или выберите для этой карточки отдельное рабочее дерево",
-			project.Name, holder.Title, holder.Branch)
+		return "", msg.Err("branch.folderTaken", "project", project.Name, "card", holder.Title, "branch", holder.Branch)
 	}
 
 	branch := card.Branch
@@ -123,27 +122,27 @@ func (m *Manager) claimBranch(card model.Card, project model.Project) (string, e
 	if dirty, err := git(folder, "status", "--porcelain", "--untracked-files=no"); err != nil {
 		return "", err
 	} else if dirty != "" {
-		return "", fmt.Errorf("в папке «%s» есть незакоммиченные изменения — переключить её на ветку карточки нельзя, не рискуя ими; закоммитьте или спрячьте их (git stash), или выберите отдельное рабочее дерево", project.Name)
+		return "", msg.Err("branch.folderDirty", "project", project.Name)
 	}
 
 	base := card.Base
 	if branchExists(folder, branch) {
 		if _, err := git(folder, "switch", branch); err != nil {
-			return "", fmt.Errorf("не удалось переключиться на ветку карточки: %w", err)
+			return "", msg.Wrap(err, "branch.switchFailed")
 		}
 	} else {
 		base = baseBranch(folder)
 		if _, err := git(folder, "switch", "-c", branch, base); err != nil {
-			return "", fmt.Errorf("не удалось создать ветку карточки: %w", err)
+			return "", msg.Wrap(err, "branch.createFailed")
 		}
 	}
 	if card.Branch == "" {
 		if err := m.store.SetCardWorkspace(card.ID, branch, base, ""); err != nil {
 			return "", err
 		}
-		m.note(card.ID, fmt.Sprintf("Папка `%s` переключена на ветку карточки `%s` от `%s`.", folder, branch, base))
+		m.note(card.ID, msg.New("journal.branchSwitched", "path", folder, "branch", branch, "base", base))
 	} else {
-		m.note(card.ID, fmt.Sprintf("Папка `%s` снова переключена на ветку карточки `%s`.", folder, branch))
+		m.note(card.ID, msg.New("journal.branchSwitchedAgain", "path", folder, "branch", branch))
 	}
 	return folder, nil
 }
@@ -161,9 +160,9 @@ func (m *Manager) worktreeRoot() string {
 
 // note writes a journal line that no run is behind: the workspace is the
 // card's, not any one stage's.
-func (m *Manager) note(cardID, text string) {
-	if _, err := m.store.Record(model.JournalEntry{CardID: cardID, Kind: model.EntryMove, Text: text}); err != nil {
-		m.log.Warn("не удалось записать в журнал карточки", "card", cardID, "err", err)
+func (m *Manager) note(cardID string, what msg.Msg) {
+	if _, err := m.store.Record(model.JournalEntry{CardID: cardID, Kind: model.EntryMove, Msg: &what}); err != nil {
+		m.log.Warn("could not write the card journal", "card", cardID, "err", err)
 	}
 }
 
@@ -211,7 +210,7 @@ func git(folder string, args ...string) (string, error) {
 }
 
 // CardBranch names a card's branch after its title, so `git branch` reads as a
-// list of tasks: «Почини логин» → pochini-login-1a2b3c4d. The card's short id
+// list of tasks: «Fix the login» → fix-the-login-1a2b3c4d (Cyrillic transliterated). The card's short id
 // ends it, so two cards with one title never share a branch.
 func CardBranch(title, cardID string) string {
 	slug := slugify(title, 40)
@@ -286,7 +285,7 @@ func shortID(id string) string {
 func (m *Manager) worktreeAttention() []Attention {
 	cards, err := m.store.ClosedWithWorktree()
 	if err != nil {
-		m.log.Warn("не удалось прочитать закрытые карточки с рабочими деревьями", "err", err)
+		m.log.Warn("could not read closed cards with working trees", "err", err)
 		return nil
 	}
 	var out []Attention
@@ -295,17 +294,13 @@ func (m *Manager) worktreeAttention() []Attention {
 			// Removed by hand: nothing to ask about, and the card should
 			// stop pointing at it. The branch stays.
 			if err := m.store.SetCardWorkspace(c.ID, c.Branch, c.Base, ""); err != nil {
-				m.log.Warn("не удалось забыть пропавшее рабочее дерево", "card", c.ID, "err", err)
+				m.log.Warn("could not forget a vanished working tree", "card", c.ID, "err", err)
 			}
 			continue
 		}
 		status, _ := git(c.Worktree, "status", "--porcelain")
-		text := fmt.Sprintf("Задача закрыта, а её рабочее дерево осталось: %s. Удалить его? Ветка %s останется.", c.Worktree, c.Branch)
-		if status != "" {
-			text = fmt.Sprintf("Задача закрыта, а её рабочее дерево осталось: %s. В нём есть незакоммиченные изменения — при удалении они пропадут. Ветка %s останется.", c.Worktree, c.Branch)
-		}
 		out = append(out, Attention{
-			Key: "w:" + c.ID, CardID: c.ID, CardTitle: c.Title, Text: text,
+			Key: "w:" + c.ID, CardID: c.ID, CardTitle: c.Title,
 			Worktree: c.Worktree, Branch: c.Branch, Dirty: status != "",
 			Awaiting: true, Since: c.UpdatedAt,
 		})
@@ -330,11 +325,11 @@ func (m *Manager) RemoveWorktree(cardID string, discard bool) error {
 		return nil
 	}
 	if card.State != model.StateDone && card.State != model.StateDropped {
-		return fmt.Errorf("задача ещё в работе — её рабочее дерево не удаляется")
+		return msg.Err("worktree.cardInWork")
 	}
 	project, err := m.store.Project(card.Project)
 	if err != nil {
-		return fmt.Errorf("проект карточки не найден в реестре: %w", err)
+		return err
 	}
 	if info, err := os.Stat(card.Worktree); err == nil && info.IsDir() {
 		args := []string{"worktree", "remove", card.Worktree}
@@ -343,16 +338,16 @@ func (m *Manager) RemoveWorktree(cardID string, discard bool) error {
 		}
 		if _, err := git(project.Path, args...); err != nil {
 			if !discard && strings.Contains(err.Error(), "modified or untracked") {
-				return fmt.Errorf("в рабочем дереве появились незакоммиченные изменения — посмотрите на них ещё раз")
+				return msg.Err("worktree.becameDirty")
 			}
-			return fmt.Errorf("не удалось удалить рабочее дерево: %w", err)
+			return msg.Wrap(err, "worktree.removeFailed")
 		}
 	}
 	_, _ = git(project.Path, "worktree", "prune")
 	if err := m.store.SetCardWorkspace(card.ID, card.Branch, card.Base, ""); err != nil {
 		return err
 	}
-	m.note(card.ID, fmt.Sprintf("Рабочее дерево `%s` удалено, ветка `%s` осталась.", card.Worktree, card.Branch))
+	m.note(card.ID, msg.New("journal.worktreeRemoved", "path", card.Worktree, "branch", card.Branch))
 	m.emitAttention(Attention{Key: "w:" + card.ID, CardID: card.ID})
 	return nil
 }

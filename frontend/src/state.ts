@@ -6,6 +6,7 @@ import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp
 import type { Card, Flow, InboxGroup, Project, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { CardSummary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
+import { errorText, label, t } from "./i18n";
 
 // Everything the screens read, in one place. The backend is the only copy of
 // the truth — nothing here is computed from an earlier answer — so a reload is
@@ -20,27 +21,24 @@ export const [agents, setAgents] = createSignal<AgentsView>({ agents: [], adapte
 export const [attention, setAttention] = createSignal<Attention[]>([]);
 export const [projects, setProjects] = createSignal<Project[]>([]);
 
-// How a card works in a repository, in the words the server names them
-// (model/workmode.go). Offered wherever a card gets its project: the card
-// itself and a task typed into the ribbon.
-export const WORK_MODES = [
-  { value: "", label: "в самой папке, как есть",
-    why: "агент работает в папке на той ветке, что сейчас в ней стоит" },
-  { value: "worktree", label: "отдельное рабочее дерево",
-    why: "своя копия папки на своей ветке — можно вести несколько задач одного репозитория сразу, ваша папка не трогается" },
-  { value: "branch", label: "ветка в этой же папке",
-    why: "папка переключается на ветку задачи — по одной задаче за раз, работа сразу видна в вашем редакторе" },
-];
+// How a card works in a repository, as the server names the modes
+// (model/workmode.go), with what each means. Offered wherever a card gets its
+// project: the card itself and a task typed into the ribbon. The order is the
+// server's; the words are the dictionary's.
+export const workModes = () =>
+  (list(vocabulary().workModes).length > 0 ? list(vocabulary().workModes) : [""]).map((value) => ({
+    value, label: label("workMode", value), why: t(`workModeWhy.${value || "_"}`),
+  }));
 
 // Where the application is in replacing itself. A build with no updater — a
-// headless run, a test — answers too, and says «не поддерживается»: the screen
+// headless run, a test — answers too, and says it is not supported: the screen
 // then shows the version and nothing else rather than an empty panel.
 export const [updateState, setUpdateState] = createSignal<UpdateState>({
   supported: false, enabled: false, currentVersion: "", status: "unconfigured",
 });
 export const [vocabulary, setVocabulary] = createSignal<Vocabulary>({
   triggers: [], actions: [], works: [], kinds: [], ruleActions: [],
-  outcomeProperty: "", outcomeValues: [], screenKinds: [], projectKinds: [],
+  outcomeProperty: "", outcomeValues: [], screenKinds: [], projectKinds: [], workModes: [],
 });
 
 // A Go slice that was empty arrives as null, and every screen would otherwise
@@ -51,16 +49,30 @@ export function list<T>(v: T[] | null | undefined): T[] {
   return v ?? [];
 }
 
-// error is the last thing that went wrong, shown once and dismissible. A
-// refusal from the backend is a sentence written for a person — it is displayed
-// as it came rather than replaced with something vaguer.
-export const [error, setError] = createSignal<string>("");
+// error is the last thing that went wrong, shown once and dismissible. Kept as
+// it came and worded when shown, so a refusal reads in the language the screen
+// is in now rather than the one it was in when it happened.
+const [failure, setFailure] = createSignal<unknown>(null);
+export const error = () => (failure() === null ? "" : errorText(failure()));
+export const setError = (e: unknown) => setFailure(e === "" ? null : e);
 
 /** report shows a failure without letting it break the caller's flow. */
 export function report(e: unknown) {
-  const text = e instanceof Error ? e.message : String(e);
-  setError(text);
+  setFailure(e);
   console.error(e);
+}
+
+/** syncNotificationWords hands the backend what a system notification says
+ *  around an agent's question, in the language the screen is in. The backend
+ *  has no words of its own for it. */
+export function syncNotificationWords() {
+  void API.SetNotificationWords({
+    asks: t("notify.asks"),
+    permission: t("notify.permission"),
+    permissionBare: t("notify.permissionBare"),
+    reply: t("notify.reply"),
+    replyPlaceholder: t("notify.replyPlaceholder"),
+  }).catch((e) => console.error(e));
 }
 
 /** guard runs an action and reports a refusal instead of throwing it away. */
@@ -233,7 +245,7 @@ export async function loadRibbons() {
   }
 }
 
-/** showRibbon opens one card's strip, which is what «Сделай» ends in. */
+/** showRibbon opens one card's strip, which is what «Do it» ends in. */
 export function showRibbon(cardID: string) {
   if (!ribbons.some((r) => r.id === cardID) || cardID === closedRibbon()) {
     // Not in the stack: a card already closed, or one that is about to arrive
@@ -247,7 +259,7 @@ export function showRibbon(cardID: string) {
 }
 
 // Which screen is open. A signal rather than a local of the shell, because
-// «Сделай» is one gesture that ends on another screen: taking a card into work
+// «Do it» is one gesture that ends on another screen: taking a card into work
 // and watching it start are the same moment.
 export type Tab = "inbox" | "ribbon" | "work" | "attention" | "flows" | "projects" | "sources" | "agents" | "updates";
 export const [tab, setTab] = createSignal<Tab>("inbox");

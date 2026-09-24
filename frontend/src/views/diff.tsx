@@ -4,6 +4,7 @@ import { Events } from "@wailsio/runtime";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Diff, File } from "../../bindings/github.com/artipop/xxvi/internal/gitdiff/models";
 import { list } from "../state";
+import { errorText, label, plural, t } from "../i18n";
 
 // The diff screen: what changed in the card's working copy, read from the git
 // that is already in that folder.
@@ -15,16 +16,9 @@ import { list } from "../state";
 // thing would be a second answer to one question.
 //
 // A failure of git is not a failure of the screen: a card whose project is not
-// a repository is an ordinary card, and the pane says so in the sentence the
-// backend wrote rather than pushing it into the application's error bar, where
-// it would read as something broken.
-
-const STATUS: Record<string, string> = {
-  added: "новый",
-  deleted: "удалён",
-  modified: "изменён",
-  renamed: "переименован",
-};
+// a repository is an ordinary card, and the pane says so itself rather than
+// pushing it into the application's error bar, where it would read as
+// something broken.
 
 // How many lines make a file nobody opened this pane to read. A lock file, a
 // generated bundle, a vendored blob: a real change that belongs in the list,
@@ -44,7 +38,7 @@ const rereadAfterMs = 800;
 
 export default function DiffPane(props: { cardId: string; rev: string }): JSX.Element {
   const [diff, setDiff] = createSignal<Diff | null>(null);
-  const [failed, setFailed] = createSignal("");
+  const [failed, setFailed] = createSignal<unknown>(null);
   const [busy, setBusy] = createSignal(true);
 
   let reading = false;
@@ -56,11 +50,11 @@ export default function DiffPane(props: { cardId: string; rev: string }): JSX.El
     setBusy(true);
     try {
       setDiff(await API.Diff(props.cardId, props.rev));
-      setFailed("");
+      setFailed(null);
     } catch (e) {
       // What is already on screen stays under the message: a folder that failed
       // to be read once has not stopped holding what it held.
-      setFailed(e instanceof Error ? e.message : String(e));
+      setFailed(e);
     } finally {
       reading = false;
       setBusy(false);
@@ -99,30 +93,30 @@ export default function DiffPane(props: { cardId: string; rev: string }): JSX.El
         <span class="mono" title={diff()?.root}>{compared(props.rev, diff())}</span>
         <Show when={files().length > 0}>
           <span class="meta">
-            {files().length} файл(ов) <span class="plus">+{added()}</span>{" "}
+            {plural("diff.files", files().length)} <span class="plus">+{added()}</span>{" "}
             <span class="minus">−{removed()}</span>
           </span>
         </Show>
         <div class="spacer" />
         <Show when={files().length > 1}>
-          <button class="btn quiet tiny" onClick={() => setFoldAll(foldAll() + 1)} title="Свернуть все файлы">⌃</button>
-          <button class="btn quiet tiny" onClick={() => setUnfoldAll(unfoldAll() + 1)} title="Развернуть все файлы">⌄</button>
+          <button class="btn quiet tiny" onClick={() => setFoldAll(foldAll() + 1)} title={t("diff.foldAll")}>⌃</button>
+          <button class="btn quiet tiny" onClick={() => setUnfoldAll(unfoldAll() + 1)} title={t("diff.unfoldAll")}>⌄</button>
         </Show>
-        <button class="btn quiet tiny" onClick={() => void read()} disabled={busy()} title="Перечитать">↻</button>
+        <button class="btn quiet tiny" onClick={() => void read()} disabled={busy()} title={t("diff.reread")}>↻</button>
       </div>
 
       <div class="diff-body">
-        <Show when={failed() !== ""}>
-          <div class="screen-note">{failed()}</div>
+        <Show when={failed() !== null}>
+          <div class="screen-note">{errorText(failed())}</div>
         </Show>
-        <Show when={!busy() || diff()} fallback={<div class="screen-note">Читаем изменения…</div>}>
-          <Show when={files().length > 0} fallback={<Show when={failed() === ""}><div class="screen-note">Изменений нет.</div></Show>}>
+        <Show when={!busy() || diff()} fallback={<div class="screen-note">{t("diff.reading")}</div>}>
+          <Show when={files().length > 0} fallback={<Show when={failed() === null}><div class="screen-note">{t("diff.none")}</div></Show>}>
             <For each={files()}>
               {(file) => <FileBlock file={file} foldAll={foldAll()} unfoldAll={unfoldAll()} />}
             </For>
             <Show when={diff()?.truncated}>
               <div class="screen-note">
-                Показано не всё: изменений больше, чем помещается на экран. Числа над файлами — настоящие.
+                {t("diff.truncated")}
               </div>
             </Show>
           </Show>
@@ -137,17 +131,10 @@ export default function DiffPane(props: { cardId: string; rev: string }): JSX.El
 // would describe the smaller half of what is on screen.
 function compared(rev: string, diff: Diff | null): string {
   if (rev.trim() !== "") return rev;
-  if (!diff?.base) return "не закоммичено";
-  const n = diff.commits ?? 0;
-  return `ветка ${diff.branch || "?"} от ${diff.base}, ${n} ${commitsWord(n)}`;
-}
-
-function commitsWord(n: number): string {
-  const tens = n % 100, ones = n % 10;
-  if (tens >= 11 && tens <= 14) return "коммитов";
-  if (ones === 1) return "коммит";
-  if (ones >= 2 && ones <= 4) return "коммита";
-  return "коммитов";
+  if (!diff?.base) return t("diff.uncommitted");
+  return t("diff.branch", {
+    branch: diff.branch || "?", base: diff.base, commits: plural("diff.commits", diff.commits ?? 0),
+  });
 }
 
 function FileBlock(props: { file: File; foldAll: number; unfoldAll: number }): JSX.Element {
@@ -170,14 +157,14 @@ function FileBlock(props: { file: File; foldAll: number; unfoldAll: number }): J
         onClick={() => foldable() && setOpen(!open())}
       >
         <span class="diff-chevron">{foldable() ? (open() ? "⌄" : "›") : ""}</span>
-        <span class="tag">{STATUS[props.file.status] ?? props.file.status}</span>
+        <span class="tag">{label("fileStatus", props.file.status)}</span>
         <span class="mono diff-path">
           <Show when={props.file.oldPath && props.file.oldPath !== props.file.path}>
             <span class="dim">{props.file.oldPath} → </span>
           </Show>
           {props.file.path}
         </span>
-        <Show when={props.file.binary}><span class="tag">двоичный</span></Show>
+        <Show when={props.file.binary}><span class="tag">{t("diff.binary")}</span></Show>
         <div class="spacer" />
         <span class="meta">
           <span class="plus">+{props.file.added}</span> <span class="minus">−{props.file.removed}</span>

@@ -1,15 +1,17 @@
 package model
 
 import (
-	"fmt"
 	"path"
+	"strconv"
 	"strings"
+
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // Validation of a whole flow, in one place, because that is how it is saved:
 // the editor hands over the entire graph and the engine checks it before it
 // takes it. A transition leading nowhere, two stages of one name, an agent that
-// is not registered — each is refused with a sentence saying which.
+// is not registered — each is refused with a message saying which.
 //
 // The list this implements is docs/system.md §10.
 
@@ -19,11 +21,11 @@ import (
 func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 	f.Name = strings.TrimSpace(f.Name)
 	if f.Name == "" {
-		return Flow{}, fmt.Errorf("имя флоу не может быть пустым")
+		return Flow{}, msg.Err("flow.noName")
 	}
 	f.Description = strings.TrimSpace(f.Description)
 	if len(f.Stages) == 0 {
-		return Flow{}, fmt.Errorf("флоу «%s» не содержит ни одной стадии", f.Name)
+		return Flow{}, msg.Err("flow.noStages", "flow", f.Name)
 	}
 
 	seenID := make(map[string]bool, len(f.Stages))
@@ -35,17 +37,17 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 		s.Prompt = strings.TrimSpace(s.Prompt)
 
 		if s.ID == "" {
-			return Flow{}, fmt.Errorf("у стадии %d нет идентификатора", i+1)
+			return Flow{}, msg.Err("stage.noID", "n", strconv.Itoa(i+1))
 		}
 		if seenID[s.ID] {
-			return Flow{}, fmt.Errorf("идентификатор стадии «%s» встречается дважды", s.ID)
+			return Flow{}, msg.Err("stage.idTwice", "id", s.ID)
 		}
 		if s.Name == "" {
-			return Flow{}, fmt.Errorf("у стадии %d нет названия", i+1)
+			return Flow{}, msg.Err("stage.noName", "n", strconv.Itoa(i+1))
 		}
 		lower := strings.ToLower(s.Name)
 		if seenName[lower] {
-			return Flow{}, fmt.Errorf("две стадии называются «%s» — карточка не сможет сказать, где она", s.Name)
+			return Flow{}, msg.Err("stage.nameTwice", "stage", s.Name)
 		}
 		if s.Action == "" {
 			s.Action = ActionNone
@@ -53,31 +55,30 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 		switch s.Action {
 		case ActionNone, ActionAgent:
 		default:
-			return Flow{}, fmt.Errorf("неизвестное действие «%s» у стадии «%s» (допустимо: %s)",
-				s.Action, s.Name, strings.Join(Actions, ", "))
+			return Flow{}, msg.Err("stage.unknownAction",
+				"action", s.Action, "stage", s.Name, "allowed", strings.Join(Actions, ", "))
 		}
 		// Where the work happens is a question only an agent stage has, and one
 		// it always has: a stage that named no mode is worked in the terminal.
 		switch {
 		case s.Action != ActionAgent:
 			if s.Work != "" {
-				return Flow{}, fmt.Errorf("стадия «%s» ничего не запускает — режиму работы «%s» там негде быть",
-					s.Name, s.Work)
+				return Flow{}, msg.Err("stage.workWithoutAgent", "stage", s.Name, "work", s.Work)
 			}
 		case s.Work == "":
 			s.Work = WorkTerminal
 		case s.Work == WorkTerminal || s.Work == WorkSession:
 		default:
-			return Flow{}, fmt.Errorf("неизвестный режим работы «%s» у стадии «%s» (допустимо: %s)",
-				s.Work, s.Name, strings.Join(Works, ", "))
+			return Flow{}, msg.Err("stage.unknownWork",
+				"work", s.Work, "stage", s.Name, "allowed", strings.Join(Works, ", "))
 		}
 		if s.MaxRunning < 0 {
-			return Flow{}, fmt.Errorf("лимит одновременных сессий стадии «%s» не может быть отрицательным", s.Name)
+			return Flow{}, msg.Err("stage.negativeLimit", "stage", s.Name)
 		}
 
 		crew, err := normalizeCrew(s.Crew, agents)
 		if err != nil {
-			return Flow{}, fmt.Errorf("стадия «%s»: %w", s.Name, err)
+			return Flow{}, msg.Wrap(err, "stage.invalid", "stage", s.Name)
 		}
 		s.Crew = crew
 
@@ -86,20 +87,19 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 		// "the only registered agent", and that has to actually be true.
 		if s.Action == ActionAgent && len(s.Crew) == 0 && len(agents) != 1 {
 			if len(agents) == 0 {
-				return Flow{}, fmt.Errorf("стадия «%s» запускает агента, но ни один агент не зарегистрирован", s.Name)
+				return Flow{}, msg.Err("stage.noAgents", "stage", s.Name)
 			}
-			return Flow{}, fmt.Errorf("у стадии «%s» не задан состав, а агентов несколько (%s) — выбирать будет не из чего",
-				s.Name, AgentNames(agents))
+			return Flow{}, msg.Err("stage.noCrew", "stage", s.Name, "agents", AgentNames(agents))
 		}
 		// A final stage is where a card stops. Running something there would
 		// produce an outcome with nowhere to go.
 		if s.Final && s.Action != ActionNone {
-			return Flow{}, fmt.Errorf("финальная стадия «%s» ничего не делает — уберите действие «%s»", s.Name, s.Action)
+			return Flow{}, msg.Err("stage.finalRuns", "stage", s.Name, "action", s.Action)
 		}
 
 		writes, err := normalizeWrites(s.Writes)
 		if err != nil {
-			return Flow{}, fmt.Errorf("стадия «%s»: %w", s.Name, err)
+			return Flow{}, msg.Wrap(err, "stage.invalid", "stage", s.Name)
 		}
 		s.Writes = writes
 		s.Reads = normalizeReads(s.Reads)
@@ -108,10 +108,10 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 		// waits gets its answer from a person, and that answer is the card's own
 		// property — declared nowhere, because nobody is being told to write it.
 		if len(s.Writes) > 0 && s.Action != ActionAgent {
-			return Flow{}, fmt.Errorf("стадия «%s» ничего не запускает — писать на карточку там некому", s.Name)
+			return Flow{}, msg.Err("stage.writesWithoutAgent", "stage", s.Name)
 		}
 		if len(s.Reads) > 0 && s.Action != ActionAgent {
-			return Flow{}, fmt.Errorf("стадия «%s» ничего не запускает — читать с карточки там некому", s.Name)
+			return Flow{}, msg.Err("stage.readsWithoutAgent", "stage", s.Name)
 		}
 
 		// Screens are checked but not restricted by action: unlike writes and
@@ -120,7 +120,7 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 		// (docs/system.md §12.4).
 		screens, err := normalizeScreens(s.Screens)
 		if err != nil {
-			return Flow{}, fmt.Errorf("стадия «%s»: %w", s.Name, err)
+			return Flow{}, msg.Wrap(err, "stage.invalid", "stage", s.Name)
 		}
 		s.Screens = screens
 
@@ -130,10 +130,10 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 
 	f.EntryStage = strings.TrimSpace(f.EntryStage)
 	if f.EntryStage == "" {
-		return Flow{}, fmt.Errorf("во флоу «%s» не указана входная стадия", f.Name)
+		return Flow{}, msg.Err("flow.noEntry", "flow", f.Name)
 	}
 	if !seenID[f.EntryStage] {
-		return Flow{}, fmt.Errorf("входная стадия «%s» отсутствует во флоу", f.EntryStage)
+		return Flow{}, msg.Err("flow.entryMissing", "stage", f.EntryStage)
 	}
 
 	// Several conditional edges may share one (from, on) — the conditions tell
@@ -147,17 +147,17 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 		e.On = strings.TrimSpace(e.On)
 
 		if !seenID[e.From] {
-			return Flow{}, fmt.Errorf("переход ведёт из несуществующей стадии «%s»", e.From)
+			return Flow{}, msg.Err("edge.fromMissing", "stage", e.From)
 		}
 		if !seenID[e.To] {
-			return Flow{}, fmt.Errorf("переход из «%s» ведёт в несуществующую стадию «%s»", stageName(f, e.From), e.To)
+			return Flow{}, msg.Err("edge.toMissing", "from", stageName(f, e.From), "stage", e.To)
 		}
 		trigger, ok := TriggerByKind(e.On)
 		if !ok {
-			return Flow{}, fmt.Errorf("неизвестное событие перехода «%s»", e.On)
+			return Flow{}, msg.Err("edge.unknownTrigger", "on", e.On)
 		}
 		if from, _ := f.Stage(e.From); from.Final {
-			return Flow{}, fmt.Errorf("из финальной стадии «%s» не может быть переходов", from.Name)
+			return Flow{}, msg.Err("edge.fromFinal", "stage", from.Name)
 		}
 		if e.If.IsZero() {
 			e.If = nil
@@ -165,22 +165,19 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 		if e.If != nil {
 			cond, err := validateCond(*e.If, trigger)
 			if err != nil {
-				return Flow{}, fmt.Errorf("переход из «%s» по событию «%s»: %w",
-					stageName(f, e.From), TriggerLabel(e.On), err)
+				return Flow{}, msg.Wrap(err, "edge.invalid", "from", stageName(f, e.From), "on", e.On)
 			}
 			e.If = &cond
 		}
 		// For card.changed the condition is not a guard but the event itself:
 		// an edge that does not say which value fires it waits for nothing.
 		if e.On == TriggerCardChanged && e.If == nil {
-			return Flow{}, fmt.Errorf("переход «%s» из «%s» должен говорить, какое значение его запускает",
-				TriggerLabel(e.On), stageName(f, e.From))
+			return Flow{}, msg.Err("edge.noValue", "on", e.On, "from", stageName(f, e.From))
 		}
 		if e.If == nil {
 			key := e.From + "|" + e.On
 			if seenFallback[key] {
-				return Flow{}, fmt.Errorf("у стадии «%s» два перехода по событию «%s» без условий — куда ехать, непонятно",
-					stageName(f, e.From), TriggerLabel(e.On))
+				return Flow{}, msg.Err("edge.twoFallbacks", "stage", stageName(f, e.From), "on", e.On)
 			}
 			seenFallback[key] = true
 		}
@@ -201,13 +198,13 @@ func validateCond(c Cond, trigger Trigger) (Cond, error) {
 	hasComment := c.CommentContains != ""
 	switch {
 	case hasProp && hasComment:
-		return Cond{}, fmt.Errorf("условие либо про свойство карточки, либо про ответ агента — не оба сразу")
+		return Cond{}, msg.Err("cond.both")
 	case !hasProp && !hasComment:
-		return Cond{}, fmt.Errorf("пустое условие")
+		return Cond{}, msg.Err("cond.empty")
 	case hasProp && (c.Property == "" || c.Value == ""):
-		return Cond{}, fmt.Errorf("условию нужны и свойство, и значение")
+		return Cond{}, msg.Err("cond.half")
 	case hasComment && trigger.Source != SourceOutcome:
-		return Cond{}, fmt.Errorf("условие про ответ агента возможно только на исходе шага — здесь агент ничего не говорил")
+		return Cond{}, msg.Err("cond.commentNotOutcome")
 	}
 	return c, nil
 }
@@ -232,7 +229,7 @@ func normalizeCrew(crew []string, agents []Agent) ([]string, error) {
 			}
 		}
 		if entry == nil {
-			return nil, fmt.Errorf("агент «%s» не найден в реестре (%s)", name, AgentNames(agents))
+			return nil, msg.Err("crew.unknownAgent", "agent", name, "agents", AgentNames(agents))
 		}
 		if seen[Username(entry.Name)] {
 			continue
@@ -262,11 +259,11 @@ func normalizeWrites(writes []PropertyWrite) ([]PropertyWrite, error) {
 			continue
 		}
 		if IsOutcomeProperty(w.Property) {
-			return nil, fmt.Errorf("«%s» пишется само после каждой стадии — объявлять его не нужно", OutcomeProperty)
+			return nil, msg.Err("writes.outcome")
 		}
 		key := strings.ToLower(w.Property)
 		if seen[key] {
-			return nil, fmt.Errorf("свойство «%s» объявлено дважды", w.Property)
+			return nil, msg.Err("writes.twice", "property", w.Property)
 		}
 		seen[key] = true
 		out = append(out, w)
@@ -298,14 +295,14 @@ func normalizeScreens(screens []Screen) ([]Screen, error) {
 			continue
 		}
 		if !isScreenKind(sc.Kind) {
-			return nil, fmt.Errorf("неизвестный вид экрана «%s»", sc.Kind)
+			return nil, msg.Err("screen.unknownKind", "kind", sc.Kind)
 		}
 		// A terminal without a command is a shell in the card's folder, and a
 		// diff without revisions is what is not committed yet — both are the
 		// screen's useful default rather than an unfinished declaration. The
 		// rest point at something, and without it there is nothing to open.
 		if sc.Ref == "" && sc.Kind != ScreenTerminal && sc.Kind != ScreenDiff {
-			return nil, fmt.Errorf("экран «%s» не говорит, что показывать", ScreenKindLabel(sc.Kind))
+			return nil, msg.Err("screen.noRef", "kind", sc.Kind)
 		}
 		if sc.Kind == ScreenNotes {
 			if err := checkNotesPath(sc.Ref); err != nil {
@@ -319,7 +316,7 @@ func normalizeScreens(screens []Screen) ([]Screen, error) {
 		}
 		key := strings.ToLower(sc.Kind + "\x00" + sc.Ref)
 		if seen[key] {
-			return nil, fmt.Errorf("экран «%s» на «%s» объявлен дважды", ScreenKindLabel(sc.Kind), sc.Ref)
+			return nil, msg.Err("screen.twice", "kind", sc.Kind, "ref", sc.Ref)
 		}
 		seen[key] = true
 		out = append(out, sc)
@@ -354,13 +351,13 @@ func checkNotesPath(ref string) error {
 		abs = true
 	}
 	if abs {
-		return fmt.Errorf("путь к заметкам «%s» должен быть относительным — он лежит в папке карточки", ref)
+		return msg.Err("notes.absolute", "path", ref)
 	}
 	// Checked on the cleaned path so that "a/../../b" is caught as well as the
 	// plainly written "../b".
 	clean := path.Clean(slashed)
 	if clean == ".." || strings.HasPrefix(clean, "../") {
-		return fmt.Errorf("путь к заметкам «%s» выходит из папки карточки", ref)
+		return msg.Err("notes.escapes", "path", ref)
 	}
 	return nil
 }
@@ -374,7 +371,7 @@ func checkNotesPath(ref string) error {
 func checkRevisions(ref string) error {
 	for _, rev := range strings.Fields(ref) {
 		if strings.HasPrefix(rev, "-") {
-			return fmt.Errorf("«%s» — это не ревизия: экран «дифф» говорит, что с чем сравнить", rev)
+			return msg.Err("diff.notRevision", "rev", rev)
 		}
 	}
 	return nil

@@ -1,6 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import { agents, applyCard, attention, closeCard, guard, list, openCard, projects, showRibbon, WORK_MODES } from "../state";
+import { agents, applyCard, attention, closeCard, guard, list, openCard, projects, showRibbon, vocabulary, workModes } from "../state";
+import { label, markTitle, propName, propValue, t, waitText } from "../i18n";
 import { QuestionForm, WorktreeForm } from "./attention";
 import { JournalList } from "./journal";
 
@@ -19,14 +20,14 @@ export default function CardPanel() {
     <div>
       <div class="panel">
         <div class="row">
-          <h3 style={{ margin: 0 }}>{card().source || "Своя карточка"}</h3>
+          <h3 style={{ margin: 0 }}>{card().source || t("card.own")}</h3>
           <div class="spacer" />
           {/* Any card that has been anywhere has a strip, finished or not —
               and a finished one is where its results are. */}
           <Show when={list(view().events).length > 0}>
-            <button class="btn quiet" onClick={() => showRibbon(card().id)}>Лента →</button>
+            <button class="btn quiet" onClick={() => showRibbon(card().id)}>{t("common.toRibbon")}</button>
           </Show>
-          <button class="btn quiet" onClick={closeCard}>Закрыть</button>
+          <button class="btn quiet" onClick={closeCard}>{t("common.close")}</button>
         </div>
 
         <div class="title" style={{ "margin-top": "6px", "font-size": "16px" }}>{card().title}</div>
@@ -41,7 +42,7 @@ export default function CardPanel() {
               {(s) => (
                 <button
                   class={`stage ${s.current ? "current" : ""} ${s.done ? "done" : ""} ${s.final ? "final" : ""}`}
-                  title="Перевести карточку сюда"
+                  title={t("card.moveHere")}
                   onClick={() => act(() => API.MoveTo(card().id, s.id))}
                 >
                   {s.name}
@@ -52,19 +53,19 @@ export default function CardPanel() {
 
           <div class="row wrap">
             <span class="tag">{flow()!.flowName}</span>
-            <Show when={flow()!.running}><span class="tag accent"><span class="dot" />агент работает</span></Show>
-            <Show when={flow()!.queued}><span class="tag"><span class="dot" />ждёт места на стадии</span></Show>
+            <Show when={flow()!.running}><span class="tag accent"><span class="dot" />{t("common.agentWorking")}</span></Show>
+            <Show when={flow()!.queued}><span class="tag"><span class="dot" />{t("card.queued")}</span></Show>
           </div>
 
           <Show when={(flow()!.waitingFor?.length ?? 0) > 0}>
             <div class="meta" style={{ "margin-top": "8px" }}>
-              Стадия ждёт: {flow()!.waitingFor!.join("; ")}
+              {t("card.stageWaits", { what: list(flow()!.waitingFor).map(waitText).join("; ") })}
             </div>
           </Show>
 
           {/* A stage where nobody works and nothing runs waits for a person to
               say how it went, and saying so used to mean finding the field in
-              «Свойства» and typing a value into it. There are two answers and
+              «Properties» and typing a value into it. There are two answers and
               the flow already knows where each of them leads, so they are two
               buttons naming the stage they lead to. */}
           <Show when={list(flow()!.marks).length > 0}>
@@ -73,7 +74,7 @@ export default function CardPanel() {
                 {(mark) => (
                   <button
                     class={`btn ${mark.forward ? "primary" : "quiet"}`}
-                    title={`Отметить «${mark.value}» — карточка уедет в «${mark.stage}»`}
+                    title={markTitle(mark)}
                     onClick={() => act(() => API.MarkOutcome(card().id, mark.value))}
                   >
                     {mark.forward ? `${mark.stage} →` : `← ${mark.stage}`}
@@ -88,10 +89,10 @@ export default function CardPanel() {
               <button class="btn quiet" onClick={() => act(async () => {
                 await API.CancelCard(card().id);
                 return API.Card(card().id);
-              })}>Остановить агента</button>
+              })}>{t("card.stopAgent")}</button>
             </Show>
             <button class="btn quiet" onClick={() => act(() => API.RemoveFromFlow(card().id))}>
-              Снять с флоу
+              {t("card.removeFromFlow")}
             </button>
           </div>
         </Show>
@@ -101,9 +102,11 @@ export default function CardPanel() {
           attention panel shows — answering either lets the agent go on. */}
       <Show when={view().question}>
         <div class="panel">
-          <h3>Агент спрашивает</h3>
+          <h3>{t("question.asks")}</h3>
           <QuestionForm
             questionId={view().question!.id}
+            kind={view().question!.kind}
+            tool={view().question!.tool}
             text={view().question!.text}
             options={view().question!.options ?? []}
             freeText={view().question!.freeText}
@@ -141,22 +144,21 @@ function Props() {
     if (!flow) return [] as { property: string; value: string }[];
     const out: { property: string; value: string }[] = [];
     for (const wait of flow.waitingFor ?? []) {
-      const m = wait.match(/«([^»]+)»\s*=\s*«([^»]+)»/);
-      if (m) out.push({ property: m[1], value: m[2] });
+      if (wait.if?.property && wait.if.value) out.push({ property: wait.if.property, value: wait.if.value });
     }
     return out;
   };
 
   return (
     <div class="panel">
-      <h3>Свойства</h3>
+      <h3>{t("card.props")}</h3>
 
       <Show when={awaited().length > 0}>
         <div class="row wrap" style={{ "margin-bottom": "10px" }}>
           <For each={awaited()}>
             {(a) => (
               <button class="btn primary" onClick={() => set(a.property, a.value)}>
-                {a.property}: {a.value}
+                {propName(a.property)}: {propValue(a.property, a.value)}
               </button>
             )}
           </For>
@@ -167,18 +169,29 @@ function Props() {
         <For each={Object.entries(view().card.props ?? {})}>
           {([n, v]) => (
             <>
-              <span class="name">{n}</span>
-              <input type="text" value={v} onChange={(e) => set(n, e.currentTarget.value)} />
-              <button class="btn quiet" title="Убрать" onClick={() => set(n, "")}>×</button>
+              <span class="name">{propName(n)}</span>
+              {/* The outcome is the application's own closed set, stored as an
+                  identifier: offered as its two values, in the person's words,
+                  rather than as an identifier to retype. */}
+              <Show when={sameName(n, vocabulary().outcomeProperty)} fallback={
+                <input type="text" value={v} onChange={(e) => set(n, e.currentTarget.value)} />
+              }>
+                <select value={v} onChange={(e) => set(n, e.currentTarget.value)}>
+                  <For each={list(vocabulary().outcomeValues)}>
+                    {(o) => <option value={o}>{label("outcome", o)}</option>}
+                  </For>
+                </select>
+              </Show>
+              <button class="btn quiet" title={t("common.remove")} onClick={() => set(n, "")}>×</button>
             </>
           )}
         </For>
       </div>
 
       <div class="row" style={{ "margin-top": "10px" }}>
-        <input type="text" placeholder="свойство" value={name()} onInput={(e) => setName(e.currentTarget.value)} />
-        <input type="text" placeholder="значение" value={value()} onInput={(e) => setValue(e.currentTarget.value)} />
-        <button class="btn" onClick={add}>Задать</button>
+        <input type="text" placeholder={t("card.propName")} value={name()} onInput={(e) => setName(e.currentTarget.value)} />
+        <input type="text" placeholder={t("card.propValue")} value={value()} onInput={(e) => setValue(e.currentTarget.value)} />
+        <button class="btn" onClick={add}>{t("card.setProp")}</button>
       </div>
     </div>
   );
@@ -197,19 +210,17 @@ function Place() {
 
   return (
     <div class="panel">
-      <h3>Проект</h3>
+      <h3>{t("card.project")}</h3>
       <Show when={projects().length > 0} fallback={
-        <div class="meta">Реестр пуст. Пока в нём ничего нет, карточка работает в своей пустой папке.</div>
+        <div class="meta">{t("card.noProjects")}</div>
       }>
         <select value={view().card.project ?? ""} onChange={(e) => set(e.currentTarget.value)}
                 style={{ width: "auto" }}>
-          <option value="">своя папка</option>
+          <option value="">{t("common.ownFolder")}</option>
           <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
         </select>
         <div class="meta" style={{ "margin-top": "6px" }}>
-          {current()
-            ? `Агент, терминал и заметки открываются в ${where()}`
-            : "Карточка получит свою пустую папку — это верно для работы с чистого листа."}
+          {current() ? t("card.opensIn", { path: where() }) : t("card.ownFolderNote")}
         </div>
         <Show when={current()?.repo}>
           <WorkMode />
@@ -235,20 +246,20 @@ function WorkMode() {
     <div style={{ "margin-top": "10px" }}>
       <Show when={!view().card.branch} fallback={
         <div class="meta">
-          {view().card.worktree ? "Отдельное рабочее дерево" : "Ветка в этой же папке"}:{" "}
+          {view().card.worktree ? t("card.onWorktree") : t("card.onBranch")}:{" "}
           <code>{view().card.branch}</code>
-          {view().card.base ? <> от <code>{view().card.base}</code></> : null}
+          {view().card.base ? <> {t("card.from")} <code>{view().card.base}</code></> : null}
           <Show when={asked()}>
             <WorktreeForm a={asked()!} onAnswered={applyCard} />
           </Show>
         </div>
       }>
         <select value={view().card.workMode ?? ""} onChange={(e) => set(e.currentTarget.value)}
-                style={{ width: "auto" }} title="Как агенту работать с папкой">
-          <For each={WORK_MODES}>{(m) => <option value={m.value}>{m.label}</option>}</For>
+                style={{ width: "auto" }} title={t("card.workModeTitle")}>
+          <For each={workModes()}>{(m) => <option value={m.value}>{m.label}</option>}</For>
         </select>
         <div class="meta" style={{ "margin-top": "6px" }}>
-          {WORK_MODES.find((m) => m.value === (view().card.workMode ?? ""))?.why}
+          {workModes().find((m) => m.value === (view().card.workMode ?? ""))?.why}
         </div>
       </Show>
     </div>
@@ -262,19 +273,19 @@ function Assignee() {
 
   return (
     <div class="panel">
-      <h3>Исполнитель</h3>
+      <h3>{t("card.assignee")}</h3>
       <div class="row wrap">
         <select value={view().card.assignee ?? ""} onChange={(e) => set(e.currentTarget.value)}
                 style={{ width: "auto" }}>
-          <option value="">не назначен</option>
+          <option value="">{t("card.unassigned")}</option>
           <For each={agents().agents}>{(a) => <option value={a.name}>{a.name}</option>}</For>
         </select>
-        <input type="text" placeholder="или имя человека"
+        <input type="text" placeholder={t("card.orPerson")}
                value={isAgent(view().card.assignee ?? "") ? "" : (view().card.assignee ?? "")}
                onChange={(e) => set(e.currentTarget.value)} />
       </div>
       <div class="meta" style={{ "margin-top": "6px" }}>
-        Имя агента — «пусть работает он». Имя человека — карточку взяли, и агент на ней не запускается.
+        {t("card.assigneeNote")}
       </div>
     </div>
   );
@@ -292,11 +303,15 @@ function Journal() {
   return (
     <div class="panel">
       <button class="fold" onClick={() => setOpen(!open())}>
-        Журнал <span class={`caret ${open() ? "open" : ""}`}>›</span>
+        {t("card.journal")} <span class={`caret ${open() ? "open" : ""}`}>›</span>
       </button>
       <Show when={open()}>
         <JournalList entries={list(view().journal)} />
       </Show>
     </div>
   );
+}
+
+function sameName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
 }

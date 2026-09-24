@@ -1,8 +1,9 @@
 package model
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // A project is where the work happens: the card says what, the flow says how it
@@ -25,14 +26,6 @@ const (
 
 // ProjectKinds is every accepted kind, in the order the editor offers them.
 var ProjectKinds = []string{ProjectFolder}
-
-// ProjectKindLabel names a kind for a person.
-func ProjectKindLabel(kind string) string {
-	if kind == ProjectFolder {
-		return "папка"
-	}
-	return kind
-}
 
 // Project is one place work is done.
 type Project struct {
@@ -70,22 +63,22 @@ func ValidateProject(p Project) (Project, error) {
 	p.Path = strings.TrimSpace(p.Path)
 
 	if p.Name == "" {
-		return Project{}, fmt.Errorf("у проекта нет названия")
+		return Project{}, msg.Err("project.noName")
 	}
 	if p.Kind == "" {
 		p.Kind = ProjectFolder
 	}
 	if !isProjectKind(p.Kind) {
-		return Project{}, fmt.Errorf("неизвестный вид проекта «%s» (допустимо: %s)",
-			p.Kind, strings.Join(ProjectKinds, ", "))
+		return Project{}, msg.Err("project.unknownKind",
+			"kind", p.Kind, "allowed", strings.Join(ProjectKinds, ", "))
 	}
 	if p.Path == "" {
-		return Project{}, fmt.Errorf("у проекта «%s» не указана папка", p.Name)
+		return Project{}, msg.Err("project.noPath", "project", p.Name)
 	}
 	// Absolute, because a relative path means "relative to whatever this
 	// process happened to be started in", and that is not a place.
 	if !strings.HasPrefix(p.Path, "/") && !(len(p.Path) >= 2 && p.Path[1] == ':') {
-		return Project{}, fmt.Errorf("путь проекта «%s» должен быть абсолютным: %s", p.Name, p.Path)
+		return Project{}, msg.Err("project.relativePath", "project", p.Name, "path", p.Path)
 	}
 	return p, nil
 }

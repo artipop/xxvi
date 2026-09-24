@@ -28,11 +28,11 @@ type CardFlow struct {
 	Stages   []CardStage `json:"stages"`
 	StageID  string      `json:"stageId"`
 	Since    time.Time   `json:"since"`
-	// WaitingFor is what the stage is waiting on, in a person's words and with
-	// the conditions spelled out. Empty on a stage that runs something.
-	WaitingFor []string `json:"waitingFor,omitempty"`
-	Queued     bool     `json:"queued,omitempty"`  // waiting for a place on the stage
-	Running    bool     `json:"running,omitempty"` // a session of this stage is working now
+	// WaitingFor is what the stage is waiting on: the events, and the conditions
+	// that make them the ones. Empty on a stage that runs something.
+	WaitingFor []model.Wait `json:"waitingFor,omitempty"`
+	Queued     bool         `json:"queued,omitempty"`  // waiting for a place on the stage
+	Running    bool         `json:"running,omitempty"` // a session of this stage is working now
 	// Marks are the moves a person can make from here — see model.Mark. Empty
 	// wherever the flow does not offer one, which is every stage that decides
 	// for itself.
@@ -66,7 +66,7 @@ func (e *Engine) CardFlowFor(cardID string) (*CardFlow, error) {
 			Done:    visited[s.ID] && s.ID != st.StageID,
 		})
 	}
-	out.WaitingFor = flow.WaitDescriptions(st.StageID)
+	out.WaitingFor = flow.Waits(st.StageID)
 
 	if e.runner != nil {
 		out.Running = e.runner.RunningOnStage(st.StageID) > 0 && e.cardIsRunning(cardID)

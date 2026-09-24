@@ -86,7 +86,7 @@ func Read(root string) (map[string][]string, error) {
 		}
 		matches := site.Pattern.FindAllStringSubmatch(string(data), -1)
 		if len(matches) == 0 {
-			return nil, fmt.Errorf("%s: версия не найдена — образец в internal/buildversion больше не подходит к этому файлу", site.Path)
+			return nil, fmt.Errorf("%s: version not found — the pattern in internal/buildversion no longer fits this file", site.Path)
 		}
 		versions := make([]string, 0, len(matches))
 		for _, m := range matches {
@@ -101,7 +101,7 @@ func Read(root string) (map[string][]string, error) {
 // byte as it was. It returns the paths it changed.
 func Set(root, version string) ([]string, error) {
 	if !semverish.MatchString(version) {
-		return nil, fmt.Errorf("%q — не версия вида x.y.z (без ведущего v: это дело тега)", version)
+		return nil, fmt.Errorf("%q is not a version of the form x.y.z (no leading v: that belongs to the tag)", version)
 	}
 	var changed []string
 	for _, site := range Sites {
@@ -112,7 +112,7 @@ func Set(root, version string) ([]string, error) {
 		}
 		next, n := replaceGroup(site.Pattern, string(data), version)
 		if n == 0 {
-			return nil, fmt.Errorf("%s: версия не найдена — образец в internal/buildversion больше не подходит к этому файлу", site.Path)
+			return nil, fmt.Errorf("%s: version not found — the pattern in internal/buildversion no longer fits this file", site.Path)
 		}
 		if next == string(data) {
 			continue

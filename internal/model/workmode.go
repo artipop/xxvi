@@ -1,6 +1,6 @@
 package model
 
-import "fmt"
+import "github.com/artipop/xxvi/internal/msg"
 
 // How a card works in its project when the project is a git repository. Asked
 // of the card, not of the project: the same repository takes a quick fix in
@@ -26,18 +26,6 @@ const (
 // WorkModes is every accepted mode, in the order a person is offered them.
 var WorkModes = []string{WorkModeFolder, WorkModeWorktree, WorkModeBranch}
 
-// WorkModeLabel names a mode for a person, in the words Russian git
-// documentation uses for these things.
-func WorkModeLabel(mode string) string {
-	switch mode {
-	case WorkModeWorktree:
-		return "отдельное рабочее дерево"
-	case WorkModeBranch:
-		return "ветка в этой же папке"
-	}
-	return "в самой папке, как есть"
-}
-
 // ValidateWorkMode refuses a mode this application does not know.
 func ValidateWorkMode(mode string) error {
 	for _, m := range WorkModes {
@@ -45,5 +33,5 @@ func ValidateWorkMode(mode string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("неизвестный способ работы с папкой «%s» (допустимо: worktree, branch или пусто)", mode)
+	return msg.Err("workMode.unknown", "mode", mode)
 }

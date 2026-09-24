@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/store"
 )
 
@@ -138,7 +139,7 @@ func TestBranchModeSwitchesTheFolderForOneCardAtATime(t *testing.T) {
 		t.Fatalf("папка на %q, карточка %+v", head, a)
 	}
 
-	if _, err := m.WorkDir(b.ID); err == nil || !strings.Contains(err.Error(), "занята") {
+	if _, err := m.WorkDir(b.ID); err == nil || !msg.Is(err, "branch.folderTaken") {
 		t.Fatalf("вторая карточка ждёт, пока папка занята: %v", err)
 	}
 
@@ -152,7 +153,7 @@ func TestBranchModeSwitchesTheFolderForOneCardAtATime(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _ = git(repo, "add", "f.txt")
-	if _, err := m.WorkDir(b.ID); err == nil || !strings.Contains(err.Error(), "незакоммиченные") {
+	if _, err := m.WorkDir(b.ID); err == nil || !msg.Is(err, "branch.folderDirty") {
 		t.Fatalf("под несохранённой работой папку не переключают: %v", err)
 	}
 	_, _ = git(repo, "commit", "-q", "-m", "f")

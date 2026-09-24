@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -64,7 +65,7 @@ func (c *sessionClient) RequestPermission(ctx context.Context, params acpsdk.Req
 
 	answer := c.m.ask(ctx, c.s, Question{
 		Kind:    QuestionPermission,
-		Text:    permissionText(toolName, title),
+		Text:    title,
 		Tool:    toolName,
 		Options: permissionOptions(params),
 	})
@@ -74,7 +75,7 @@ func (c *sessionClient) RequestPermission(ctx context.Context, params acpsdk.Req
 		// Nobody answered — the application is closing, the turn was cancelled,
 		// or the person said no. The policy is still the way to stop being asked.
 		c.recordDecision(toolName, title, "reject", answer.Declined)
-		c.m.log.Info("разрешение не выдано", "session", c.s.id, "card", c.s.card.ID, "tool", toolName)
+		c.m.log.Info("permission not granted", "session", c.s.id, "card", c.s.card.ID, "tool", toolName)
 		return selectOption(params, acpsdk.PermissionOptionKindRejectOnce)
 	}
 	// "Always" is what makes answering once enough: the rest of this session's
@@ -90,20 +91,6 @@ func (c *sessionClient) RequestPermission(ctx context.Context, params acpsdk.Req
 	return acpsdk.RequestPermissionResponse{Outcome: acpsdk.RequestPermissionOutcome{
 		Selected: &acpsdk.RequestPermissionOutcomeSelected{OptionId: acpsdk.PermissionOptionId(chosen.ID)},
 	}}, nil
-}
-
-// permissionText is the question as a person reads it: what the agent is about
-// to do, in the agent's own words where it gave any.
-func permissionText(toolName, title string) string {
-	switch {
-	case title != "" && toolName != "":
-		return fmt.Sprintf("Разрешить %s: %s?", toolName, title)
-	case title != "":
-		return fmt.Sprintf("Разрешить: %s?", title)
-	case toolName != "":
-		return fmt.Sprintf("Разрешить %s?", toolName)
-	}
-	return "Разрешить действие агента?"
 }
 
 // permissionOptions turns the agent's options into the card's buttons. The
@@ -289,29 +276,29 @@ func (c *sessionClient) WriteTextFile(ctx context.Context, params acpsdk.WriteTe
 // — and the boundary itself is shared with the notes screen (see Within).
 func (c *sessionClient) jail(path string) (string, error) {
 	if !filepath.IsAbs(path) {
-		return "", fmt.Errorf("путь должен быть абсолютным: %s", path)
+		return "", fmt.Errorf("the path must be absolute: %s", path)
 	}
 	inside, err := Within(c.s.cwd, path)
 	if err != nil {
-		c.m.log.Warn("доступ за пределы рабочей папки запрещён", "session", c.s.id, "path", filepath.Clean(path))
-		return "", fmt.Errorf("путь %s вне рабочей папки сессии", filepath.Clean(path))
+		c.m.log.Warn("access outside the working folder refused", "session", c.s.id, "path", filepath.Clean(path))
+		return "", fmt.Errorf("the path %s is outside the session's working folder", filepath.Clean(path))
 	}
 	return inside, nil
 }
 
 // Terminal capability is not advertised, so these are never reached.
 func (c *sessionClient) CreateTerminal(ctx context.Context, params acpsdk.CreateTerminalRequest) (acpsdk.CreateTerminalResponse, error) {
-	return acpsdk.CreateTerminalResponse{}, fmt.Errorf("терминал не поддерживается")
+	return acpsdk.CreateTerminalResponse{}, errors.New("terminals are not supported")
 }
 func (c *sessionClient) KillTerminal(ctx context.Context, params acpsdk.KillTerminalRequest) (acpsdk.KillTerminalResponse, error) {
-	return acpsdk.KillTerminalResponse{}, fmt.Errorf("терминал не поддерживается")
+	return acpsdk.KillTerminalResponse{}, errors.New("terminals are not supported")
 }
 func (c *sessionClient) TerminalOutput(ctx context.Context, params acpsdk.TerminalOutputRequest) (acpsdk.TerminalOutputResponse, error) {
-	return acpsdk.TerminalOutputResponse{}, fmt.Errorf("терминал не поддерживается")
+	return acpsdk.TerminalOutputResponse{}, errors.New("terminals are not supported")
 }
 func (c *sessionClient) ReleaseTerminal(ctx context.Context, params acpsdk.ReleaseTerminalRequest) (acpsdk.ReleaseTerminalResponse, error) {
-	return acpsdk.ReleaseTerminalResponse{}, fmt.Errorf("терминал не поддерживается")
+	return acpsdk.ReleaseTerminalResponse{}, errors.New("terminals are not supported")
 }
 func (c *sessionClient) WaitForTerminalExit(ctx context.Context, params acpsdk.WaitForTerminalExitRequest) (acpsdk.WaitForTerminalExitResponse, error) {
-	return acpsdk.WaitForTerminalExitResponse{}, fmt.Errorf("терминал не поддерживается")
+	return acpsdk.WaitForTerminalExitResponse{}, errors.New("terminals are not supported")
 }

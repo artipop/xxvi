@@ -2,6 +2,7 @@ import { createSignal, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { UpdateState } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
 import { loadUpdateState, updateState } from "../state";
+import { errorText, t, when } from "../i18n";
 
 // Replacing this application with a newer one, in its own words.
 //
@@ -19,21 +20,21 @@ import { loadUpdateState, updateState } from "../state";
 // closed is already finished when it opens.
 function headline(s: UpdateState): string {
   switch (s.status) {
-    case "checking": return "Ищу версию новее…";
-    case "available": return `Есть версия ${s.availableVersion ?? ""}`;
-    case "downloading": return "Скачиваю…";
-    case "verifying": return "Проверяю подпись…";
-    case "installing": return "Устанавливаю…";
-    case "ready": return `Версия ${s.availableVersion ?? ""} готова. Встанет при перезапуске.`;
-    case "error": return "Обновиться не получилось";
-    case "up-to-date": return "Это последняя версия";
+    case "checking": return t("updates.checking");
+    case "available": return t("updates.available", { version: s.availableVersion });
+    case "downloading": return t("updates.downloading");
+    case "verifying": return t("updates.verifying");
+    case "installing": return t("updates.installing");
+    case "ready": return t("updates.ready", { version: s.availableVersion });
+    case "error": return t("updates.error");
+    case "up-to-date": return t("updates.upToDate");
     default:
       // Idle. What a previous run found is not carried over — only when it
       // looked — so an installation that has checked before says nothing here
-      // and lets the date below speak. Saying «ещё не проверяли» directly above
+      // and lets the date below speak. Saying «not checked yet» directly above
       // the date it last looked is the application contradicting itself in two
       // adjacent lines.
-      return s.lastCheckedAt ? "" : "Ещё не проверяли";
+      return s.lastCheckedAt ? "" : t("updates.neverChecked");
   }
 }
 
@@ -43,23 +44,23 @@ function headline(s: UpdateState): string {
 // with.
 function reason(s: UpdateState): string {
   switch (s.errorStage) {
-    case "check": return "Не удалось достучаться до сервера обновлений.";
-    case "download": return "Не удалось скачать обновление.";
-    case "verify": return "Скачанное не сошлось с подписью и установлено не было.";
-    case "install": return "Обновление скачалось, но установить его не удалось.";
+    case "check": return t("updates.failCheck");
+    case "download": return t("updates.failDownload");
+    case "verify": return t("updates.failVerify");
+    case "install": return t("updates.failInstall");
     default: return "";
   }
 }
 
 function megabytes(bytes?: number): string {
-  return bytes ? `${(bytes / (1024 * 1024)).toFixed(1)} МБ` : "";
+  return bytes ? t("updates.megabytes", { n: (bytes / (1024 * 1024)).toFixed(1) }) : "";
 }
 
 export default function UpdatesView() {
   const [failed, setFailed] = createSignal("");
   const s = updateState;
 
-  // Every action is «отправил и жду события»: what came of it arrives the same
+  // Every action is «sent, now wait for the event»: what came of it arrives the same
   // way it would have arrived on a timer. Only a refusal that never got as far
   // as a step is reported here — and it is reported on this screen rather than
   // in the window's error banner, because it is about this screen and says so
@@ -69,7 +70,7 @@ export default function UpdatesView() {
     try {
       await action();
     } catch (e) {
-      setFailed(e instanceof Error ? e.message : String(e));
+      setFailed(errorText(e));
       // A refusal fires no event, so nothing would re-read the state — and the
       // checkbox would stay where the pointer left it rather than where it is.
       void loadUpdateState();
@@ -88,23 +89,22 @@ export default function UpdatesView() {
 
   return (
     <>
-      <div class="row"><h1>Обновление</h1></div>
-      <p class="lede">
-        Приложение заменяет себя версией новее. Каждый выпуск подписан, и ставится
-        только то, что сошлось с ключом, с которым эта сборка собрана.
-      </p>
+      <div class="row"><h1>{t("updates.title")}</h1></div>
+      <p class="lede">{t("updates.lede")}</p>
 
       <Show
         when={s().supported}
         fallback={
           <div class="empty">
-            Эта сборка себя не обновляет{s().currentVersion ? `. Установлена версия ${s().currentVersion}` : ""}.
+            {s().currentVersion
+              ? t("updates.unsupportedVersion", { version: s().currentVersion })
+              : t("updates.unsupported")}
           </div>
         }
       >
         <div class="card">
           <div class="row">
-            <span class="title">Версия {s().currentVersion}</span>
+            <span class="title">{t("updates.version", { version: s().currentVersion })}</span>
             <div class="spacer" />
             <Show when={s().status === "available" && s().sizeBytes}>
               <span class="tag">{megabytes(s().sizeBytes)}</span>
@@ -137,21 +137,21 @@ export default function UpdatesView() {
           <div class="row">
             <Show when={s().status === "ready"}>
               <button class="btn primary" onClick={() => run(API.RestartToUpdate)}>
-                Перезапустить и обновиться
+                {t("updates.restart")}
               </button>
             </Show>
             <Show when={s().status === "available"}>
-              <button class="btn primary" onClick={() => run(API.InstallUpdate)}>Установить</button>
-              <button class="btn" onClick={() => run(API.SkipUpdate)}>Пропустить эту версию</button>
+              <button class="btn primary" onClick={() => run(API.InstallUpdate)}>{t("updates.install")}</button>
+              <button class="btn" onClick={() => run(API.SkipUpdate)}>{t("updates.skip")}</button>
             </Show>
             <Show when={s().status !== "ready"}>
               <button class="btn" disabled={busy()} onClick={() => run(API.CheckForUpdate)}>
-                Проверить
+                {t("updates.check")}
               </button>
             </Show>
             <div class="spacer" />
             <Show when={s().lastCheckedAt}>
-              <span class="update-when">Смотрели {new Date(s().lastCheckedAt!).toLocaleString()}</span>
+              <span class="update-when">{t("updates.checkedAt", { when: when(s().lastCheckedAt, false) })}</span>
             </Show>
           </div>
         </div>
@@ -164,16 +164,15 @@ export default function UpdatesView() {
               onChange={(e) => run(() => API.SetUpdatesEnabled(e.currentTarget.checked))}
             />
             <span>
-              <span class="title">Проверять самому</span>
-              <span class="update-hint"> — раз в несколько часов. Ничего не скачивается, пока вы не попросите.</span>
+              <span class="title">{t("updates.auto")}</span>
+              <span class="update-hint">{t("updates.autoHint")}</span>
             </span>
           </label>
         </div>
 
         <Show when={s().skippedVersion}>
           <p class="lede">
-            Версия {s().skippedVersion} пропущена и больше не предлагается. Отменить это
-            можно в {s().path || "updates.json"}.
+            {t("updates.skipped", { version: s().skippedVersion, path: s().path || "updates.json" })}
           </p>
         </Show>
       </Show>

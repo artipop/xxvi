@@ -1,6 +1,7 @@
 import { createSignal, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { report } from "../state";
+import { errorText, t } from "../i18n";
 import "@xterm/xterm/css/xterm.css";
 
 // A terminal screen: a real pty on the other end of a socket, and xterm drawing
@@ -115,7 +116,7 @@ export default function Terminal(props: {
       observer.observe(host);
     };
 
-    start().catch((e) => { setError(String(e?.message ?? e)); report(e); });
+    start().catch((e) => { setError(errorText(e)); report(e); });
 
     return () => {
       disposed = true;
@@ -132,7 +133,7 @@ export default function Terminal(props: {
       </Show>
       <div class="terminal-host" ref={host} />
       <Show when={status() === "closed"}>
-        <div class="meta">{props.ended ?? "шелл завершился"}</div>
+        <div class="meta">{props.ended ?? t("terminal.shellEnded")}</div>
       </Show>
     </div>
   );

@@ -1,7 +1,8 @@
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import { agents, applyCard, flows, guard, list, projects, showRibbon, WORK_MODES } from "../state";
+import { agents, applyCard, flows, guard, list, projects, showRibbon, workModes } from "../state";
+import { t } from "../i18n";
 
 // A task typed where the work is watched, not filed first and fetched back from
 // the inbox: the inbox is for what arrived and waits for a decision, and a task
@@ -32,7 +33,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   // A branch of its own is a question about a repository; anywhere else the
   // answer is the folder as it stands, whatever was remembered.
   const isRepo = () => projects().find((p) => p.id === projectID())?.repo ?? false;
-  const mode = () => (isRepo() && WORK_MODES.some((m) => m.value === workMode()) ? workMode() : "");
+  const mode = () => (isRepo() && workModes().some((m) => m.value === workMode()) ? workMode() : "");
   const agentName = () =>
     list(agents().agents).find((a) => a.name === agent())?.name ?? list(agents().agents)[0]?.name ?? "";
   const flowID = () => flows().find((f) => f.id === flow())?.id ?? flows()[0]?.id ?? "";
@@ -61,7 +62,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
       <textarea
         ref={box}
         class="compose-text"
-        placeholder="Что сделать? Первая строка — заголовок, весь текст уйдёт агенту."
+        placeholder={t("compose.placeholder")}
         value={text()}
         onInput={(e) => setText(e.currentTarget.value)}
         onKeyDown={(e) => {
@@ -72,25 +73,25 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
         }}
       />
       <div class="row wrap">
-        <select value={projectID()} onChange={(e) => setProject(e.currentTarget.value)} title="Где делать">
-          <option value="">своя папка</option>
+        <select value={projectID()} onChange={(e) => setProject(e.currentTarget.value)} title={t("inbox.where")}>
+          <option value="">{t("common.ownFolder")}</option>
           <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
         </select>
         <Show when={isRepo()}>
           <select value={mode()} onChange={(e) => setWorkMode(e.currentTarget.value)}
-                  title={WORK_MODES.find((m) => m.value === mode())?.why}>
-            <For each={WORK_MODES}>{(m) => <option value={m.value}>{m.label}</option>}</For>
+                  title={workModes().find((m) => m.value === mode())?.why}>
+            <For each={workModes()}>{(m) => <option value={m.value}>{m.label}</option>}</For>
           </select>
         </Show>
-        <select value={agentName()} onChange={(e) => setAgent(e.currentTarget.value)} title="Кто делает">
+        <select value={agentName()} onChange={(e) => setAgent(e.currentTarget.value)} title={t("compose.who")}>
           <For each={list(agents().agents)}>{(a) => <option value={a.name}>{a.name}</option>}</For>
         </select>
-        <select value={flowID()} onChange={(e) => setFlow(e.currentTarget.value)} title="По какому флоу">
+        <select value={flowID()} onChange={(e) => setFlow(e.currentTarget.value)} title={t("compose.flow")}>
           <For each={flows()}>{(f) => <option value={f.id}>{f.name}</option>}</For>
         </select>
         <div class="spacer" />
         <button class="btn primary" onClick={start} disabled={busy() || !text().trim() || !flowID()}>
-          Начать ↵
+          {t("compose.start")}
         </button>
       </div>
     </div>

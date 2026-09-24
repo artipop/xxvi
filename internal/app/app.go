@@ -87,7 +87,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 		}
 	}
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		return nil, fmt.Errorf("создать папку данных: %w", err)
+		return nil, fmt.Errorf("create the data folder: %w", err)
 	}
 
 	st, err := store.Open(filepath.Join(dataDir, "xxvi.db"))
@@ -99,9 +99,9 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	// A session left running by a previous run is not still working: a row that
 	// says otherwise would make a card look busy forever.
 	if n, err := st.AbandonRunningSessions(); err != nil {
-		log.Warn("не удалось закрыть сессии прошлого запуска", "err", err)
+		log.Warn("could not close the sessions of the previous run", "err", err)
 	} else if n > 0 {
-		log.Info("сессии прошлого запуска отмечены отменёнными", "count", n)
+		log.Info("sessions of the previous run marked cancelled", "count", n)
 	}
 
 	a.Engine = engine.New(st, nil, a, log)
@@ -123,7 +123,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 		// A terminal that cannot be opened is a screen that says so. Everything
 		// else in the application works without one, and refusing to start over
 		// it would be the wrong size of failure.
-		log.Warn("терминалы выключены", "почему", err)
+		log.Warn("terminals disabled", "why", err)
 	}
 
 	a.Tools = stagemcp.New(log)
@@ -131,7 +131,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 		// The same size of failure, one step further along: without this port a
 		// stage cannot be worked in a terminal at all, and the stage that tries
 		// says so on its card instead of the application refusing to open.
-		log.Warn("инструменты агента выключены", "почему", err)
+		log.Warn("agent tools disabled", "why", err)
 	}
 	a.Agents.SetTerminals(a.Terminals, a.Tools)
 
@@ -146,15 +146,15 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 		Store: st, Engine: a.Engine, Filer: a.Pipeline, Folders: a.Agents, Emit: a.Emit,
 	}, log)
 	if err := a.Outside.Listen(); err != nil {
-		log.Warn("инструменты приложения выключены", "почему", err)
+		log.Warn("application tools disabled", "why", err)
 	} else if err := appmcp.WriteHandoff(dataDir, a.Outside.URL(), a.Outside.Token()); err == nil {
 		// The address, not the token: a log is a file people paste into issues.
-		log.Info("инструменты приложения открыты", "url", a.Outside.URL())
+		log.Info("application tools open", "url", a.Outside.URL())
 	} else {
 		// The port is open and the tools work; what failed is the note saying
 		// where they are. Said out loud, because the symptom without it is
 		// `xxvi mcp` insisting the application is not running.
-		log.Warn("не удалось записать адрес инструментов приложения", "err", err)
+		log.Warn("could not write the application tools address", "err", err)
 	}
 
 	if err := a.seed(); err != nil {
@@ -225,7 +225,7 @@ func (a *App) Emit(event string, payload any) {
 func DefaultDataDir() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("не удалось определить папку настроек: %w", err)
+		return "", fmt.Errorf("could not find the settings folder: %w", err)
 	}
 	return filepath.Join(base, "XXVI"), nil
 }

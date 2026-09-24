@@ -1,6 +1,6 @@
 package app
 
-import "errors"
+import "github.com/artipop/xxvi/internal/msg"
 
 // How this application learns of a newer version of itself.
 //
@@ -28,7 +28,7 @@ type Updates interface {
 	Restart() error
 }
 
-// UpdateState is what the «Обновление» screen draws.
+// UpdateState is what the «Update» screen draws.
 type UpdateState struct {
 	// Supported is false where there is nothing to update: a headless run, a
 	// test, a build with no updater wired in.
@@ -57,7 +57,8 @@ type UpdateState struct {
 	// Error is what went wrong, verbatim and in the framework's English:
 	// "dial tcp: lookup updates.deffun.org: no such host". ErrorStage is the
 	// step it went wrong at — check, download, verify, install — and it is
-	// there because the screen says the actionable half itself, in Russian.
+	// there because the screen says the actionable half itself, in the
+	// person's language.
 	// The verbatim text stays underneath it, in small print: it is what a bug
 	// report needs and nothing on this side can supply it.
 	Error      string `json:"error,omitempty"`
@@ -84,11 +85,11 @@ func (a *App) updater() Updates {
 // ErrNoUpdates is the answer of a build that cannot replace itself. It is an
 // error rather than a silent no-op because every caller of it is a button
 // somebody pressed.
-var ErrNoUpdates = errors.New("обновление этой сборки не поддерживается")
+var ErrNoUpdates = msg.Err("update.unsupported")
 
 // ---- updates ----
 
-// UpdateState is everything the «Обновление» screen draws. A build with no
+// UpdateState is everything the «Update» screen draws. A build with no
 // updater answers too, and says so: the screen then shows the version and
 // nothing else, rather than an empty panel.
 func (s *API) UpdateState() (UpdateState, error) {
@@ -132,7 +133,7 @@ func (s *API) InstallUpdate() error {
 }
 
 // SkipUpdate stops offering the release now on offer. Remembered across
-// restarts, or the button would mean «до перезапуска».
+// restarts, or the button would mean «until restart».
 func (s *API) SkipUpdate() error {
 	u := s.app.updater()
 	if u == nil {

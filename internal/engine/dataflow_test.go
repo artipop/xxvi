@@ -54,7 +54,7 @@ func TestStageOutputsReachTheCardBeforeTheFork(t *testing.T) {
 	}
 
 	brief := f.runner.lastJob(t).Prompt
-	if !strings.Contains(brief, "Вердикт") || !strings.Contains(brief, "обязательно") {
+	if !strings.Contains(brief, "Вердикт") || !strings.Contains(brief, "required") {
 		t.Fatalf("бриф стадии должен назвать обязательный выход, получено:\n%s", brief)
 	}
 
@@ -161,7 +161,7 @@ func TestReturnedCardTellsTheAgentWhatFailed(t *testing.T) {
 	f.runner.finish(card.ID, model.TriggerSuccess, "Вердикт: fail")
 
 	brief := f.runner.lastJob(t).Prompt
-	if !strings.Contains(brief, "вернулась сюда") || !strings.Contains(brief, "Проверка") {
+	if !strings.Contains(brief, "came back here") || !strings.Contains(brief, "Проверка") {
 		t.Fatalf("вернувшаяся карточка должна сказать агенту, откуда и почему:\n%s", brief)
 	}
 }
@@ -178,7 +178,7 @@ func TestReadsFallBackToWhatTheRouteWrote(t *testing.T) {
 	f.runner.finish(card.ID, model.TriggerSuccess, "Вердикт: fail\nПревью: https://preview.example/1")
 
 	brief := f.runner.lastJob(t).Prompt
-	if !strings.Contains(brief, "С карточки:") || !strings.Contains(brief, "https://preview.example/1") {
+	if !strings.Contains(brief, "From the card:") || !strings.Contains(brief, "https://preview.example/1") {
 		t.Fatalf("стадия без своих входов получает то, что записали до неё:\n%s", brief)
 	}
 }

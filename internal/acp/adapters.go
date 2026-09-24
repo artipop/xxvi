@@ -1,6 +1,7 @@
 package acp
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // Everything that differs between one ACP agent and another: the binary to look
@@ -58,13 +60,13 @@ type adapter struct {
 	// cliMCPArgs hand the CLI a file of MCP servers. A session gets its servers
 	// over the protocol, where session/new has a field for them; a terminal is
 	// the vendor CLI itself and has to be told in its own spelling. This is how
-	// «шаг готов» reaches the agent, so a kind without it cannot report — and
+	// «step done» reaches the agent, so a kind without it cannot report — and
 	// therefore cannot work a stage.
 	cliMCPArgs func(configPath string) []string
 	// cliPromptArgs put the first message on the CLI's own command line, which
 	// is how a stage hands over its brief. Typing it into the pty instead means
 	// writing to a CLI that is not listening yet — and the thing it might be
-	// showing is «доверяете ли вы файлам в этой папке?», which must not be
+	// showing is «do you trust the files in this folder?», which must not be
 	// answered with a task.
 	//
 	// It carries its own end-of-options marker: the brief is a positional
@@ -167,8 +169,8 @@ type AdapterStatus struct {
 	// ViaNPX marks a kind that is not installed but will be run through npx —
 	// it works, only the first run pays for the download.
 	ViaNPX bool `json:"viaNpx,omitempty"`
-	// Detail says what is missing, in the words a person needs to act on.
-	Detail string `json:"detail,omitempty"`
+	// Detail says what is missing, with what a person needs to act on.
+	Detail *msg.Msg `json:"detail,omitempty"`
 
 	// Terminal reports that a stage can be *worked in a terminal* by this kind,
 	// which is a different question from Ready and has a different answer: the
@@ -176,7 +178,7 @@ type AdapterStatus struct {
 	// machine can have one without the other (docs/system.md §4.1.1).
 	Terminal bool `json:"terminal"`
 	// TerminalDetail says why not, or what it will run.
-	TerminalDetail string `json:"terminalDetail,omitempty"`
+	TerminalDetail *msg.Msg `json:"terminalDetail,omitempty"`
 }
 
 // AdapterStatuses reports every kind we know how to launch, in the order the UI
@@ -202,35 +204,39 @@ func adapterStatus(kind string) AdapterStatus {
 		return st
 	}
 	if def.npmPackage == "" {
-		st.Detail = fmt.Sprintf("не найден %s — укажите путь к бинарнику или команду запуска у агента", def.bin)
+		st.Detail = detail("adapter.missing", "bin", def.bin)
 		return st
 	}
 	if _, err := lookupBin("npx"); err == nil {
 		st.Ready, st.ViaNPX = true, true
-		st.Detail = fmt.Sprintf("%s не установлен — будет запускаться через npx (первый запуск дольше)", def.bin)
+		st.Detail = detail("adapter.viaNpx", "bin", def.bin)
 		return st
 	}
 	// Nothing to offer: npm is how both adapters are published, and installing
 	// Node.js is not something to do behind a person's back.
-	st.Detail = fmt.Sprintf("не найден ни %s, ни npx — поставьте Node.js и выполните `npm install -g %s`",
-		def.bin, def.npmPackage)
+	st.Detail = detail("adapter.noNpx", "bin", def.bin, "package", def.npmPackage)
 	return st
+}
+
+func detail(code string, kv ...string) *msg.Msg {
+	m := msg.New(code, kv...)
+	return &m
 }
 
 // terminalStatus answers "can a stage be worked in a terminal by this kind, on
 // this machine". Asked in the agents dialog for the same reason the adapter is:
 // the alternative is finding out on a card, after somebody built a flow around
 // a stage that will never open.
-func terminalStatus(kind string) (bool, string) {
+func terminalStatus(kind string) (bool, *msg.Msg) {
 	cli, ok := cliFor(kind)
 	if !ok {
-		return false, "нет своего CLI или способа передать ему инструменты — стадию можно работать только сессией"
+		return false, detail("adapter.noCLI")
 	}
 	bin, err := lookupBin(cli.cliBin)
 	if err != nil {
-		return false, fmt.Sprintf("не найден %s — стадию в терминале запускать нечем", cli.cliBin)
+		return false, detail("terminal.binMissing", "bin", cli.cliBin)
 	}
-	return true, bin
+	return true, detail("adapter.terminalReady", "bin", bin)
 }
 
 // terminalBin is the interactive CLI as it will actually be run: found on PATH
@@ -268,7 +274,7 @@ func launchFor(a model.Agent) (launch, error) {
 		argv = append(argv, bin...)
 		argv = append(argv, def.acpArgs...)
 	default:
-		return launch{}, fmt.Errorf("у агента «%s» (тип %s) нет команды запуска", a.Name, a.Kind)
+		return launch{}, msg.Err("agent.noLaunch", "agent", a.Name, "kind", a.Kind)
 	}
 	l := launch{argv: append(argv, a.Args...), dropEnv: def.dropEnv, mode: def.mode}
 	// A model asked for through the environment is set whichever way the agent
@@ -294,16 +300,15 @@ func adapterArgv(kind, override string) ([]string, error) {
 	} else if override != "" {
 		// A path a person typed is an instruction, not a hint: falling back
 		// from it would silently run something else.
-		return nil, fmt.Errorf("указанный путь %s: %w", override, err)
+		return nil, msg.Wrap(err, "adapter.badPath", "path", override)
 	}
 	if def.npmPackage == "" {
-		return nil, fmt.Errorf("не найден %s — укажите путь к бинарнику или команду запуска у агента", def.bin)
+		return nil, msg.Err("adapter.missing", "bin", def.bin)
 	}
 	if npx, err := lookupBin("npx"); err == nil {
 		return []string{npx, "--yes", def.npmPackage}, nil
 	}
-	return nil, fmt.Errorf("не найден %s: установите его командой `npm install -g %s` "+
-		"(или поставьте Node.js, тогда адаптер запустится через npx)", def.bin, def.npmPackage)
+	return nil, msg.Err("adapter.install", "bin", def.bin, "package", def.npmPackage)
 }
 
 // lookupBin finds an executable. PATH first, then the usual install locations,
@@ -311,7 +316,7 @@ func adapterArgv(kind, override string) ([]string, error) {
 // with Homebrew or npm would otherwise be invisible.
 func lookupBin(name string) (string, error) {
 	if name == "" {
-		return "", fmt.Errorf("не задано имя программы")
+		return "", errors.New("no program name given")
 	}
 	if strings.ContainsRune(name, filepath.Separator) {
 		if _, err := os.Stat(name); err != nil {
@@ -333,7 +338,7 @@ func lookupBin(name string) (string, error) {
 			return p, nil
 		}
 	}
-	return "", fmt.Errorf("не найден %s", name)
+	return "", fmt.Errorf("%s not found", name)
 }
 
 // resolveArgv0 makes an argv runnable from a GUI process, for the same reason

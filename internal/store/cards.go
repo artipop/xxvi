@@ -11,6 +11,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // Cards, their properties, their history, and where they stand.
@@ -49,7 +50,7 @@ func (r cardRow) card() model.Card {
 // caller has none.
 func (s *Store) CreateCard(c model.Card) (model.Card, error) {
 	if strings.TrimSpace(c.Title) == "" {
-		return model.Card{}, fmt.Errorf("у карточки нет заголовка")
+		return model.Card{}, msg.Err("card.noTitle")
 	}
 	if strings.TrimSpace(c.ID) == "" {
 		c.ID = uuid.NewString()
@@ -74,7 +75,7 @@ func (s *Store) CreateCard(c model.Card) (model.Card, error) {
 		return writeProps(tx, c.ID, c.Props)
 	})
 	if err != nil {
-		return model.Card{}, fmt.Errorf("создать карточку: %w", err)
+		return model.Card{}, fmt.Errorf("create card: %w", err)
 	}
 	return c, nil
 }
@@ -84,7 +85,7 @@ func (s *Store) Card(id string) (model.Card, error) {
 	var r cardRow
 	err := s.db.Get(&r, `SELECT * FROM card WHERE id = ?`, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.Card{}, fmt.Errorf("карточка %q: %w", id, ErrNotFound)
+		return model.Card{}, msg.Tag(ErrNotFound, "card.notFound", "card", id)
 	}
 	if err != nil {
 		return model.Card{}, err
@@ -102,7 +103,7 @@ func (s *Store) Card(id string) (model.Card, error) {
 func (s *Store) CardsInState(state model.CardState) ([]model.Card, error) {
 	var rows []cardRow
 	if err := s.db.Select(&rows, `SELECT * FROM card WHERE state = ? ORDER BY created_at DESC`, string(state)); err != nil {
-		return nil, fmt.Errorf("прочитать карточки: %w", err)
+		return nil, fmt.Errorf("read cards: %w", err)
 	}
 	return s.withProps(rows)
 }
@@ -151,7 +152,7 @@ func (s *Store) UpdateCard(id string, edit CardEdit) (model.Card, error) {
 		args := []any{millis(time.Now())}
 		if edit.Title != nil {
 			if strings.TrimSpace(*edit.Title) == "" {
-				return fmt.Errorf("у карточки не может быть пустого заголовка")
+				return msg.Err("card.noTitle")
 			}
 			set = append(set, "title = ?")
 			args = append(args, strings.TrimSpace(*edit.Title))
@@ -170,7 +171,7 @@ func (s *Store) UpdateCard(id string, edit CardEdit) (model.Card, error) {
 		}
 		if edit.State != nil {
 			if !edit.State.Valid() {
-				return fmt.Errorf("неизвестное состояние карточки %q", *edit.State)
+				return fmt.Errorf("unknown card state %q", *edit.State)
 			}
 			set = append(set, "state = ?")
 			args = append(args, string(*edit.State))
@@ -181,7 +182,7 @@ func (s *Store) UpdateCard(id string, edit CardEdit) (model.Card, error) {
 			return err
 		}
 		if n, _ := res.RowsAffected(); n == 0 {
-			return fmt.Errorf("карточка %q: %w", id, ErrNotFound)
+			return msg.Tag(ErrNotFound, "card.notFound", "card", id)
 		}
 		return writeProps(tx, id, edit.Props)
 	})
@@ -205,16 +206,20 @@ func (s *Store) SetItemVersion(cardID, version string) error {
 // stands in is looked up here rather than passed in: every writer would have to
 // ask for it, and one that forgot would put its entry nowhere.
 func (s *Store) Record(e model.JournalEntry) (model.JournalEntry, error) {
-	if strings.TrimSpace(e.Text) == "" {
+	if strings.TrimSpace(e.Text) == "" && (e.Msg == nil || e.Msg.IsZero()) {
 		return model.JournalEntry{}, nil
+	}
+	stored := ""
+	if e.Msg != nil {
+		stored = e.Msg.Store()
 	}
 	now := time.Now().UTC()
 	res, err := s.db.Exec(`
-		INSERT INTO card_comment (card_id, author, text, kind, session_id, event_id, created_at)
-		VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(id), 0) FROM flow_event WHERE card_id = ?), ?)`,
-		e.CardID, e.Author, e.Text, string(e.Kind), e.SessionID, e.CardID, millis(now))
+		INSERT INTO card_comment (card_id, author, text, msg, kind, session_id, event_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(id), 0) FROM flow_event WHERE card_id = ?), ?)`,
+		e.CardID, e.Author, e.Text, stored, string(e.Kind), e.SessionID, e.CardID, millis(now))
 	if err != nil {
-		return model.JournalEntry{}, fmt.Errorf("записать в журнал карточки: %w", err)
+		return model.JournalEntry{}, fmt.Errorf("write card journal: %w", err)
 	}
 	e.ID, _ = res.LastInsertId()
 	e.CreatedAt = now
@@ -228,22 +233,27 @@ func (s *Store) Journal(cardID string) ([]model.JournalEntry, error) {
 		CardID    string `db:"card_id"`
 		Author    string `db:"author"`
 		Text      string `db:"text"`
+		Msg       string `db:"msg"`
 		Kind      string `db:"kind"`
 		SessionID string `db:"session_id"`
 		EventID   int64  `db:"event_id"`
 		CreatedAt int64  `db:"created_at"`
 	}
 	if err := s.db.Select(&rows, `
-		SELECT id, card_id, author, text, kind, session_id, event_id, created_at
+		SELECT id, card_id, author, text, msg, kind, session_id, event_id, created_at
 		FROM card_comment WHERE card_id = ? ORDER BY id`, cardID); err != nil {
 		return nil, err
 	}
 	out := make([]model.JournalEntry, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, model.JournalEntry{
+		e := model.JournalEntry{
 			ID: r.ID, CardID: r.CardID, Kind: model.EntryKind(r.Kind), Author: r.Author, Text: r.Text,
 			SessionID: r.SessionID, EventID: r.EventID, CreatedAt: fromMillis(r.CreatedAt),
-		})
+		}
+		if m := msg.Parse(r.Msg); !m.IsZero() {
+			e.Msg = &m
+		}
+		out = append(out, e)
 	}
 	return out, nil
 }
@@ -329,7 +339,7 @@ func (s *Store) EnterStage(cardID, flowID, stageID string) error {
 // when it reached a final stage, inbox when somebody pulled it back.
 func (s *Store) LeaveFlow(cardID string, state model.CardState) error {
 	if !state.Valid() {
-		return fmt.Errorf("неизвестное состояние карточки %q", state)
+		return fmt.Errorf("unknown card state %q", state)
 	}
 	return s.tx(func(tx *sqlx.Tx) error {
 		if _, err := tx.Exec(`DELETE FROM card_flow WHERE card_id = ?`, cardID); err != nil {
@@ -350,7 +360,7 @@ func (s *Store) AppendFlowEvent(e model.FlowEvent) error {
 	_, err := s.db.Exec(`
 		INSERT INTO flow_event (card_id, flow_id, from_stage, to_stage, on_trigger, detail, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		e.CardID, e.FlowID, e.FromStage, e.ToStage, e.On, e.Detail, millis(time.Now()))
+		e.CardID, e.FlowID, e.FromStage, e.ToStage, e.On, storedMsg(e.Detail), millis(time.Now()))
 	return err
 }
 
@@ -373,7 +383,7 @@ func (s *Store) FlowEvents(cardID string) ([]model.FlowEvent, error) {
 	for _, r := range rows {
 		out = append(out, model.FlowEvent{
 			ID: r.ID, CardID: r.CardID, FlowID: r.FlowID, FromStage: r.FromStage,
-			ToStage: r.ToStage, On: r.OnTrigger, Detail: r.Detail, CreatedAt: fromMillis(r.CreatedAt),
+			ToStage: r.ToStage, On: r.OnTrigger, Detail: parsedMsg(r.Detail), CreatedAt: fromMillis(r.CreatedAt),
 		})
 	}
 	return out, nil
@@ -404,8 +414,26 @@ func (s *Store) LastFlowEvent(cardID string) (model.FlowEvent, bool, error) {
 	}
 	return model.FlowEvent{
 		ID: r.ID, CardID: r.CardID, FlowID: r.FlowID, FromStage: r.FromStage,
-		ToStage: r.ToStage, On: r.OnTrigger, Detail: r.Detail, CreatedAt: fromMillis(r.CreatedAt),
+		ToStage: r.ToStage, On: r.OnTrigger, Detail: parsedMsg(r.Detail), CreatedAt: fromMillis(r.CreatedAt),
 	}, true, nil
+}
+
+// storedMsg and parsedMsg are an optional message as a column holds it: a
+// transition's reason, a session's failure. A row from before these were codes
+// holds a sentence, and comes back as the text it is.
+func storedMsg(m *msg.Msg) string {
+	if m == nil {
+		return ""
+	}
+	return m.Store()
+}
+
+func parsedMsg(stored string) *msg.Msg {
+	m := msg.Parse(stored)
+	if m.IsZero() {
+		return nil
+	}
+	return &m
 }
 
 // CardsOnStage counts the cards standing on each stage of a flow — what the

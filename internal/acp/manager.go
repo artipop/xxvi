@@ -10,6 +10,7 @@ package acp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/artipop/xxvi/internal/engine"
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/stagemcp"
 	"github.com/artipop/xxvi/internal/store"
 	"github.com/artipop/xxvi/internal/term"
@@ -67,7 +69,7 @@ func (o Options) withDefaults() Options {
 // Reporter is who a finished session tells. The engine implements it; a test
 // records the calls.
 type Reporter interface {
-	Finished(cardID, outcome, detail, agentText string)
+	Finished(cardID, outcome string, detail msg.Msg, agentText string)
 }
 
 // Emitter pushes events to the UI.
@@ -172,7 +174,7 @@ func (m *Manager) Start(job engine.Job) error {
 		AgentName: s.agent.Name, AgentKind: s.agent.Kind, Work: s.work,
 		Status: store.StatusQueued, Cwd: cwd, StartedAt: time.Now().UTC(),
 	}); err != nil {
-		return fmt.Errorf("записать сессию: %w", err)
+		return fmt.Errorf("record the session: %w", err)
 	}
 
 	m.mu.Lock()
@@ -225,15 +227,15 @@ func (m *Manager) RunningOnStage(stageID string) int {
 
 // Cancel stops whatever is running for a card. A cancelled session produces no
 // outcome: somebody intervened, so the flow waits for them.
-func (m *Manager) Cancel(cardID, reason string) {
+func (m *Manager) Cancel(cardID string, reason msg.Msg) {
 	m.mu.Lock()
 	s := m.byCard[cardID]
 	m.mu.Unlock()
 	if s == nil {
 		return
 	}
-	m.log.Info("сессия отменяется", "session", s.id, "card", cardID, "reason", reason)
-	s.cancel(reason)
+	m.log.Info("cancelling session", "session", s.id, "card", cardID, "reason", reason.String())
+	s.cancel()
 }
 
 // ---- the session lifecycle ----
@@ -243,15 +245,15 @@ func (m *Manager) run(s *session) {
 	defer m.release(s)
 
 	if m.rootCtx.Err() != nil {
-		m.finish(s, store.StatusCancelled, "приложение завершается")
+		m.finish(s, store.StatusCancelled, msg.New("session.appQuitting"))
 		return
 	}
-	m.record(s, model.EntryMove, fmt.Sprintf("Агент %s начал работу в папке `%s`.", s.agent.Name, s.cwd))
+	m.record(s, model.EntryMove, msg.New("journal.sessionStarted", "agent", s.agent.Name, "dir", s.cwd))
 
 	conn, acpSessionID, cleanup, err := m.connect(s)
 	if err != nil {
-		m.finish(s, store.StatusFailed, err.Error())
-		m.record(s, model.EntryProblem, fmt.Sprintf("Сессия агента не запустилась: %s", truncate(err.Error(), 1500)))
+		m.finish(s, store.StatusFailed, failure(err))
+		m.record(s, model.EntryProblem, msg.New("journal.sessionNotStarted").Because(clipped(err)))
 		return
 	}
 	defer cleanup()
@@ -261,15 +263,15 @@ func (m *Manager) run(s *session) {
 
 	switch {
 	case m.rootCtx.Err() != nil:
-		m.finish(s, store.StatusCancelled, "приложение завершается")
+		m.finish(s, store.StatusCancelled, msg.New("session.appQuitting"))
 	case s.wasCancelled():
-		m.finish(s, store.StatusCancelled, "сессия отменена")
-		m.record(s, model.EntryProblem, "Сессия агента отменена.")
+		m.finish(s, store.StatusCancelled, msg.New("session.cancelled"))
+		m.record(s, model.EntryProblem, msg.New("journal.sessionCancelled"))
 	case err != nil:
-		m.finish(s, store.StatusFailed, err.Error())
-		m.record(s, model.EntryProblem, fmt.Sprintf("Сессия агента завершилась с ошибкой: %s", truncate(err.Error(), 1500)))
+		m.finish(s, store.StatusFailed, failure(err))
+		m.record(s, model.EntryProblem, msg.New("journal.sessionFailed").Because(clipped(err)))
 	default:
-		m.finish(s, store.StatusDone, "")
+		m.finish(s, store.StatusDone, msg.Msg{})
 		m.record(s, model.EntryReport, doneReport(final))
 	}
 }
@@ -300,14 +302,14 @@ func (m *Manager) release(s *session) {
 func (m *Manager) connect(s *session) (*acpsdk.ClientSideConnection, acpsdk.SessionId, func(), error) {
 	argv := resolveArgv0(s.launch.argv)
 	if len(argv) == 0 {
-		return nil, "", nil, fmt.Errorf("пустая команда запуска агента")
+		return nil, "", nil, msg.Err("agent.emptyCommand")
 	}
 	// The kind's own variables sit under the agent's, which is what lets an
 	// entry override a model the table would have set.
 	env := append(append([]string{}, s.launch.env...), spawnEnv(s.agent)...)
 	proc, err := spawn(m.rootCtx, argv, s.cwd, env, s.launch.dropEnv...)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("запустить агента %q: %w", argv[0], err)
+		return nil, "", nil, msg.Wrap(err, "agent.startFailed", "command", argv[0])
 	}
 	conn := acpsdk.NewClientSideConnection(&sessionClient{m: m, s: s}, proc.stdin, proc.stdout)
 	conn.SetLogger(m.log.With("session", s.id))
@@ -336,7 +338,7 @@ func (m *Manager) connect(s *session) (*acpsdk.ClientSideConnection, acpsdk.Sess
 
 	acpID := string(sess.SessionId)
 	if err := m.store.UpdateSession(s.id, store.SessionUpdate{ACPSessionID: &acpID}); err != nil {
-		m.log.Warn("не удалось записать идентификатор ACP-сессии", "session", s.id, "err", err)
+		m.log.Warn("could not record the ACP session id", "session", s.id, "err", err)
 	}
 	return conn, sess.SessionId, cleanup, nil
 }
@@ -377,7 +379,7 @@ func (m *Manager) turn(s *session, conn *acpsdk.ClientSideConnection, acpSession
 	})
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded && !s.wasCancelled() {
-			return s.finalText(), fmt.Errorf("таймаут хода (%s)", m.opts.TurnTimeout)
+			return s.finalText(), msg.Err("session.turnTimeout", "timeout", m.opts.TurnTimeout.String())
 		}
 		return s.finalText(), fmt.Errorf("session/prompt: %w", err)
 	}
@@ -409,7 +411,7 @@ func (m *Manager) selectMode(ctx context.Context, s *session, conn *acpsdk.Clien
 	if _, err := conn.SetSessionMode(ctx, acpsdk.SetSessionModeRequest{
 		SessionId: sess.SessionId, ModeId: acpsdk.SessionModeId(mode),
 	}); err != nil {
-		m.log.Warn("агент отказал в режиме сессии", "session", s.id, "mode", mode, "err", err)
+		m.log.Warn("agent refused the session mode", "session", s.id, "mode", mode, "err", err)
 	}
 }
 
@@ -428,7 +430,7 @@ func (m *Manager) selectModel(ctx context.Context, s *session, conn *acpsdk.Clie
 		}
 		value, ok := matchConfigValue(sel.Options, s.agent.Model)
 		if !ok {
-			m.log.Warn("агент не предлагает такую модель", "session", s.id, "model", s.agent.Model)
+			m.log.Warn("agent does not offer this model", "session", s.id, "model", s.agent.Model)
 			return
 		}
 		if string(sel.CurrentValue) == value {
@@ -439,7 +441,7 @@ func (m *Manager) selectModel(ctx context.Context, s *session, conn *acpsdk.Clie
 				SessionId: sess.SessionId, ConfigId: sel.Id, Value: acpsdk.SessionConfigValueId(value),
 			},
 		}); err != nil {
-			m.log.Warn("агент отказал в модели", "session", s.id, "model", value, "err", err)
+			m.log.Warn("agent refused the model", "session", s.id, "model", value, "err", err)
 		}
 		return
 	}
@@ -478,13 +480,13 @@ func configSelectOptions(options acpsdk.SessionConfigSelectOptions) []acpsdk.Ses
 
 // ---- bookkeeping ----
 
-func (m *Manager) finish(s *session, status store.SessionStatus, errText string) {
+func (m *Manager) finish(s *session, status store.SessionStatus, why msg.Msg) {
 	s.setStatus(status)
 	now := time.Now().UTC()
 	if err := m.store.UpdateSession(s.id, store.SessionUpdate{
-		Status: &status, ErrorText: &errText, FinishedAt: &now,
+		Status: &status, Error: &why, FinishedAt: &now,
 	}); err != nil {
-		m.log.Warn("не удалось сохранить состояние сессии", "session", s.id, "err", err)
+		m.log.Warn("could not save the session state", "session", s.id, "err", err)
 	}
 	m.emitSession(s)
 }
@@ -492,17 +494,37 @@ func (m *Manager) finish(s *session, status store.SessionStatus, errText string)
 func (m *Manager) setStatus(s *session, status store.SessionStatus) {
 	s.setStatus(status)
 	if err := m.store.UpdateSession(s.id, store.SessionUpdate{Status: &status}); err != nil {
-		m.log.Warn("не удалось сохранить состояние сессии", "session", s.id, "err", err)
+		m.log.Warn("could not save the session state", "session", s.id, "err", err)
 	}
 	m.emitSession(s)
 }
 
-func (m *Manager) record(s *session, kind model.EntryKind, text string) {
-	if _, err := m.store.Record(model.JournalEntry{
-		CardID: s.card.ID, Kind: kind, Author: s.agent.Name, SessionID: s.id, Text: text,
-	}); err != nil {
-		m.log.Warn("не удалось записать в журнал карточки", "card", s.card.ID, "err", err)
+// record writes one entry of a run to its card's journal. A message whose code
+// is msg.CodeText is somebody else's words — the agent's report, a person's
+// answer — and is kept as the text it is rather than as something to word.
+func (m *Manager) record(s *session, kind model.EntryKind, what msg.Msg) {
+	entry := model.JournalEntry{CardID: s.card.ID, Kind: kind, Author: s.agent.Name, SessionID: s.id}
+	if what.Code == msg.CodeText {
+		entry.Text = what.Arg("text")
+	} else {
+		entry.Msg = &what
 	}
+	if _, err := m.store.Record(entry); err != nil {
+		m.log.Warn("could not write the card journal", "card", s.card.ID, "err", err)
+	}
+}
+
+// failure is why a run failed, as its session keeps it.
+func failure(err error) msg.Msg { return msg.Of(clipped(err)) }
+
+// clipped keeps a failure nobody wrote a code for to a length a journal entry
+// can carry: a CLI that printed its whole stack trace is still one line of
+// history.
+func clipped(err error) error {
+	if m := msg.Of(err); m.Code == msg.CodeInternal {
+		return errors.New(truncate(m.Arg("text"), 1500))
+	}
+	return err
 }
 
 func (m *Manager) emitSession(s *session) {
@@ -548,11 +570,11 @@ func (m *Manager) workDir(cardID string) (string, error) {
 	if err == nil && card.Project != "" {
 		project, err := m.store.Project(card.Project)
 		if err != nil {
-			return "", fmt.Errorf("проект карточки не найден в реестре: %w", err)
+			return "", err
 		}
 		info, err := os.Stat(project.Path)
 		if err != nil || !info.IsDir() {
-			return "", fmt.Errorf("папка проекта «%s» не найдена: %s", project.Name, project.Path)
+			return "", msg.Err("project.folderMissing", "project", project.Name, "path", project.Path)
 		}
 		if card.WorkMode != model.WorkModeFolder {
 			return m.claimWorkspace(card, project)
@@ -566,7 +588,7 @@ func (m *Manager) workDir(cardID string) (string, error) {
 	}
 	dir := filepath.Join(base, cardID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("создать рабочую папку: %w", err)
+		return "", fmt.Errorf("create working folder: %w", err)
 	}
 	return dir, nil
 }
@@ -584,11 +606,11 @@ func policyFor(a model.Agent, fallback ToolPolicy) ToolPolicy {
 // doneReport is the agent's closing words as they are. What they are and who
 // said them is on the entry itself, and the working folder is on the entry that
 // opened the step; the ribbon sets this under the agent's screen as it stands.
-func doneReport(final string) string {
+func doneReport(final string) msg.Msg {
 	if t := strings.TrimSpace(final); t != "" {
-		return truncate(t, 4000)
+		return msg.New(msg.CodeText, "text", truncate(t, 4000))
 	}
-	return "Агент завершил работу и ничего не сказал."
+	return msg.New("report.silent")
 }
 
 func truncate(s string, n int) string {
@@ -654,7 +676,7 @@ func (s *session) beginTurn(cancel context.CancelFunc) bool {
 
 // cancel stops the session. Before a turn exists the cancel is remembered, so
 // a card moved while its agent was starting up does not get worked anyway.
-func (s *session) cancel(reason string) {
+func (s *session) cancel() {
 	s.mu.Lock()
 	s.cancelled = true
 	if s.turnCancel == nil {
@@ -727,27 +749,27 @@ func (s *session) finalText() string {
 
 // outcome is the event this session hands its stage. A cancelled session yields
 // nothing at all: a person stepped in, so the flow waits for them.
-func (s *session) outcome() (trigger, detail string) {
+func (s *session) outcome() (trigger string, detail msg.Msg) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch {
 	case s.cancelled:
-		return "", ""
+		return "", msg.Msg{}
 	case s.status == store.StatusDone:
-		return model.TriggerSuccess, "агент завершил работу"
+		return model.TriggerSuccess, msg.New("outcome.agentDone")
 	case s.status == store.StatusFailed:
 		if s.work == model.WorkTerminal {
-			return model.TriggerFailure, "шаг в терминале не прошёл"
+			return model.TriggerFailure, msg.New("outcome.terminalFailed")
 		}
-		return model.TriggerFailure, "сессия агента упала"
+		return model.TriggerFailure, msg.New("outcome.sessionFailed")
 	default:
-		return "", ""
+		return "", msg.Msg{}
 	}
 }
 
 // event persists one thing the session did, in order.
 func (s *session) event(m *Manager, kind string, payload any) {
 	if err := m.store.AppendSessionEvent(s.id, s.seq.Add(1), kind, payload); err != nil {
-		m.log.Warn("не удалось записать событие сессии", "session", s.id, "err", err)
+		m.log.Warn("could not record a session event", "session", s.id, "err", err)
 	}
 }

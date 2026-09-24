@@ -28,7 +28,7 @@ func main() {
 		os.Exit(1)
 	}
 	if len(changed) == 0 {
-		fmt.Printf("уже %s\n", os.Args[1])
+		fmt.Printf("already %s\n", os.Args[1])
 		return
 	}
 	for _, path := range changed {

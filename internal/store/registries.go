@@ -10,6 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // The two registries a person edits: agents and sources. They are rows like
@@ -45,7 +46,7 @@ func (r agentRow) agent() model.Agent {
 func (s *Store) Agents() ([]model.Agent, error) {
 	var rows []agentRow
 	if err := s.db.Select(&rows, `SELECT * FROM agent ORDER BY name_key`); err != nil {
-		return nil, fmt.Errorf("прочитать агентов: %w", err)
+		return nil, fmt.Errorf("read agents: %w", err)
 	}
 	out := make([]model.Agent, 0, len(rows))
 	for _, r := range rows {
@@ -60,7 +61,7 @@ func (s *Store) Agent(name string) (model.Agent, error) {
 	var r agentRow
 	err := s.db.Get(&r, `SELECT * FROM agent WHERE name_key = ?`, model.Username(name))
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.Agent{}, fmt.Errorf("агент «%s»: %w", name, ErrNotFound)
+		return model.Agent{}, msg.Tag(ErrNotFound, "agent.notFound", "agent", name)
 	}
 	if err != nil {
 		return model.Agent{}, err
@@ -85,7 +86,7 @@ func (s *Store) SaveAgent(a model.Agent) (model.Agent, error) {
 		encodeJSON(a.Env), encodeJSON(a.Args), encodeJSON(a.Command), encodeJSON(a.AutoAllowTools),
 		millis(time.Now()))
 	if err != nil {
-		return model.Agent{}, fmt.Errorf("сохранить агента: %w", err)
+		return model.Agent{}, fmt.Errorf("save agent: %w", err)
 	}
 	return a, nil
 }
@@ -99,7 +100,7 @@ func (s *Store) DeleteAgent(name string) error {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("агент «%s»: %w", name, ErrNotFound)
+		return msg.Tag(ErrNotFound, "agent.notFound", "agent", name)
 	}
 	return nil
 }
@@ -121,7 +122,7 @@ func (s *Store) StagesUsingAgent(name string) ([]string, error) {
 func validateAgent(a model.Agent) (model.Agent, error) {
 	a.Name = strings.TrimSpace(a.Name)
 	if a.Name == "" {
-		return model.Agent{}, fmt.Errorf("имя агента не может быть пустым")
+		return model.Agent{}, msg.Err("agent.noName")
 	}
 	a.Kind = strings.TrimSpace(strings.ToLower(a.Kind))
 	a.BinPath = strings.TrimSpace(a.BinPath)
@@ -135,11 +136,11 @@ func validateAgent(a model.Agent) (model.Agent, error) {
 		// The generic kind carries its own agent: there is nothing for us to
 		// look up, so an empty command is an agent that cannot start.
 		if len(a.Command) == 0 {
-			return model.Agent{}, fmt.Errorf("агенту типа «%s» нужна команда запуска (argv ACP-агента)", model.KindACP)
+			return model.Agent{}, msg.Err("agent.noCommand", "kind", model.KindACP)
 		}
 	case model.KindClaude, model.KindCodex:
 	default:
-		return model.Agent{}, fmt.Errorf("неизвестный тип агента «%s» (допустимо: %s)", a.Kind, strings.Join(model.Kinds, ", "))
+		return model.Agent{}, msg.Err("agent.unknownKind", "kind", a.Kind, "allowed", strings.Join(model.Kinds, ", "))
 	}
 	return a, nil
 }
@@ -186,7 +187,7 @@ func (r sourceRow) source() model.Source {
 func (s *Store) Sources() ([]model.Source, error) {
 	var rows []sourceRow
 	if err := s.db.Select(&rows, `SELECT * FROM source ORDER BY name_key`); err != nil {
-		return nil, fmt.Errorf("прочитать источники: %w", err)
+		return nil, fmt.Errorf("read sources: %w", err)
 	}
 	out := make([]model.Source, 0, len(rows))
 	for _, r := range rows {
@@ -206,7 +207,7 @@ func (s *Store) Source(name string) (model.Source, error) {
 	var r sourceRow
 	err := s.db.Get(&r, `SELECT * FROM source WHERE name_key = ?`, nameKey(name))
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.Source{}, fmt.Errorf("источник «%s»: %w", name, ErrNotFound)
+		return model.Source{}, msg.Tag(ErrNotFound, "source.notFound", "source", name)
 	}
 	if err != nil {
 		return model.Source{}, err
@@ -255,7 +256,7 @@ func (s *Store) SaveSource(src model.Source) (model.Source, error) {
 		return nil
 	})
 	if err != nil {
-		return model.Source{}, fmt.Errorf("сохранить источник: %w", err)
+		return model.Source{}, fmt.Errorf("save source: %w", err)
 	}
 	return src, nil
 }
@@ -268,7 +269,7 @@ func (s *Store) DeleteSource(name string) error {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("источник «%s»: %w", name, ErrNotFound)
+		return msg.Tag(ErrNotFound, "source.notFound", "source", name)
 	}
 	return nil
 }
@@ -285,7 +286,7 @@ func (s *Store) rules(source string) ([]model.Rule, error) {
 	if err := s.db.Select(&rows, `
 		SELECT name, then_action, match_json, props_json, suggest_flow, assignee
 		FROM source_rule WHERE source = ? ORDER BY ord`, source); err != nil {
-		return nil, fmt.Errorf("прочитать правила источника «%s»: %w", source, err)
+		return nil, fmt.Errorf("read rules of source %q: %w", source, err)
 	}
 	out := make([]model.Rule, 0, len(rows))
 	for _, r := range rows {

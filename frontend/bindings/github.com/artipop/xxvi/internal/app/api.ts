@@ -236,7 +236,7 @@ export function Journal(cardID: string): $CancellablePromise<model$0.JournalEntr
 }
 
 /**
- * KeepCardWorktree answers «оставить»: the tree stays, and is not asked about
+ * KeepCardWorktree answers «keep»: the tree stays, and is not asked about
  * again.
  */
 export function KeepCardWorktree(cardID: string): $CancellablePromise<$models.CardView> {
@@ -244,8 +244,8 @@ export function KeepCardWorktree(cardID: string): $CancellablePromise<$models.Ca
 }
 
 /**
- * MarkOutcome is a person answering for a stage that runs nothing: «прошло» or
- * «не прошло», put on the card so the flow sees it and moves.
+ * MarkOutcome is a person answering for a stage that runs nothing: passed or
+ * failed, put on the card so the flow sees it and moves.
  * 
  * It goes through SetProp rather than straight to the store, and that is the
  * point: the engine's own write of the outcome is silent, because the machine
@@ -283,9 +283,11 @@ export function OpenTerminal(cardID: string, screenID: string, command: string):
  * their project is knows it as a place they can point at, not as a string they
  * can spell — and a typo in a path is a project that refuses to save with a
  * sentence about a folder that is not there.
+ * 
+ * The dialog's title is the UI's, like every other word on the screen.
  */
-export function PickFolder($from: string): $CancellablePromise<string> {
-    return $Call.ByID(78060566, $from);
+export function PickFolder(title: string, $from: string): $CancellablePromise<string> {
+    return $Call.ByID(78060566, title, $from);
 }
 
 /**
@@ -317,7 +319,7 @@ export function ReadDoc(cardID: string, name: string): $CancellablePromise<strin
 }
 
 /**
- * RemoveCardWorktree answers «удалить» to a closed card's working tree: the tree
+ * RemoveCardWorktree answers «remove» to a closed card's working tree: the tree
  * goes, the branch stays. Discard is the person having been told the tree holds
  * uncommitted changes and removing it anyway.
  */
@@ -431,6 +433,15 @@ export function SetCardWorkMode(cardID: string, mode: string): $CancellablePromi
 }
 
 /**
+ * SetNotificationWords hands over what a system notification says around an
+ * agent's question, in the language the UI is showing. Called by the UI when it
+ * starts and whenever the language changes.
+ */
+export function SetNotificationWords(words: $models.NotificationWords): $CancellablePromise<void> {
+    return $Call.ByID(2706622007, words);
+}
+
+/**
  * SetProp sets a property on a card and tells the engine, because a property is
  * how a person answers a waiting stage. Which stage cares, and whether this was
  * the value it wanted, is the engine's to decide — setting anything else is
@@ -450,7 +461,7 @@ export function SetUpdatesEnabled(enabled: boolean): $CancellablePromise<$models
 
 /**
  * SkipUpdate stops offering the release now on offer. Remembered across
- * restarts, or the button would mean «до перезапуска».
+ * restarts, or the button would mean «until restart».
  */
 export function SkipUpdate(): $CancellablePromise<void> {
     return $Call.ByID(1510861001);
@@ -486,7 +497,7 @@ export function TakeIntoWork(cardID: string, flowID: string): $CancellablePromis
 }
 
 /**
- * UpdateState is everything the «Обновление» screen draws. A build with no
+ * UpdateState is everything the «Update» screen draws. A build with no
  * updater answers too, and says so: the screen then shows the version and
  * nothing else, rather than an empty panel.
  */

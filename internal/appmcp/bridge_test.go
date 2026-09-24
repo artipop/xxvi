@@ -98,7 +98,7 @@ func TestBridgeCarriesTheToolsThrough(t *testing.T) {
 // answer is to open it.
 func TestBridgeWithoutARunningApplication(t *testing.T) {
 	_, err := ReadHandoff(t.TempDir())
-	if err == nil || !strings.Contains(err.Error(), "не запущен") {
+	if err == nil || !strings.Contains(err.Error(), "not running") {
 		t.Fatalf("без запущенного приложения ожидается внятный отказ, получено: %v", err)
 	}
 }

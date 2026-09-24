@@ -83,7 +83,7 @@ func New(log *slog.Logger) *Server {
 func (s *Server) Listen() error {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return fmt.Errorf("открыть порт для инструментов агента: %w", err)
+		return fmt.Errorf("open the agent tools port: %w", err)
 	}
 	s.mu.Lock()
 	s.addr = ln.Addr().String()
@@ -95,7 +95,7 @@ func (s *Server) Listen() error {
 	s.mu.Unlock()
 	go func() {
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-			s.log.Error("сервер инструментов агента остановлен", "err", err)
+			s.log.Error("agent tools server stopped", "err", err)
 		}
 	}()
 	return nil
@@ -173,7 +173,7 @@ func (s *Server) handler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := s.step(r); !ok {
-			http.Error(w, "этот шаг уже закончен", http.StatusForbidden)
+			http.Error(w, "this step is already finished", http.StatusForbidden)
 			return
 		}
 		inner.ServeHTTP(w, r)
@@ -205,7 +205,7 @@ func newServer(step Step) *mcp.Server {
 		switch outcome {
 		case "done", "failed":
 		default:
-			return errorResult("«%s» — не исход шага. Ожидается done или failed.", in.Outcome), nil, nil
+			return errorResult("«%s» is not a step outcome. Expected done or failed.", in.Outcome), nil, nil
 		}
 		if err := step.Report(Report{
 			OK:      outcome == "done",
@@ -214,22 +214,22 @@ func newServer(step Step) *mcp.Server {
 		}); err != nil {
 			return errorResult("%v", err), nil, nil
 		}
-		return textResult("Шаг записан. Карточка поехала дальше — новых указаний по ней не будет."), nil, nil
+		return textResult("Step recorded. The card has moved on — there will be no further instructions for it."), nil, nil
 	})
 	return srv
 }
 
 func instructions(step Step) string {
 	var b strings.Builder
-	b.WriteString("Это шаг флоу XXVI")
+	b.WriteString("This is a step of an XXVI flow")
 	if step.StageName != "" {
-		fmt.Fprintf(&b, " — стадия «%s»", step.StageName)
+		fmt.Fprintf(&b, " — the stage «%s»", step.StageName)
 	}
 	if step.CardTitle != "" {
-		fmt.Fprintf(&b, " по карточке «%s»", step.CardTitle)
+		fmt.Fprintf(&b, " for the card «%s»", step.CardTitle)
 	}
-	b.WriteString(".\n\nЗакончив работу, вызови finish_step: пока он не вызван, карточка стоит здесь и никуда не едет. ")
-	b.WriteString("Выход из терминала концом шага не считается.")
+	b.WriteString(".\n\nWhen you are done, call finish_step: until it is called, the card stands here and goes nowhere. ")
+	b.WriteString("Leaving the terminal does not count as finishing the step.")
 	return b.String()
 }
 
@@ -239,15 +239,15 @@ func instructions(step Step) string {
 // about too late.
 func describe(step Step) string {
 	var b strings.Builder
-	b.WriteString("Сообщить, что шаг закончен, и чем. Вызывай, когда работа сделана или когда стало ясно, что сделать её нельзя: до этого вызова карточка стоит на месте.")
+	b.WriteString("Report that the step is finished, and how. Call it when the work is done or when it has become clear it cannot be done: until this call the card stays where it is.")
 	if len(step.Writes) == 0 {
 		return b.String()
 	}
-	b.WriteString("\n\nВ properties нужно передать:")
+	b.WriteString("\n\nPass in properties:")
 	for _, w := range step.Writes {
 		fmt.Fprintf(&b, "\n- «%s»", w.Property)
 		if w.Required {
-			b.WriteString(" — обязательно, без него шаг не закончится")
+			b.WriteString(" — required, the step does not finish without it")
 		}
 	}
 	return b.String()
@@ -255,7 +255,7 @@ func describe(step Step) string {
 
 func textResult(text string) *mcp.CallToolResult {
 	if strings.TrimSpace(text) == "" {
-		text = "(пусто)"
+		text = "(empty)"
 	}
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: text}}}
 }

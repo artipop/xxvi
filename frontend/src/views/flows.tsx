@@ -5,14 +5,15 @@ import {
   agents, flows, guard, list, loadFlowCards, loadFlows, openCardByID, stageCards, vocabulary,
 } from "../state";
 import FlowCanvas, { type Selection, type StageWrite, condLabel, edgeIndexOf } from "./flowCanvas";
+import { errorText, label, propName, t } from "../i18n";
 
 // The flow editor. The canvas is the flow itself: a box is a stage — a place a
 // card stands and the work done there — an arrow is what moves a card on, and
 // the chips along the bottom of a box are what the stage leaves on the card.
 //
 // A conditional arrow is pulled from the chip it asks about, which is the whole
-// point of drawing the outputs at all: the edge that branches on «Вердикт»
-// starts at the thing that produces «Вердикт», instead of being assembled in a
+// point of drawing the outputs at all: the edge that branches on «Verdict»
+// starts at the thing that produces «Verdict», instead of being assembled in a
 // panel out of a list of every property anybody ever typed.
 //
 // A flow is saved whole and checked whole: the refusal that comes back names the
@@ -23,7 +24,7 @@ export default function FlowsView() {
 
   // Keyed on the flows arriving and on nothing else. Reading the selection as
   // a dependency too — which is what a Solid 1 effect did, because the body was
-  // the dependency list — meant «+ Новый» cleared the selection and the same
+  // the dependency list — meant «+ New» cleared the selection and the same
   // effect put the first flow straight back.
   createEffect(flows, (all) => {
     if (!selectedID() && all.length > 0) setSelectedID(all[0].id);
@@ -33,10 +34,9 @@ export default function FlowsView() {
 
   return (
     <>
-      <h1>Флоу</h1>
+      <h1>{t("flows.title")}</h1>
       <p class="lede">
-        Стадия — место, где карточка стоит, и работа, которая на ней делается.
-        Переход — событие, которое двигает карточку дальше.
+        {t("flows.lede")}
       </p>
 
       <div class="row wrap" style={{ "margin-bottom": "14px" }}>
@@ -47,7 +47,7 @@ export default function FlowsView() {
             </button>
           )}
         </For>
-        <button class="btn quiet" onClick={() => setSelectedID("")}>+ Новый</button>
+        <button class="btn quiet" onClick={() => setSelectedID("")}>{t("flows.new")}</button>
       </div>
 
       <Editor flow={current()} onSaved={(f) => setSelectedID(f.id)} onRemoved={() => setSelectedID("")} />
@@ -55,12 +55,12 @@ export default function FlowsView() {
   );
 }
 
-/** blankFlow is what «+ Новый» starts from: one stage, which is the smallest
+/** blankFlow is what «+ New» starts from: one stage, which is the smallest
  *  thing that validates, and it is already the entry. */
 function blankFlow(): Flow {
   return {
     id: "", name: "", description: "", entryStage: "s1",
-    stages: [{ id: "s1", name: "Первая стадия", action: "none", x: 80, y: 120 } as Stage],
+    stages: [{ id: "s1", name: t("flows.firstStage"), action: "none", x: 80, y: 120 } as Stage],
     edges: [],
   } as Flow;
 }
@@ -76,7 +76,7 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
   const [confirming, setConfirming] = createSignal(false);
 
   // Loading a flow into the draft is a copy, not a reference: the canvas is
-  // edited freely and nothing is written until «Сохранить», because the engine
+  // edited freely and nothing is written until «Save», because the engine
   // checks the whole picture before it takes it.
   createEffect(() => props.flow, (f) => {
     setDraft(() => (f ? (JSON.parse(JSON.stringify(f)) as Flow) : blankFlow()));
@@ -99,17 +99,17 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
       setDirty(false);
       props.onSaved(saved);
     } catch (e) {
-      // The backend's refusal is a sentence written for a person. Shown as it
-      // came, because replacing it with "ошибка сохранения" throws away the only
+      // The backend's refusal says which part of the graph is wrong. Shown in
+      // full, because replacing it with "could not save" throws away the only
       // part that helps.
-      setSaveError(e instanceof Error ? e.message : String(e));
+      setSaveError(errorText(e));
     }
   };
 
   // Deleting a flow is asked about first, and then written through at once.
   // Everything else here is a draft somebody may still be arranging; a flow
   // somebody has just confirmed deleting is not, and leaving it on screen until
-  // «Сохранить» reads as the button not having worked.
+  // «Save» reads as the button not having worked.
   const remove = async () => {
     if (!draft.id) return;
     setConfirming(false);
@@ -123,7 +123,7 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
     setDraft((f) => {
       const list = f.stages || (f.stages = []);
       list.push({
-        id, name: "Новая стадия", action: "none",
+        id, name: t("flows.newStage"), action: "none",
         x: 60 + list.length * 220, y: 140, ...stage,
       } as Stage);
       if (!f.entryStage) f.entryStage = id;
@@ -137,11 +137,11 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
   // rather than a kind of stage of its own, because that is all it is — and a
   // fourth action would have to be explained where two are enough.
   //
-  // The edges are not drawn here. Where «прошло» and «не прошло» lead is the
+  // The edges are not drawn here. Where «passed» and «failed» lead is the
   // one arrow a person draws (docs/system.md §4.4), and guessing it would make
   // the button a flow of its own.
   const addReview = () =>
-    addStage({ name: "Ревью", action: "none", screens: [{ kind: "diff", ref: "" } as Screen] });
+    addStage({ name: t("flows.review"), action: "none", screens: [{ kind: "diff", ref: "" } as Screen] });
 
   const cardsOn = (stageID: string) => stageCards().filter((c) => c.stageId === stageID);
 
@@ -202,32 +202,32 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
     <>
       <div class="row wrap" style={{ "margin-bottom": "10px" }}>
         <label class="field" style={{ flex: "1", margin: 0 }}>
-          <span>Название</span>
+          <span>{t("projects.name")}</span>
           <input type="text" value={draft.name}
                  onInput={(e) => { setDraft(storePath("name", e.currentTarget.value)); touch(); }} />
         </label>
         <label class="field" style={{ flex: "2", margin: 0 }}>
-          <span>Описание</span>
+          <span>{t("flows.description")}</span>
           <input type="text" value={draft.description ?? ""}
                  onInput={(e) => { setDraft(storePath("description", e.currentTarget.value)); touch(); }} />
         </label>
       </div>
 
       <div class="row" style={{ "margin-bottom": "10px" }}>
-        <button class="btn" onClick={() => addStage()}>+ Стадия</button>
-        <button class="btn" onClick={addReview} title="Стадия ожидания с диффом: человек смотрит и отвечает">+ Ревью</button>
+        <button class="btn" onClick={() => addStage()}>{t("flows.addStage")}</button>
+        <button class="btn" onClick={addReview} title={t("flows.addReviewTitle")}>{t("flows.addReview")}</button>
         <div class="spacer" />
-        <Show when={dirty()}><span class="meta">есть несохранённые изменения</span></Show>
+        <Show when={dirty()}><span class="meta">{t("flows.unsaved")}</span></Show>
         <Show when={draft.id}>
           <Show when={confirming()} fallback={
-            <button class="btn quiet" onClick={() => setConfirming(true)}>Удалить флоу</button>
+            <button class="btn quiet" onClick={() => setConfirming(true)}>{t("flows.delete")}</button>
           }>
-            <span class="meta">Удалить «{draft.name}» насовсем?</span>
-            <button class="btn quiet" onClick={() => setConfirming(false)}>Отмена</button>
-            <button class="btn danger" onClick={remove}>Удалить</button>
+            <span class="meta">{t("flows.confirmDelete", { name: draft.name })}</span>
+            <button class="btn quiet" onClick={() => setConfirming(false)}>{t("common.cancel")}</button>
+            <button class="btn danger" onClick={remove}>{t("common.delete")}</button>
           </Show>
         </Show>
-        <button class="btn primary" onClick={save}>Сохранить</button>
+        <button class="btn primary" onClick={save}>{t("common.save")}</button>
       </div>
 
       <Show when={saveError()}>
@@ -236,15 +236,13 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
 
       <Show when={unwritten().length > 0}>
         <div class="warn-note">
-          Условие спрашивает про {unwritten().map((n) => `«${n}»`).join(", ")}, но ни одна стадия
-          не объявляет, что это пишет. Карточка по такой ветке не поедет, если значение не поставит человек.
+          {t("flows.unwritten", { properties: unwritten().map((n) => `«${propName(n)}»`).join(", ") })}
         </div>
       </Show>
 
       <Show when={unresolved().length > 0}>
         <div class="warn-note">
-          Экран открывает {unresolved().map((n) => `«${n}»`).join(", ")}, но ни одна стадия
-          не объявляет, что это пишет. Экран будет стоять пустым, пока значение не поставит человек.
+          {t("flows.unresolved", { properties: unresolved().map((n) => `«${propName(n)}»`).join(", ") })}
         </div>
       </Show>
 
@@ -265,9 +263,7 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
             }}
           />
           <div class="meta" style={{ "margin-top": "6px" }}>
-            Тяните из правого края коробки: верхняя точка — «шаг прошёл», нижняя — «шаг упал»,
-            точка снизу — событие. Из фишки-выхода тянется развилка по этому свойству.
-            Конец стрелки можно перехватить и бросить на другую стадию — или в пустоту, чтобы разрезать.
+            {t("flows.canvasHint")}
           </div>
         </div>
 
@@ -281,12 +277,12 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
                        onDeleted={() => setSelected(null)} />
           </Show>
           <Show when={!selected()}>
-            <div class="panel"><div class="empty">Выберите стадию или переход, чтобы настроить.</div></div>
+            <div class="panel"><div class="empty">{t("flows.selectHint")}</div></div>
           </Show>
 
           <Show when={cardsOn(selectedStage()).length > 0}>
             <div class="panel">
-              <h3>Карточки на стадии</h3>
+              <h3>{t("flows.cardsOnStage")}</h3>
               <For each={cardsOn(selectedStage())}>
                 {(c) => (
                   <div class="row" style={{ padding: "4px 0", cursor: "pointer" }}
@@ -314,7 +310,7 @@ function sameFold(a: string | undefined | null, b: string | undefined | null): b
  *  backwards over the incoming edges with a visited set, because a flow has
  *  cycles on purpose — a failed check sends the card back to the agent. A stage
  *  never reads its own output back. */
-// refNames mirrors model.ScreenRefs on the Go side: «{Превью}», and the braces
+// refNames mirrors model.ScreenRefs on the Go side: «{Preview}», and the braces
 // are the whole syntax. Anything richer would be a script.
 function refNames(ref: string): string[] {
   const out: string[] = [];
@@ -413,7 +409,7 @@ function StagePanel(props: {
   const setScreens = (next: Screen[]) => set({ screens: next });
 
   const addScreen = () =>
-    setScreens([...screens(), { kind: vocabulary().screenKinds?.[0]?.kind ?? "notes", ref: "" } as Screen]);
+    setScreens([...screens(), { kind: vocabulary().screenKinds?.[0] ?? "notes", ref: "" } as Screen]);
 
   const editScreen = (i: number, patch: Partial<Screen>) =>
     setScreens(screens().map((sc, at) => (at === i ? { ...sc, ...patch } : sc)));
@@ -421,22 +417,22 @@ function StagePanel(props: {
   const removeScreen = (i: number) => setScreens(screens().filter((_, at) => at !== i));
 
   const refHint = (kind: string) =>
-    kind === "notes" ? "план.md"
-      : kind === "terminal" ? "npm run dev — или пусто, шелл в папке карточки"
-      : kind === "diff" ? "HEAD~1, main...HEAD — или пусто, что не закоммичено"
-      : "{Превью}";
+    kind === "notes" ? t("flows.refNotes")
+      : kind === "terminal" ? t("flows.refTerminal")
+      : kind === "diff" ? t("flows.refDiff")
+      : t("flows.refBrowser");
 
   return (
     <Show when={stage()}>
       <div class="panel">
-        <h3>Стадия</h3>
+        <h3>{t("flows.stage")}</h3>
         <label class="field">
-          <span>Название</span>
+          <span>{t("projects.name")}</span>
           <input type="text" value={stage().name} onInput={(e) => set({ name: e.currentTarget.value })} />
         </label>
 
         <label class="field">
-          <span>Что происходит</span>
+          <span>{t("flows.whatHappens")}</span>
           <select value={stage().final ? "final" : stage().action}
                   onChange={(e) => {
                     const v = e.currentTarget.value;
@@ -447,9 +443,9 @@ function StagePanel(props: {
                       : set({ final: false, action: v, work: v === "agent" ? (stage().work || "terminal") : "" });
                   }}>
             <For each={list(vocabulary().actions)}>
-              {(a) => <option value={a}>{a === "agent" ? "работает агент" : "ждёт события"}</option>}
+              {(a) => <option value={a}>{a === "agent" ? t("flows.agentWorks") : t("flows.waitsEvent")}</option>}
             </For>
-            <option value="final">финал — карточка закрывается</option>
+            <option value="final">{t("flows.finalOption")}</option>
           </select>
         </label>
 
@@ -459,26 +455,26 @@ function StagePanel(props: {
               it in its own interface, a session is a step nobody watches
               (docs/system.md §4.1.1). */}
           <label class="field">
-            <span>Где идёт работа</span>
+            <span>{t("flows.whereWork")}</span>
             <select value={stage().work || "terminal"}
                     onChange={(e) => set({ work: e.currentTarget.value })}>
               <For each={list(vocabulary().works)}>
-                {(w) => <option value={w.kind}>{w.label}</option>}
+                {(w) => <option value={w}>{label("work", w)}</option>}
               </For>
             </select>
             <span class="meta">
               {stage().work === "session"
-                ? "Агент отчитывается последними словами. Спросить человека может только по протоколу."
-                : "Свой CLI агента в терминале карточки: вопросы он рисует сам, и там же на них отвечают."}
+                ? t("flows.sessionNote")
+                : t("flows.terminalNote")}
             </span>
           </label>
           <label class="field">
-            <span>Что сказать агенту на этом шаге</span>
+            <span>{t("flows.stagePrompt")}</span>
             <textarea value={stage().prompt ?? ""} onInput={(e) => set({ prompt: e.currentTarget.value })} />
           </label>
           <div class="field">
             <span style={{ display: "block", color: "var(--dim)", "font-size": "12px", "margin-bottom": "3px" }}>
-              Состав — кому разрешено работать эту стадию
+              {t("flows.crew")}
             </span>
             <div class="row wrap">
               <For each={list(agents().agents)}>
@@ -492,39 +488,39 @@ function StagePanel(props: {
             </div>
           </div>
           <label class="field">
-            <span>Сколько карточек одновременно (0 — без ограничения стадии)</span>
+            <span>{t("flows.maxRunning")}</span>
             <input type="text" value={String(stage().maxRunning ?? 0)}
                    onInput={(e) => set({ maxRunning: Number(e.currentTarget.value) || 0 })} />
           </label>
 
           {/* The stage's outputs. Declaring one is what makes a transition on a
               property deterministic rather than hopeful: the arrow that asks
-              about «Вердикт» is pulled from the stage that must produce it. */}
+              about «Verdict» is pulled from the stage that must produce it. */}
           <div class="field">
             <div class="row">
-              <span style={{ color: "var(--dim)", "font-size": "12px" }}>Записывает на карточку</span>
+              <span style={{ color: "var(--dim)", "font-size": "12px" }}>{t("flows.writes")}</span>
               <div class="spacer" />
-              <button class="btn quiet" onClick={addWrite}>+ Свойство</button>
+              <button class="btn quiet" onClick={addWrite}>{t("flows.addWrite")}</button>
             </div>
             <Show when={writes().length > 0} fallback={
-              <div class="meta">Ничего не объявлено — стадия просто заканчивается.</div>
+              <div class="meta">{t("flows.noWrites")}</div>
             }>
               <For each={writes()}>
                 {(w, i) => (
                   <div class="row" style={{ "margin-top": "4px" }}>
-                    <input type="text" placeholder="Вердикт" value={w.property} style={{ flex: "1" }}
+                    <input type="text" placeholder={t("flows.writePlaceholder")} value={w.property} style={{ flex: "1" }}
                            onInput={(e) => editWrite(i(), { property: e.currentTarget.value })} />
-                    <label class="meta" title="Без этого значения шаг не будет закончен">
+                    <label class="meta" title={t("flows.requiredTitle")}>
                       <input type="checkbox" checked={Boolean(w.required)}
                              onChange={(e) => editWrite(i(), { required: e.currentTarget.checked })} />
-                      {" "}обяз.
+                      {" "}{t("flows.required")}
                     </label>
                     <button class="btn quiet" onClick={() => removeWrite(i())}>✕</button>
                   </div>
                 )}
               </For>
               <div class="meta" style={{ "margin-top": "4px" }}>
-                Агент передаёт значения последними строками ответа: «Свойство: значение».
+                {t("flows.writesNote")}
               </div>
             </Show>
           </div>
@@ -535,16 +531,16 @@ function StagePanel(props: {
               every later stage. */}
           <div class="field">
             <span style={{ display: "block", color: "var(--dim)", "font-size": "12px", "margin-bottom": "3px" }}>
-              Получает с карточки
+              {t("flows.reads")}
             </span>
             <Show when={available().length > 0} fallback={
-              <div class="meta">До этой стадии никто ничего не записывает.</div>
+              <div class="meta">{t("flows.noUpstream")}</div>
             }>
               <div class="row wrap">
                 <For each={available()}>
                   {(w) => (
                     <button class={`btn ${reads().includes(w.property) ? "primary" : "quiet"}`}
-                            title={`пишет «${w.from}»`}
+                            title={t("flows.writtenBy", { stage: w.from })}
                             onClick={() => toggleRead(w.property)}>
                       {w.property}
                     </button>
@@ -553,8 +549,8 @@ function StagePanel(props: {
               </div>
               <div class="meta" style={{ "margin-top": "4px" }}>
                 {reads().length === 0
-                  ? "Ничего не отмечено — стадия получит всё, что записали до неё."
-                  : "Отмеченное подставляется в начало брифа со значениями."}
+                  ? t("flows.readsAll")
+                  : t("flows.readsSome")}
               </div>
             </Show>
           </div>
@@ -564,12 +560,12 @@ function StagePanel(props: {
             nothing runs is exactly where somebody is looking. */}
         <div class="field">
           <div class="row">
-            <span style={{ color: "var(--dim)", "font-size": "12px" }}>Экраны ленты</span>
+            <span style={{ color: "var(--dim)", "font-size": "12px" }}>{t("flows.screens")}</span>
             <div class="spacer" />
-            <button class="btn quiet" onClick={addScreen}>+ Экран</button>
+            <button class="btn quiet" onClick={addScreen}>{t("flows.addScreen")}</button>
           </div>
           <Show when={screens().length > 0} fallback={
-            <div class="meta">Ничего не объявлено — в ленте будет только ход агента.</div>
+            <div class="meta">{t("flows.noScreens")}</div>
           }>
             <For each={screens()}>
               {(sc, i) => (
@@ -577,7 +573,7 @@ function StagePanel(props: {
                   <select value={sc.kind} style={{ width: "auto" }}
                           onChange={(e) => editScreen(i(), { kind: e.currentTarget.value })}>
                     <For each={list(vocabulary().screenKinds)}>
-                      {(k) => <option value={k.kind}>{k.label}</option>}
+                      {(k) => <option value={k}>{label("screen", k)}</option>}
                     </For>
                   </select>
                   <input type="text" placeholder={refHint(sc.kind)} value={sc.ref ?? ""} style={{ flex: "1" }}
@@ -587,7 +583,7 @@ function StagePanel(props: {
               )}
             </For>
             <div class="meta" style={{ "margin-top": "4px" }}>
-              В ссылке можно подставить свойство карточки: «{"{Превью}"}».
+              {t("flows.refNote")}
             </div>
           </Show>
         </div>
@@ -596,10 +592,10 @@ function StagePanel(props: {
           <button class="btn quiet"
                   disabled={props.draft.entryStage === props.stageID}
                   onClick={() => { props.setDraft(storePath("entryStage", props.stageID)); props.onChange(); }}>
-            {props.draft.entryStage === props.stageID ? "Это входная стадия" : "Сделать входной"}
+            {props.draft.entryStage === props.stageID ? t("flows.isEntry") : t("flows.makeEntry")}
           </button>
           <div class="spacer" />
-          <button class="btn quiet" onClick={removeStage}>Удалить</button>
+          <button class="btn quiet" onClick={removeStage}>{t("common.delete")}</button>
         </div>
       </div>
     </Show>
@@ -644,22 +640,22 @@ function EdgePanel(props: {
   return (
     <Show when={edge()}>
       <div class="panel">
-        <h3>Переход</h3>
+        <h3>{t("flows.edge")}</h3>
         <div class="meta" style={{ "margin-bottom": "8px" }}>
           «{nameOf(edge().from)}» → «{nameOf(edge().to)}»{condLabel(edge()) ? ` · ${condLabel(edge())}` : ""}
         </div>
 
         <div class="grid2">
           <label class="field">
-            <span>Когда</span>
+            <span>{t("flows.when")}</span>
             <select value={edge().on} onChange={(e) => set({ on: e.currentTarget.value })}>
               <For each={list(vocabulary().triggers)}>
-                {(t) => <option value={t.kind}>{t.label}</option>}
+                {(tr) => <option value={tr.kind}>{label("trigger", tr.kind)}</option>}
               </For>
             </select>
           </label>
           <label class="field">
-            <span>Куда</span>
+            <span>{t("flows.to")}</span>
             <select value={edge().to} onChange={(e) => set({ to: e.currentTarget.value })}>
               <For each={stages().filter((s) => s.id !== edge().from)}>
                 {(s) => <option value={s.id}>{s.name}</option>}
@@ -672,7 +668,7 @@ function EdgePanel(props: {
 
         <div class="row">
           <div class="spacer" />
-          <button class="btn quiet" onClick={removeEdge}>Убрать переход</button>
+          <button class="btn quiet" onClick={removeEdge}>{t("flows.removeEdge")}</button>
         </div>
       </div>
     </Show>
@@ -699,7 +695,7 @@ function Condition(props: {
   return (
     <div>
       <label class="field">
-        <span>Условие</span>
+        <span>{t("flows.condition")}</span>
         <select value={kind()} onChange={(e) => {
           const v = e.currentTarget.value;
           if (v === "none") props.onChange(null);
@@ -711,47 +707,47 @@ function Condition(props: {
         }}>
           {/* card.changed has no unconditional form: the condition is not a
               guard there but the event itself — which value fires it. */}
-          <Show when={!isHuman()}><option value="none">без условия — запасной выход</option></Show>
-          <option value="prop">на карточке выбрано свойство</option>
-          <Show when={!isHuman()}><option value="words">в ответе агента есть текст</option></Show>
+          <Show when={!isHuman()}><option value="none">{t("flows.condNone")}</option></Show>
+          <option value="prop">{t("flows.condProp")}</option>
+          <Show when={!isHuman()}><option value="words">{t("flows.condWords")}</option></Show>
         </select>
       </label>
 
       <Show when={kind() === "prop"}>
         <div class="grid2">
-          <input type="text" list="cond-props" placeholder="свойство" value={props.edge.if?.property ?? ""}
+          <input type="text" list="cond-props" placeholder={t("card.propName")} value={props.edge.if?.property ?? ""}
                  onInput={(e) => props.onChange({ property: e.currentTarget.value, value: props.edge.if?.value ?? "" })} />
-          <input type="text" list="cond-values" placeholder="значение" value={props.edge.if?.value ?? ""}
+          <input type="text" list="cond-values" placeholder={t("card.propValue")} value={props.edge.if?.value ?? ""}
                  onInput={(e) => props.onChange({ property: props.edge.if?.property ?? "", value: e.currentTarget.value })} />
         </div>
         {/* The flow's own vocabulary, offered rather than imposed: a value a
             person types by hand is still a value. */}
         <datalist id="cond-props">
-          <option value={outcome()} />
-          <For each={props.choices}>{(w) => <option value={w.property} label={`пишет «${w.from}»`} />}</For>
+          <option value={outcome()} label={propName(outcome())} />
+          <For each={props.choices}>{(w) => <option value={w.property} label={t("flows.writtenBy", { stage: w.from })} />}</For>
         </datalist>
         <datalist id="cond-values">
           <Show when={sameFold(props.edge.if?.property, outcome())}>
-            <For each={list(vocabulary().outcomeValues)}>{(v) => <option value={v} />}</For>
+            <For each={list(vocabulary().outcomeValues)}>{(v) => <option value={v} label={label("outcome", v)} />}</For>
           </Show>
         </datalist>
         <Show when={props.choices.length > 0}>
           <div class="meta" style={{ "margin-top": "4px" }}>
-            До этой ветки записывают: {props.choices.map((w) => `«${w.property}» (${w.from})`).join(", ")}.
+            {t("flows.writtenBefore", { list: props.choices.map((w) => `«${w.property}» (${w.from})`).join(", ") })}
           </div>
         </Show>
         <Show when={isHuman()}>
           <div class="meta" style={{ "margin-top": "4px" }}>
-            Ветка по «{outcome()}» — это две кнопки на карточке: вперёд и назад.
+            {t("flows.outcomeBranch", { property: propName(outcome()) })}
           </div>
         </Show>
       </Show>
 
       <Show when={kind() === "words"}>
-        <input type="text" placeholder="ГОТОВО К ДЕПЛОЮ" value={props.edge.if?.commentContains ?? ""}
+        <input type="text" placeholder={t("flows.wordsPlaceholder")} value={props.edge.if?.commentContains ?? ""}
                onInput={(e) => props.onChange({ commentContains: e.currentTarget.value })} />
         <div class="meta" style={{ "margin-top": "4px" }}>
-          Эти слова допишутся в промпт стадии, чтобы агент знал, чем закончить.
+          {t("flows.wordsNote")}
         </div>
       </Show>
     </div>

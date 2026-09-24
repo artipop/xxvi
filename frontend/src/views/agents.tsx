@@ -2,6 +2,7 @@ import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Agent } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import { agents, guard, loadAgents, vocabulary } from "../state";
+import { say, t } from "../i18n";
 
 // The agent registry, with the adapter check beside it — "can this agent
 // actually run here" is the question this screen is opened with, and a missing
@@ -12,39 +13,39 @@ export default function AgentsView() {
 
   return (
     <>
-      <h1>Агенты</h1>
-      <p class="lede">Агенты по ACP. Стадия выбирает исполнителя из своего состава.</p>
+      <h1>{t("agents.title")}</h1>
+      <p class="lede">{t("agents.lede")}</p>
 
-      <h2>Что установлено на этой машине</h2>
+      <h2>{t("agents.installed")}</h2>
       <For each={agents().adapters}>
         {(a) => (
           <div class="card">
             <div class="row wrap">
               <span class="title">{a.kind}</span>
-              <Show when={a.ready} fallback={<span class="tag bad"><span class="dot" />не запустится</span>}>
-                <span class="tag ok"><span class="dot" />{a.viaNpx ? "через npx" : "сессией"}</span>
+              <Show when={a.ready} fallback={<span class="tag bad"><span class="dot" />{t("agents.wontStart")}</span>}>
+                <span class="tag ok"><span class="dot" />{a.viaNpx ? t("agents.viaNpx") : t("work.session")}</span>
               </Show>
               {/* Two questions with two answers: the vendor's ACP adapter and
                   the vendor's interactive CLI are different programs, and a
                   machine can have one without the other. */}
-              <Show when={a.terminal} fallback={<span class="tag"><span class="dot" />не в терминале</span>}>
-                <span class="tag ok"><span class="dot" />в терминале</span>
+              <Show when={a.terminal} fallback={<span class="tag"><span class="dot" />{t("agents.noTerminal")}</span>}>
+                <span class="tag ok"><span class="dot" />{t("work.terminal")}</span>
               </Show>
               <div class="spacer" />
               <Show when={a.path}><span class="meta mono">{a.path}</span></Show>
             </div>
-            <Show when={a.detail}><div class="body">{a.detail}</div></Show>
+            <Show when={a.detail}><div class="body">{say(a.detail)}</div></Show>
             <Show when={!a.terminal && a.terminalDetail}>
-              <div class="body">{a.terminalDetail}</div>
+              <div class="body">{say(a.terminalDetail)}</div>
             </Show>
           </div>
         )}
       </For>
 
       <div class="list-head">
-        <h2>Реестр</h2>
+        <h2>{t("agents.registry")}</h2>
         <div class="spacer" />
-        <button class="btn" onClick={() => setEditing({ name: "", kind: "claude" } as Agent)}>+ Агент</button>
+        <button class="btn" onClick={() => setEditing({ name: "", kind: "claude" } as Agent)}>{t("agents.new")}</button>
       </div>
 
       <For each={agents().agents}>
@@ -55,9 +56,9 @@ export default function AgentsView() {
               <span class="tag">{a.kind}</span>
               <Show when={a.model}><span class="tag">{a.model}</span></Show>
               <div class="spacer" />
-              <button class="btn quiet" onClick={() => setEditing(JSON.parse(JSON.stringify(a)))}>Изменить</button>
+              <button class="btn quiet" onClick={() => setEditing(JSON.parse(JSON.stringify(a)))}>{t("common.edit")}</button>
               <button class="btn quiet" onClick={async () => { await guard(() => API.DeleteAgent(a.name)); await loadAgents(); }}>
-                Удалить
+                {t("common.delete")}
               </button>
             </div>
             <Show when={a.prompt}><div class="body">{a.prompt}</div></Show>
@@ -83,14 +84,14 @@ function AgentForm(props: { agent: Agent; onDone: () => void }) {
 
   return (
     <div class="panel">
-      <h3>Агент</h3>
+      <h3>{t("agents.agent")}</h3>
       <div class="grid2">
         <label class="field">
-          <span>Имя</span>
+          <span>{t("agents.name")}</span>
           <input type="text" value={a().name} onInput={(e) => patch({ name: e.currentTarget.value })} />
         </label>
         <label class="field">
-          <span>Тип</span>
+          <span>{t("agents.kind")}</span>
           <select value={a().kind} onChange={(e) => patch({ kind: e.currentTarget.value })}>
             <For each={vocabulary().kinds}>{(k) => <option value={k}>{k}</option>}</For>
           </select>
@@ -98,40 +99,40 @@ function AgentForm(props: { agent: Agent; onDone: () => void }) {
       </div>
 
       <label class="field">
-        <span>Промпт — кто он вообще</span>
+        <span>{t("agents.prompt")}</span>
         <textarea value={a().prompt ?? ""} onInput={(e) => patch({ prompt: e.currentTarget.value })} />
       </label>
 
       <div class="grid2">
         <label class="field">
-          <span>Модель</span>
+          <span>{t("agents.model")}</span>
           <input type="text" value={a().model ?? ""} onInput={(e) => patch({ model: e.currentTarget.value })} />
         </label>
         <label class="field">
-          <span>Путь к бинарнику (если не на PATH)</span>
+          <span>{t("agents.binPath")}</span>
           <input type="text" value={a().binPath ?? ""} onInput={(e) => patch({ binPath: e.currentTarget.value })} />
         </label>
       </div>
 
       <Show when={a().kind === "acp"}>
         <label class="field">
-          <span>Команда запуска — весь argv ACP-агента, через пробел</span>
+          <span>{t("agents.command")}</span>
           <input type="text" value={(a().command ?? []).join(" ")}
                  onInput={(e) => patch({ command: e.currentTarget.value.split(" ").filter(Boolean) })} />
         </label>
       </Show>
 
       <label class="field">
-        <span>Что можно без спроса — по одному в строке, например Bash(git *)</span>
+        <span>{t("agents.autoAllow")}</span>
         <textarea value={(a().autoAllowTools ?? []).join("\n")}
                   onInput={(e) => patch({ autoAllowTools: e.currentTarget.value.split("\n").map((s) => s.trim()).filter(Boolean) })} />
       </label>
-      <div class="meta">Пусто — действует машинный список: смотреть можно, менять нельзя, остальное агент спросит.</div>
+      <div class="meta">{t("agents.autoAllowNote")}</div>
 
       <div class="row" style={{ "margin-top": "12px" }}>
         <div class="spacer" />
-        <button class="btn quiet" onClick={props.onDone}>Отмена</button>
-        <button class="btn primary" onClick={save}>Сохранить</button>
+        <button class="btn quiet" onClick={props.onDone}>{t("common.cancel")}</button>
+        <button class="btn primary" onClick={save}>{t("common.save")}</button>
       </div>
     </div>
   );

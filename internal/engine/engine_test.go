@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/store"
 )
 
@@ -59,7 +60,7 @@ func (r *fakeRunner) RunningOnStage(stageID string) int {
 	return n
 }
 
-func (r *fakeRunner) Cancel(cardID, reason string) {
+func (r *fakeRunner) Cancel(cardID string, reason msg.Msg) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.running, cardID)
@@ -76,7 +77,7 @@ func (r *fakeRunner) finish(cardID, outcome, agentText string) {
 	}
 	delete(r.running, cardID)
 	r.mu.Unlock()
-	r.engine.Finished(cardID, outcome, "", agentText)
+	r.engine.Finished(cardID, outcome, msg.Msg{}, agentText)
 }
 
 func (r *fakeRunner) lastJob(t *testing.T) Job {
@@ -302,7 +303,7 @@ func TestUnmatchedAnswerIsExplained(t *testing.T) {
 	if got := f.stageOf(t, card.ID); got != "review" {
 		t.Fatalf("карточка должна остаться на месте, получено %q", got)
 	}
-	if !lastEntryIs(t, f, model.EntryProblem, "ни одно условие") {
+	if !lastEntryIs(t, f, model.EntryProblem, "journal.noCondition") {
 		t.Fatal("карточка должна сказать, почему она не поехала")
 	}
 }
@@ -319,7 +320,7 @@ func TestMissingEdgeIsExplained(t *testing.T) {
 	if got := f.stageOf(t, card.ID); got != "work" {
 		t.Fatalf("без ребра карточка остаётся на месте, получено %q", got)
 	}
-	if !lastEntryIs(t, f, model.EntryProblem, "нет перехода") {
+	if !lastEntryIs(t, f, model.EntryProblem, "journal.noEdge") {
 		t.Fatal("карточка должна сказать, что перехода нет")
 	}
 }
@@ -329,8 +330,8 @@ func TestOneEventMovesACardOnce(t *testing.T) {
 	card := f.card(t, "Т")
 	f.engine.TakeIntoWork(card.ID, f.flow.ID)
 
-	f.engine.Finished(card.ID, model.TriggerSuccess, "", "")
-	f.engine.Finished(card.ID, model.TriggerSuccess, "", "")
+	f.engine.Finished(card.ID, model.TriggerSuccess, msg.Msg{}, "")
+	f.engine.Finished(card.ID, model.TriggerSuccess, msg.Msg{}, "")
 
 	events, _ := f.store.FlowEvents(card.ID)
 	// Taking into work, then one transition. A second would mean the repeat
@@ -505,7 +506,7 @@ func TestAStageThatCannotStartTakesTheFailureBranch(t *testing.T) {
 	if f.stateOf(t, card.ID) != model.StateDone {
 		t.Fatal("карточка должна была уехать по ветке отказа в финальную стадию")
 	}
-	if !anyEntryIs(t, f, card.ID, model.EntryProblem, "шаг не запущен") {
+	if !anyEntryIs(t, f, card.ID, model.EntryProblem, "journal.stepNotStarted") {
 		t.Fatal("карточка должна сказать, что шаг не запустился")
 	}
 }
@@ -547,7 +548,7 @@ func TestDropTakesACardStraightOffItsFlow(t *testing.T) {
 	if got := f.stageOf(t, card.ID); got != "" {
 		t.Fatalf("положение должно быть очищено, получено %q", got)
 	}
-	if !anyEntryIs(t, f, card.ID, model.EntryMove, "отброшена") {
+	if !anyEntryIs(t, f, card.ID, model.EntryMove, "journal.dropped") {
 		t.Fatal("журнал говорит, что карточку отбросили")
 	}
 }
@@ -609,8 +610,8 @@ func TestCardFlowSaysWhatItIsWaitingFor(t *testing.T) {
 	if len(view.WaitingFor) != 2 {
 		t.Fatalf("стадия ждёт двух ответов, получено %v", view.WaitingFor)
 	}
-	if !strings.Contains(view.WaitingFor[0], "Одобрено") {
-		t.Fatalf("ожидание должно называть свойство: %q", view.WaitingFor[0])
+	if w := view.WaitingFor[0]; w.If == nil || w.If.Property != "Одобрено" {
+		t.Fatalf("ожидание должно называть свойство: %+v", w)
 	}
 }
 
@@ -660,18 +661,27 @@ func lastEntryIs(t *testing.T, f fixture, kind model.EntryKind, want string) boo
 		return false
 	}
 	last := entries[len(entries)-1]
-	return last.Kind == kind && strings.Contains(last.Text, want)
+	return last.Kind == kind && strings.Contains(entryText(last), want)
 }
 
 func anyEntryIs(t *testing.T, f fixture, cardID string, kind model.EntryKind, want string) bool {
 	t.Helper()
 	entries, _ := f.store.Journal(cardID)
 	for _, e := range entries {
-		if e.Kind == kind && strings.Contains(e.Text, want) {
+		if e.Kind == kind && strings.Contains(entryText(e), want) {
 			return true
 		}
 	}
 	return false
+}
+
+// entryText is an entry as a test reads it: somebody's words, or the
+// application's message as its code and values.
+func entryText(e model.JournalEntry) string {
+	if e.Msg != nil {
+		return e.Msg.String()
+	}
+	return e.Text
 }
 
 // lastCardID is the card the fixture most recently touched — the tests above
@@ -724,11 +734,11 @@ func TestACardCanGoRoundALoopTwice(t *testing.T) {
 func TestPromptSaysTheCardIsOnItsOwnBranch(t *testing.T) {
 	card := model.Card{Title: "Т", WorkMode: model.WorkModeWorktree, Branch: "t-1"}
 	got := ComposePrompt(card, model.Flow{}, model.Stage{}, model.Agent{}, "")
-	if !strings.Contains(got, "новую ветку не заводи") || !strings.Contains(got, "Ветка: t-1.") {
+	if !strings.Contains(got, "do not create another one") || !strings.Contains(got, "Branch: t-1.") {
 		t.Fatalf("агенту не сказано про ветку задачи:\n%s", got)
 	}
 	card.WorkMode, card.Branch = model.WorkModeFolder, ""
-	if got := ComposePrompt(card, model.Flow{}, model.Stage{}, model.Agent{}, ""); strings.Contains(got, "ветк") {
+	if got := ComposePrompt(card, model.Flow{}, model.Stage{}, model.Agent{}, ""); strings.Contains(strings.ToLower(got), "branch") {
 		t.Fatalf("в папке как есть про ветку молчат:\n%s", got)
 	}
 }

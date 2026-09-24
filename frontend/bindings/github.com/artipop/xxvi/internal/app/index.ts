@@ -10,7 +10,7 @@ export type {
     AgentsView,
     CardSummary,
     CardView,
-    ScreenKind,
+    NotificationWords,
     StageCard,
     TerminalHandle,
     UpdateState,

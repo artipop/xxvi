@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -28,7 +27,54 @@ type Notifier struct {
 
 	mu    sync.Mutex
 	shown map[string]bool // question id → a notification is out for it
-	ok    bool            // notifications are permitted
+	words NotificationWords
+	ok    bool // notifications are permitted
+}
+
+// NotificationWords is what a notification says around the agent's own words,
+// in the person's language. The UI is where that language is known, so the UI
+// hands these over when it starts; until it has, there is nobody to word a
+// notification for, and none is shown — the question waits on its card.
+type NotificationWords struct {
+	// Asks is the title of a question on no card.
+	Asks string `json:"asks"`
+	// Permission wraps what an agent asks to do: «{what}» is the tool and the
+	// agent's own title for the call, whichever it gave.
+	Permission string `json:"permission"`
+	// PermissionBare is a permission question with nothing to say what for.
+	PermissionBare   string `json:"permissionBare"`
+	Reply            string `json:"reply"`
+	ReplyPlaceholder string `json:"replyPlaceholder"`
+}
+
+func (w NotificationWords) ready() bool { return w.Asks != "" && w.Permission != "" }
+
+// SetWords takes the words the UI speaks in.
+func (n *Notifier) SetWords(w NotificationWords) {
+	if n == nil {
+		return
+	}
+	n.mu.Lock()
+	n.words = w
+	n.mu.Unlock()
+}
+
+// body is the question as the notification says it. A form is the agent's own
+// message; a permission is the tool it asks for, worded by the UI.
+func (w NotificationWords) body(a acp.Attention) string {
+	if a.Kind != acp.QuestionPermission {
+		return a.Text
+	}
+	var parts []string
+	for _, p := range []string{a.Tool, a.Text} {
+		if p = strings.TrimSpace(p); p != "" {
+			parts = append(parts, p)
+		}
+	}
+	if len(parts) == 0 {
+		return w.PermissionBare
+	}
+	return strings.ReplaceAll(w.Permission, "{what}", strings.Join(parts, ": "))
 }
 
 // NewNotifier wires the notification service to the questions. It asks for
@@ -41,7 +87,7 @@ func NewNotifier(a *App, service *notifications.NotificationService) *Notifier {
 	n := &Notifier{app: a, service: service, shown: map[string]bool{}}
 	granted, err := service.RequestNotificationAuthorization()
 	if err != nil {
-		a.log.Info("уведомления недоступны, вопросы видны только в приложении", "err", err)
+		a.log.Info("notifications unavailable, questions are shown in the application only", "err", err)
 	}
 	n.ok = granted && err == nil
 	service.OnNotificationResponse(n.onResponse)
@@ -63,12 +109,12 @@ func NotificationsPossible() (bool, string) {
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		return false, "не удалось определить, откуда запущено приложение"
+		return false, "could not tell where the application was started from"
 	}
 	if strings.Contains(exe, ".app/Contents/MacOS/") {
 		return true, ""
 	}
-	return false, "приложение запущено не из .app — на macOS системные уведомления требуют бандла"
+	return false, "not started from an .app — system notifications on macOS need a bundle"
 }
 
 // Show puts an open question out as a notification, or takes one back when the
@@ -86,12 +132,12 @@ func (n *Notifier) Show(a acp.Attention) {
 		if n.shown[a.QuestionID] {
 			delete(n.shown, a.QuestionID)
 			if err := n.service.RemovePendingNotification(a.QuestionID); err != nil {
-				n.app.log.Debug("не удалось убрать уведомление", "err", err)
+				n.app.log.Debug("could not remove a notification", "err", err)
 			}
 		}
 		return
 	}
-	if n.shown[a.QuestionID] {
+	if n.shown[a.QuestionID] || !n.words.ready() {
 		return
 	}
 
@@ -103,20 +149,20 @@ func (n *Notifier) Show(a acp.Attention) {
 	}
 	category := notifications.NotificationCategory{
 		ID: "question-" + a.QuestionID, Actions: actions,
-		HasReplyField: a.FreeText, ReplyPlaceholder: "Ответить своими словами",
-		ReplyButtonTitle: "Ответить",
+		HasReplyField: a.FreeText, ReplyPlaceholder: n.words.ReplyPlaceholder,
+		ReplyButtonTitle: n.words.Reply,
 	}
 	if err := n.service.RegisterNotificationCategory(category); err != nil {
-		n.app.log.Debug("не удалось зарегистрировать вопрос для уведомления", "err", err)
+		n.app.log.Debug("could not register a question for a notification", "err", err)
 		return
 	}
 
 	title := a.CardTitle
 	if title == "" {
-		title = "Агент спрашивает"
+		title = n.words.Asks
 	}
 	err := n.service.SendNotificationWithActions(notifications.NotificationOptions{
-		ID: a.QuestionID, Title: title, Subtitle: a.Agent, Body: a.Text,
+		ID: a.QuestionID, Title: title, Subtitle: a.Agent, Body: n.words.body(a),
 		CategoryID: category.ID,
 		// The agent is stopped until this is answered, so it is worth a
 		// notification that does not wait for a quiet moment.
@@ -124,7 +170,7 @@ func (n *Notifier) Show(a acp.Attention) {
 		Data:              map[string]interface{}{"questionId": a.QuestionID, "cardId": a.CardID},
 	})
 	if err != nil {
-		n.app.log.Debug("не удалось показать уведомление", "err", err)
+		n.app.log.Debug("could not show a notification", "err", err)
 		return
 	}
 	n.shown[a.QuestionID] = true
@@ -135,7 +181,7 @@ func (n *Notifier) Show(a acp.Attention) {
 // agent keeps waiting and the card is where the answer is given.
 func (n *Notifier) onResponse(result notifications.NotificationResult) {
 	if result.Error != nil {
-		n.app.log.Debug("ответ на уведомление не прочитан", "err", result.Error)
+		n.app.log.Debug("could not read a notification response", "err", result.Error)
 		return
 	}
 	id := result.Response.ID
@@ -163,7 +209,7 @@ func (n *Notifier) onResponse(result notifications.NotificationResult) {
 
 func (n *Notifier) answer(questionID string, ans acp.Answer) {
 	if err := n.app.Agents.Answer(questionID, ans); err != nil {
-		n.app.log.Info("ответ из уведомления не принят", "err", fmt.Errorf("%w", err))
+		n.app.log.Info("answer from a notification not taken", "err", err)
 	}
 }
 

@@ -2,7 +2,6 @@ package model
 
 import (
 	"errors"
-	"strings"
 	"testing"
 )
 
@@ -113,15 +112,15 @@ func TestWatchesPropertyOnlyForItsOwn(t *testing.T) {
 
 // A parked card must answer "what are you waiting for" precisely, conditions
 // included — and must not claim to be waiting for its own session.
-func TestWaitDescriptionsSpellOutConditions(t *testing.T) {
-	got := devFlow().WaitDescriptions("review")
+func TestWaitsSpellOutConditions(t *testing.T) {
+	got := devFlow().Waits("review")
 	if len(got) != 2 {
 		t.Fatalf("ожидалось два ожидания, получено %v", got)
 	}
-	if !strings.Contains(got[0], "Одобрено") || !strings.Contains(got[0], "Да") {
-		t.Fatalf("ожидание должно называть свойство и значение, получено %q", got[0])
+	if got[0].If == nil || got[0].If.Property != "Одобрено" || got[0].If.Value != "Да" {
+		t.Fatalf("ожидание должно называть свойство и значение, получено %+v", got[0])
 	}
-	if len(devFlow().WaitDescriptions("work")) != 0 {
+	if len(devFlow().Waits("work")) != 0 {
 		t.Fatal("исходы собственного шага — не ожидание")
 	}
 }

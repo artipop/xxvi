@@ -49,12 +49,29 @@ export interface CardView {
 }
 
 /**
- * ScreenKind is one screen kind with the name a person reads. The constant is
- * what the flow stores; the label is what the editor shows.
+ * NotificationWords is what a notification says around the agent's own words,
+ * in the person's language. The UI is where that language is known, so the UI
+ * hands these over when it starts; until it has, there is nobody to word a
+ * notification for, and none is shown — the question waits on its card.
  */
-export interface ScreenKind {
-    "kind": string;
-    "label": string;
+export interface NotificationWords {
+    /**
+     * Asks is the title of a question on no card.
+     */
+    "asks": string;
+
+    /**
+     * Permission wraps what an agent asks to do: «{what}» is the tool and the
+     * agent's own title for the call, whichever it gave.
+     */
+    "permission": string;
+
+    /**
+     * PermissionBare is a permission question with nothing to say what for.
+     */
+    "permissionBare": string;
+    "reply": string;
+    "replyPlaceholder": string;
 }
 
 /**
@@ -76,7 +93,7 @@ export interface TerminalHandle {
 }
 
 /**
- * UpdateState is what the «Обновление» screen draws.
+ * UpdateState is what the «Update» screen draws.
  */
 export interface UpdateState {
     /**
@@ -108,7 +125,8 @@ export interface UpdateState {
      * Error is what went wrong, verbatim and in the framework's English:
      * "dial tcp: lookup updates.deffun.org: no such host". ErrorStage is the
      * step it went wrong at — check, download, verify, install — and it is
-     * there because the screen says the actionable half itself, in Russian.
+     * there because the screen says the actionable half itself, in the
+     * person's language.
      * The verbatim text stays underneath it, in small print: it is what a bug
      * report needs and nothing on this side can supply it.
      */
@@ -124,7 +142,8 @@ export interface UpdateState {
 
 /**
  * Vocabulary is the closed sets the editor offers. Sent from here so the UI can
- * never offer a trigger or an action the engine does not implement.
+ * never offer a trigger or an action the engine does not implement. Only the
+ * members are sent: what each is called is the UI's to say.
  */
 export interface Vocabulary {
     "triggers": model$0.Trigger[] | null;
@@ -134,7 +153,7 @@ export interface Vocabulary {
      * Where an agent stage runs — the terminal somebody sits at, or a session
      * nobody watches (docs/system.md §4.1.1).
      */
-    "works": ScreenKind[] | null;
+    "works": string[] | null;
     "kinds": string[] | null;
     "ruleActions": string[] | null;
 
@@ -152,11 +171,16 @@ export interface Vocabulary {
      * ribbon knows how to render, so the editor cannot offer a window nothing
      * can open (docs/system.md §12.2).
      */
-    "screenKinds": ScreenKind[] | null;
+    "screenKinds": string[] | null;
 
     /**
      * What kinds of place work can happen in. One for now — a folder — and the
      * room for the rest is the same room the triggers keep for git.
      */
-    "projectKinds": ScreenKind[] | null;
+    "projectKinds": string[] | null;
+
+    /**
+     * WorkModes are how a card may work in a repository (model/workmode.go).
+     */
+    "workModes": string[] | null;
 }

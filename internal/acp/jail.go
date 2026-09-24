@@ -1,9 +1,10 @@
 package acp
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/artipop/xxvi/internal/msg"
 )
 
 // A card's working folder is a boundary, and it has two sides: the agent
@@ -20,7 +21,7 @@ import (
 // caller that resolved the path before asking would be refused its own folder.
 func Within(root, name string) (string, error) {
 	if root == "" {
-		return "", fmt.Errorf("не задана рабочая папка")
+		return "", msg.Err("jail.noFolder")
 	}
 	clean := filepath.Clean(name)
 	if !filepath.IsAbs(clean) {
@@ -33,7 +34,7 @@ func Within(root, name string) (string, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("путь %s вне рабочей папки", clean)
+	return "", msg.Err("jail.outside", "path", clean)
 }
 
 func underRoot(path, root string) bool {

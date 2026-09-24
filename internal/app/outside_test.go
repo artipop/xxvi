@@ -100,9 +100,9 @@ func TestOutsideAgentWalksTheWholeFlow(t *testing.T) {
 	// Without this the entry stage would launch an agent of its own, and the
 	// step would already have an owner.
 	place := ok(t, sess, "take_into_work", map[string]any{
-		"card": pageCard, "flow": "Страница и проверка", "worker": "внешний агент",
+		"card": pageCard, "flow": "Page and check", "worker": "внешний агент",
 	})
-	if !strings.Contains(place, "«Вёрстка»") {
+	if !strings.Contains(place, "«Layout»") {
 		t.Fatalf("карточка должна встать на входную стадию: %s", place)
 	}
 	card := cardNamed(t, a, pageCard)
@@ -113,7 +113,7 @@ func TestOutsideAgentWalksTheWholeFlow(t *testing.T) {
 	// What the stage says it wants is readable before the work starts: the
 	// value it owes the card, and the folder the page has to land in.
 	view := ok(t, sess, "card", map[string]any{"card": pageCard})
-	if !strings.Contains(view, "«Страница»") || !strings.Contains(view, "обязательно") {
+	if !strings.Contains(view, "«Page»") || !strings.Contains(view, "required") {
 		t.Fatalf("карточка должна называть, что обязана оставить стадия: %s", view)
 	}
 	dir, err := a.Agents.WorkDir(card.ID)
@@ -134,9 +134,9 @@ func TestOutsideAgentWalksTheWholeFlow(t *testing.T) {
 	moved := ok(t, sess, "finish_step", map[string]any{
 		"card": pageCard, "outcome": "done",
 		"summary":    "Сделал index.html со статусом сборки.",
-		"properties": map[string]any{"Страница": address},
+		"properties": map[string]any{"Page": address},
 	})
-	if !strings.Contains(moved, "«Вёрстка» → «Проверка»") {
+	if !strings.Contains(moved, "«Layout» → «Check»") {
 		t.Fatalf("после отчёта карточка должна поехать на проверку: %s", moved)
 	}
 
@@ -146,23 +146,23 @@ func TestOutsideAgentWalksTheWholeFlow(t *testing.T) {
 	back := ok(t, sess, "finish_step", map[string]any{
 		"card": pageCard, "outcome": "done",
 		"summary":    "Заголовок не тот, о котором просит карточка.",
-		"properties": map[string]any{"Вердикт": "fail"},
+		"properties": map[string]any{"Verdict": "fail"},
 	})
-	if !strings.Contains(back, "«Проверка» → «Вёрстка»") {
+	if !strings.Contains(back, "«Check» → «Layout»") {
 		t.Fatalf("«fail» должен вернуть карточку на вёрстку: %s", back)
 	}
 
 	ok(t, sess, "finish_step", map[string]any{
 		"card": pageCard, "outcome": "done",
 		"summary":    "Поправил заголовок.",
-		"properties": map[string]any{"Страница": address},
+		"properties": map[string]any{"Page": address},
 	})
 	ahead := ok(t, sess, "finish_step", map[string]any{
 		"card": pageCard, "outcome": "done",
 		"summary":    "Страница делает то, о чём просит карточка.",
-		"properties": map[string]any{"Вердикт": "pass"},
+		"properties": map[string]any{"Verdict": "pass"},
 	})
-	if !strings.Contains(ahead, "«Проверка» → «Смотрим»") {
+	if !strings.Contains(ahead, "«Check» → «Look»") {
 		t.Fatalf("«pass» должен вести дальше: %s", ahead)
 	}
 
@@ -170,22 +170,22 @@ func TestOutsideAgentWalksTheWholeFlow(t *testing.T) {
 	// address in it is the one this walk produced rather than the placeholder
 	// the flow was written with.
 	looking := ok(t, sess, "card", map[string]any{"card": pageCard})
-	if !strings.Contains(looking, "браузер") || !strings.Contains(looking, address) {
-		t.Fatalf("на стадии «Смотрим» карточка должна показывать браузер на сделанной странице: %s", looking)
+	if !strings.Contains(looking, "browser") || !strings.Contains(looking, address) {
+		t.Fatalf("на стадии «Look» карточка должна показывать браузер на сделанной странице: %s", looking)
 	}
 
 	closed := ok(t, sess, "finish_step", map[string]any{
 		"card": pageCard, "outcome": "done", "summary": "Посмотрел, годится.",
 	})
-	if !strings.Contains(closed, "карточка закрыта") {
-		t.Fatalf("ответ за стадию «Смотрим» должен закрыть карточку: %s", closed)
+	if !strings.Contains(closed, "the card is closed") {
+		t.Fatalf("ответ за стадию «Look» должен закрыть карточку: %s", closed)
 	}
 
 	card = cardNamed(t, a, pageCard)
 	if card.State != model.StateDone {
 		t.Fatalf("карточка должна быть закрыта, а она %s", card.State)
 	}
-	if card.Props["Страница"] != address || card.Props["Вердикт"] != "pass" {
+	if card.Props["Page"] != address || card.Props["Verdict"] != "pass" {
 		t.Fatalf("на карточке должно остаться то, что записали стадии: %+v", card.Props)
 	}
 }
@@ -199,16 +199,16 @@ func TestStepWithoutRequiredValueIsRefused(t *testing.T) {
 
 	ok(t, sess, "add_card", map[string]any{"title": pageCard})
 	ok(t, sess, "take_into_work", map[string]any{
-		"card": pageCard, "flow": "Страница и проверка", "worker": "внешний агент",
+		"card": pageCard, "flow": "Page and check", "worker": "внешний агент",
 	})
 
 	text, refused := call(t, sess, "finish_step", map[string]any{
 		"card": pageCard, "outcome": "done", "summary": "Готово.",
 	})
-	if !refused || !strings.Contains(text, "«Страница»") {
+	if !refused || !strings.Contains(text, "«Page»") {
 		t.Fatalf("шаг без обязательного значения должен быть отказан с именем свойства: %s", text)
 	}
-	if place := ok(t, sess, "card", map[string]any{"card": pageCard}); !strings.Contains(place, "«Вёрстка»") {
+	if place := ok(t, sess, "card", map[string]any{"card": pageCard}); !strings.Contains(place, "«Layout»") {
 		t.Fatalf("отказанный шаг не должен двигать карточку: %s", place)
 	}
 }
@@ -222,7 +222,7 @@ func TestWaitingStageSaysWhatItWaitsFor(t *testing.T) {
 
 	ok(t, sess, "add_card", map[string]any{"title": "Что делать с импортом"})
 	ok(t, sess, "take_into_work", map[string]any{
-		"card": "Что делать с импортом", "flow": "Разбор и решение", "worker": "внешний агент",
+		"card": "Что делать с импортом", "flow": "Triage and decision", "worker": "внешний агент",
 	})
 	// Straight to the human fork: the stage before it is an agent's.
 	card := cardNamed(t, a, "Что делать с импортом")
@@ -233,14 +233,14 @@ func TestWaitingStageSaysWhatItWaitsFor(t *testing.T) {
 	text, refused := call(t, sess, "finish_step", map[string]any{
 		"card": "Что делать с импортом", "outcome": "done", "summary": "Разобрался.",
 	})
-	if !refused || !strings.Contains(text, "Решение") {
+	if !refused || !strings.Contains(text, "Decision") {
 		t.Fatalf("стадия должна назвать, чего она ждёт: %s", text)
 	}
 
 	moved := ok(t, sess, "set_property", map[string]any{
-		"card": "Что делать с импортом", "property": "Решение", "value": "Делаем",
+		"card": "Что делать с импортом", "property": "Decision", "value": "Go",
 	})
-	if !strings.Contains(moved, "«Выполнение»") {
+	if !strings.Contains(moved, "«Execution»") {
 		t.Fatalf("ожидаемое значение должно двигать карточку: %s", moved)
 	}
 }
@@ -253,7 +253,7 @@ func TestStepWorkedByTheApplicationIsNotReportedFromOutside(t *testing.T) {
 
 	ok(t, sess, "add_card", map[string]any{"title": pageCard})
 	card := cardNamed(t, a, pageCard)
-	flow, err := a.Store.FlowByName("Страница и проверка")
+	flow, err := a.Store.FlowByName("Page and check")
 	if err != nil {
 		t.Fatalf("флоу: %v", err)
 	}
@@ -277,9 +277,9 @@ func TestStepWorkedByTheApplicationIsNotReportedFromOutside(t *testing.T) {
 
 	text, refused := call(t, sess, "finish_step", map[string]any{
 		"card": pageCard, "outcome": "done", "summary": "я быстрее",
-		"properties": map[string]any{"Страница": "file:///tmp/x.html"},
+		"properties": map[string]any{"Page": "file:///tmp/x.html"},
 	})
-	if !refused || !strings.Contains(text, "агент приложения") {
+	if !refused || !strings.Contains(text, "application agent") {
 		t.Fatalf("чужой шаг не должен отчитываться снаружи: %s", text)
 	}
 }
@@ -405,7 +405,7 @@ func TestCommandLineBridgeReachesTheRunningApplication(t *testing.T) {
 	}
 	defer sess.Close()
 
-	if text := ok(t, sess, "flows", nil); !strings.Contains(text, "Страница и проверка") {
+	if text := ok(t, sess, "flows", nil); !strings.Contains(text, "Page and check") {
 		t.Fatalf("через команду должны приходить флоу этого приложения: %s", text)
 	}
 }

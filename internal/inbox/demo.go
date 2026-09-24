@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/store"
 )
 
@@ -104,7 +105,7 @@ func (p *Poller) loop(ctx context.Context) {
 func (p *Poller) pollAll(lastRead map[string]time.Time) {
 	sources, err := p.store.Sources()
 	if err != nil {
-		p.log.Error("не удалось прочитать источники", "err", err)
+		p.log.Error("could not read sources", "err", err)
 		return
 	}
 	for _, src := range sources {
@@ -117,12 +118,12 @@ func (p *Poller) pollAll(lastRead map[string]time.Time) {
 		}
 		lastRead[src.Name] = time.Now()
 		if err := p.Poll(src); err != nil {
-			p.log.Warn("источник не прочитан", "source", src.Name, "err", err)
+			p.log.Warn("source not read", "source", src.Name, "err", err)
 		}
 	}
 }
 
-// Poll reads one demo source now. It is also what the UI's «прочитать сейчас»
+// Poll reads one demo source now. It is also what the UI's «read now»
 // calls, so a person never has to wait out an interval to see a change.
 func (p *Poller) Poll(src model.Source) error {
 	path := DemoPath(src)
@@ -144,7 +145,7 @@ func (p *Poller) PollByName(name string) error {
 		return err
 	}
 	if src.Plugin != PluginDemo {
-		return fmt.Errorf("источник «%s» не читается из файла", src.Name)
+		return msg.Err("source.notFromFile", "source", src.Name)
 	}
 	return p.Poll(src)
 }
@@ -170,7 +171,7 @@ func ReadItems(path string) ([]model.Item, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("открыть %s: %w", path, err)
+		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
 
@@ -193,10 +194,10 @@ func ReadItems(path string) ([]model.Item, error) {
 		items = append(items, item)
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("прочитать %s: %w", path, err)
+		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	if len(bad) > 0 {
-		return items, fmt.Errorf("в файле %s не разобраны строки: %s", path, strings.Join(bad, ", "))
+		return items, msg.Err("source.badLines", "path", path, "lines", strings.Join(bad, ", "))
 	}
 	return items, nil
 }
@@ -208,7 +209,7 @@ func ReadItems(path string) ([]model.Item, error) {
 func AppendItem(path string, item model.Item) error {
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("создать папку источника: %w", err)
+			return fmt.Errorf("create the source folder: %w", err)
 		}
 	}
 	item = item.WithFallbackID()
@@ -221,11 +222,11 @@ func AppendItem(path string, item model.Item) error {
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return fmt.Errorf("открыть %s: %w", path, err)
+		return fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
 	if _, err := f.Write(append(line, '\n')); err != nil {
-		return fmt.Errorf("записать в %s: %w", path, err)
+		return fmt.Errorf("write to %s: %w", path, err)
 	}
 	return nil
 }
