@@ -17,7 +17,7 @@ function remembered(): { project?: string; workMode?: string; agent?: string; fl
   try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; }
 }
 
-export function Compose(props: { onDone?: () => void }): JSX.Element {
+export function Compose(props: { onStarted?: () => void; onCancel?: () => void }): JSX.Element {
   const was = remembered();
   const [text, setText] = createSignal("");
   const [project, setProject] = createSignal(was.project ?? "");
@@ -37,7 +37,9 @@ export function Compose(props: { onDone?: () => void }): JSX.Element {
     list(agents().agents).find((a) => a.name === agent())?.name ?? list(agents().agents)[0]?.name ?? "";
   const flowID = () => flows().find((f) => f.id === flow())?.id ?? flows()[0]?.id ?? "";
 
-  onSettled(() => { box?.focus(); });
+  // Without scrolling: the stack moves by whole ribbons and only when asked,
+  // and a focus that dragged it would land it between two of them.
+  onSettled(() => { box?.focus({ preventScroll: true }); });
 
   const start = async () => {
     if (busy() || !text().trim() || !flowID()) return;
@@ -50,7 +52,7 @@ export function Compose(props: { onDone?: () => void }): JSX.Element {
     } catch { /* a convenience, not a record */ }
     setText("");
     applyCard(view);
-    props.onDone?.();
+    props.onStarted?.();
     showRibbon(view.card.id);
   };
 
@@ -66,7 +68,7 @@ export function Compose(props: { onDone?: () => void }): JSX.Element {
           // Enter sends, as in a chat; a new line is Shift+Enter. The ribbon
           // listens on the window, and a key meant for this box stays here.
           if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); void start(); }
-          if (e.key === "Escape" && props.onDone) { e.stopPropagation(); props.onDone(); }
+          if (e.key === "Escape" && props.onCancel) { e.stopPropagation(); props.onCancel(); }
         }}
       />
       <div class="row wrap">
@@ -87,9 +89,6 @@ export function Compose(props: { onDone?: () => void }): JSX.Element {
           <For each={flows()}>{(f) => <option value={f.id}>{f.name}</option>}</For>
         </select>
         <div class="spacer" />
-        <Show when={props.onDone}>
-          <button class="btn quiet" onClick={() => props.onDone!()}>Отмена</button>
-        </Show>
         <button class="btn primary" onClick={start} disabled={busy() || !text().trim() || !flowID()}>
           Начать ↵
         </button>

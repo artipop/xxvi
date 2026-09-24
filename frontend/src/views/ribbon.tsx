@@ -69,6 +69,8 @@ function paneIDs(view: RibbonView): string[] {
   });
 }
 
+const DRAFT = "draft";
+
 export default function Ribbon(): JSX.Element {
   // Where the person is: which strip, which pane of it, and whether they put
   // themselves there. Somebody who moved on their own is not dragged along by
@@ -87,7 +89,13 @@ export default function Ribbon(): JSX.Element {
 
   const [menu, setMenu] = createSignal(false);
   const [journal, setJournal] = createSignal(false);
-  const [composing, setComposing] = createSignal(false);
+  // A new task is a ribbon of its own, not a dialog over somebody else's: it
+  // sits at the end of the stack with one empty window to write it in, and
+  // becomes the card's real strip the moment it is started. With nothing in
+  // work it is the whole stack.
+  const [drafting, setDrafting] = createSignal(false);
+  const showDraft = () => drafting() || ribbons.length === 0;
+  const stackIDs = () => [...ribbons.map((r) => r.id), ...(showDraft() ? [DRAFT] : [])];
   // Which pane has taken the keyboard: a preview or a note that a person
   // clicked into. Worth saying out loud, because from inside a preview the
   // ribbon cannot hear a key at all — the page has it — and a person pressing
@@ -118,7 +126,7 @@ export default function Ribbon(): JSX.Element {
   // n-th one starts at n heights, and arithmetic cannot land between two of
   // them the way a scroll can.
   const flyToRibbon = (cardID: string) => {
-    const at = ribbons.findIndex((r) => r.id === cardID);
+    const at = stackIDs().indexOf(cardID);
     if (at >= 0 && stack) {
       stack.scrollTo({ top: at * stack.clientHeight, behavior: motion() });
     }
@@ -162,7 +170,9 @@ export default function Ribbon(): JSX.Element {
       if (ids.length === 0) return;
       // A closed card asked for is on its way into the stack, not missing
       // from it: the next read brings it.
-      if (!ids.includes(openRibbon()) && openRibbon() !== closedRibbon()) setOpenRibbon(ids[0]);
+      if (!ids.includes(openRibbon()) && openRibbon() !== closedRibbon() && openRibbon() !== DRAFT) {
+        setOpenRibbon(ids[0]);
+      }
     },
   );
 
@@ -170,7 +180,7 @@ export default function Ribbon(): JSX.Element {
   // opened by name, and the stack has to be standing on it. Keyed on where it
   // is in the stack as well, because the one asked for may arrive a read later.
   createEffect(
-    () => ribbons.findIndex((r) => r.id === openRibbon()),
+    () => stackIDs().indexOf(openRibbon()),
     (at) => {
       if (at < 0 || !stack || stack.clientHeight === 0) return;
       if (Math.round(stack.scrollTop / stack.clientHeight) !== at) {
@@ -235,11 +245,23 @@ export default function Ribbon(): JSX.Element {
   };
 
   const stepRibbon = (delta: number) => {
-    const all = ribbons;
+    const all = stackIDs();
     if (all.length === 0) return;
-    const at = all.findIndex((r) => r.id === openRibbon());
+    const at = all.indexOf(openRibbon());
     setPinned(false);
-    flyToRibbon(all[(at + delta + all.length) % all.length].id);
+    flyToRibbon(all[(at + delta + all.length) % all.length]);
+  };
+
+  const newTask = () => {
+    setDrafting(true);
+    setPinned(false);
+    queueMicrotask(() => flyToRibbon(DRAFT));
+  };
+
+  // Given up, the draft goes and the stack stands on real work again.
+  const dropDraft = () => {
+    setDrafting(false);
+    if (ribbons.length > 0) flyToRibbon(ribbons[ribbons.length - 1].id);
   };
 
   // Taking the keyboard back. Blurring whatever holds it is enough for a note;
@@ -308,14 +330,12 @@ export default function Ribbon(): JSX.Element {
         resize((at) => (at === WIDTHS.length - 1 ? DEFAULT_WIDTH : WIDTHS.length - 1));
         break;
       case "n": case "N": case "т": case "Т":
-        if (ribbons.length > 0) { e.preventDefault(); setComposing(true); }
-        break;
+        e.preventDefault(); newTask(); break;
       case "j": case "J": case "о": case "О":
         e.preventDefault(); setJournal(!journal()); break;
       case "Escape":
         e.preventDefault();
         if (menu()) setMenu(false);
-        else if (composing()) setComposing(false);
         else if (journal()) setJournal(false);
         else setTab("inbox");
         break;
@@ -341,6 +361,7 @@ export default function Ribbon(): JSX.Element {
       <header class="ribbon-bar" style={{ "--wails-draggable": "drag" }}>
         <Sections open={menu()} setOpen={setMenu} />
         <span class="ribbon-where">
+          <Show when={openRibbon() === DRAFT || ribbons.length === 0}>Новая задача</Show>
           {current()?.title}
           <Show when={current()?.stageName}>
             <span class="ribbon-stage"> · {current()!.stageName}</span>
@@ -354,7 +375,7 @@ export default function Ribbon(): JSX.Element {
         <div class="spacer" />
         <Show when={ribbons.length > 0}>
           <button class="btn quiet tiny" style={{ "--wails-draggable": "no-drag" }}
-                  onClick={() => setComposing(!composing())} title="Новая задача (N)">+ Задача</button>
+                  onClick={newTask} title="Новая задача (N)">+ Задача</button>
         </Show>
         <Show when={current()}>
           <CardMenu
@@ -377,16 +398,6 @@ export default function Ribbon(): JSX.Element {
         </Show>
       </header>
 
-      <Show
-        when={ribbons.length > 0}
-        fallback={
-          <div class="ribbon-blank">
-            <h2>Новая задача</h2>
-            <Compose />
-            <div class="meta">Или «Сделай» во входящих. Esc — назад во входящие.</div>
-          </div>
-        }
-      >
         <div class="stack" ref={stack}>
           <For each={ribbons}>
             {(view) => (
@@ -437,13 +448,25 @@ export default function Ribbon(): JSX.Element {
               </section>
             )}
           </For>
+          <Show when={showDraft()}>
+            <section class="workspace" data-ribbon={DRAFT}>
+              <div class="band">
+                <section class="screen on draft">
+                  <header class="screen-head">
+                    <span class="tag accent">Новая задача</span>
+                    <span class="screen-title">Enter — начать, Shift+Enter — новая строка</span>
+                  </header>
+                  <div class="screen-body">
+                    <Compose
+                      onStarted={() => setDrafting(false)}
+                      onCancel={ribbons.length > 0 ? dropDraft : undefined}
+                    />
+                  </div>
+                </section>
+              </div>
+            </section>
+          </Show>
         </div>
-
-        <Show when={composing()}>
-          <div class="ribbon-compose">
-            <Compose onDone={() => setComposing(false)} />
-          </div>
-        </Show>
 
         {/* Keyed on the card, so moving to another job shows that job's
             journal rather than the last one's. */}
@@ -477,7 +500,6 @@ export default function Ribbon(): JSX.Element {
           </For>
         </nav>
         </Show>
-      </Show>
     </div>
   );
 }
