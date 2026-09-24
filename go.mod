@@ -10,6 +10,7 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/wailsapp/wails/v3 v3.0.0-beta.5
+	github.com/zalando/go-keyring v0.2.8
 	modernc.org/sqlite v1.44.3
 )
 
@@ -31,7 +32,6 @@ require (
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/u-root/u-root v0.16.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	github.com/zalando/go-keyring v0.2.8 // indirect
 	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/mod v0.35.0 // indirect
