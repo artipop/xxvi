@@ -32,5 +32,7 @@ export const NAV: NavItem[] = [
   { tab: "flows", label: () => t("nav.flows"), apart: true },
   { tab: "projects", label: () => t("nav.projects") },
   { tab: "agents", label: () => t("nav.agents") },
-  { tab: "updates", label: () => t("nav.updates"), mark: updateWaiting },
+  // Updates live in the settings, so the dot that says one is waiting sits
+  // there too.
+  { tab: "settings", label: () => t("nav.settings"), mark: updateWaiting },
 ];

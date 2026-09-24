@@ -21,24 +21,84 @@ export type Dict = Record<string, Phrase>;
 
 const DICTS: Record<Lang, Dict> = { en, ru };
 
+/** Choice is what the person picked: a language, or whatever the system reads. */
+export type Choice = Lang | "system";
+export const CHOICES: Choice[] = ["system", ...LANGS];
+
+/** Each language is named in itself, so it can be found by someone who does
+ *  not read the one on the screen. */
+export const LANG_NAMES: Record<Lang, string> = { en: "English", ru: "Русский" };
+
+// The choice and the system's languages are the backend's to keep and to learn
+// (internal/app/lang.go): the webview on macOS answers with the languages the
+// bundle is localized into, not the ones the person reads. Until the backend
+// has answered, the last answer is remembered here so the first frame is
+// already in the right language.
 const STORAGE_KEY = "xxvi.lang";
 
-function initialLang(): Lang {
+type Known = { chosen: Choice; system: string[] };
+
+function remembered(): Known {
+  const fallback: Known = { chosen: "system", system: [...(navigator.languages ?? [navigator.language])] };
   try {
-    const kept = localStorage.getItem(STORAGE_KEY);
-    if (kept === "en" || kept === "ru") return kept;
+    const kept = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<Known> | null;
+    if (!kept) return fallback;
+    return {
+      chosen: isChoice(kept.chosen) ? kept.chosen : fallback.chosen,
+      system: Array.isArray(kept.system) && kept.system.length > 0 ? kept.system : fallback.system,
+    };
   } catch {
-    // Storage can be unavailable; the system language is the next best guess.
+    return fallback;
   }
-  return navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en";
 }
 
-export const [lang, setLangSignal] = createSignal<Lang>(initialLang());
+function isChoice(v: unknown): v is Choice {
+  return CHOICES.includes(v as Choice);
+}
 
-export function setLang(l: Lang) {
-  try { localStorage.setItem(STORAGE_KEY, l); } catch { /* remembered for this window only */ }
-  document.documentElement.lang = l;
-  setLangSignal(l);
+/** pick is the first of the system's languages there are words for. */
+function pick(tags: string[]): Lang {
+  for (const tag of tags) {
+    const base = tag.toLowerCase().split(/[-_]/)[0] as Lang;
+    if (LANGS.includes(base)) return base;
+  }
+  return "en";
+}
+
+const start = remembered();
+const [choiceSignal, setChoiceSignal] = createSignal<Choice>(start.chosen);
+const [systemTags, setSystemTags] = createSignal<string[]>(start.system);
+
+export const choice = choiceSignal;
+/** systemLang is what «system» means on this machine now. */
+export const systemLang = () => pick(systemTags());
+export const lang = (): Lang => {
+  const c = choice();
+  return c === "system" ? systemLang() : c;
+};
+
+/** applyLanguage takes what the backend knows: the person's choice and the
+ *  system's languages. An empty system list means the backend could not learn
+ *  them, and the webview's guess stays. */
+export function applyLanguage(known: { chosen: string; system?: string[] | null }) {
+  if (isChoice(known.chosen)) setChoiceSignal(known.chosen);
+  if (known.system && known.system.length > 0) setSystemTags(known.system);
+  settle();
+}
+
+/** choose is the person's pick, shown at once; keeping it is the caller's. */
+export function choose(c: Choice) {
+  setChoiceSignal(c);
+  settle();
+}
+
+function settle() {
+  document.documentElement.lang = lang();
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ chosen: choice(), system: systemTags() }));
+  } catch {
+    // Only the first frame of the next start is at stake.
+  }
 }
 
 document.documentElement.lang = lang();

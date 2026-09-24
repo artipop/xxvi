@@ -49,6 +49,24 @@ export interface CardView {
 }
 
 /**
+ * Language is what the UI needs to pick its words: what the person chose, and
+ * the languages the system prefers, best first, for when they chose the system.
+ */
+export interface Language {
+    /**
+     * Chosen is a language tag the UI has a dictionary for, or LangSystem.
+     */
+    "chosen": string;
+
+    /**
+     * System is the operating system's preferred languages as BCP 47 tags. It
+     * is empty where they cannot be learned from here, and the UI then asks its
+     * webview instead.
+     */
+    "system": string[] | null;
+}
+
+/**
  * NotificationWords is what a notification says around the agent's own words,
  * in the person's language. The UI is where that language is known, so the UI
  * hands these over when it starts; until it has, there is nobody to word a

@@ -60,8 +60,15 @@ export const ru: Dict = {
   "nav.flows": "Флоу",
   "nav.projects": "Проекты",
   "nav.agents": "Агенты",
-  "nav.updates": "Обновление",
+  "nav.settings": "Настройки",
   "nav.updateMark": "Есть новая версия",
+
+  // ---- settings ----
+  "settings.title": "Настройки",
+  "settings.lede": "Как приложение ведёт себя на этой машине.",
+  "settings.language": "Язык",
+  "settings.languageHint": "Слова на экране и в уведомлениях. «Как в системе» следует за языком, выбранным в настройках системы.",
+  "lang.system": "Как в системе — {name}",
 
   // ---- notifications ----
   "notify.asks": "Агент спрашивает",
@@ -210,7 +217,7 @@ export const ru: Dict = {
   "ruleAction.drop": "отбросить",
 
   // ---- update ----
-  "updates.title": "Обновление",
+  "updates.title": "Обновления",
   "updates.lede": "Приложение заменяет себя версией новее. Каждый выпуск подписан, и ставится только то, что сошлось с ключом, с которым эта сборка собрана.",
   "updates.checking": "Ищу версию новее…",
   "updates.available": "Есть версия {version}",
@@ -234,8 +241,7 @@ export const ru: Dict = {
   "updates.skip": "Пропустить эту версию",
   "updates.check": "Проверить",
   "updates.checkedAt": "Смотрели {when}",
-  "updates.auto": "Проверять самому",
-  "updates.autoHint": " — раз в несколько часов. Ничего не скачивается, пока вы не попросите.",
+  "updates.auto": "Автоматически проверять обновления",
   "updates.skipped": "Версия {version} пропущена и больше не предлагается. Отменить это можно в {path}.",
 
   // ---- a task typed into the ribbon ----
@@ -384,4 +390,35 @@ export const ru: Dict = {
   "flows.ifCond": "если {cond}",
   "flows.writeBranchable": "«{name}» — отсюда можно потянуть развилку",
   "flows.writeCarried": "«{name}» уезжает на стадии дальше. Чтобы ветвиться по нему, перечислите его значения.",
+
+  // ---- the application menu (built by menu.go, worded here) ----
+  "menu.about": "О программе {app}",
+  "menu.settings": "Настройки…",
+  "menu.services": "Службы",
+  "menu.hide": "Скрыть {app}",
+  "menu.hideOthers": "Скрыть остальные",
+  "menu.showAll": "Показать все",
+  "menu.quit": "Завершить {app}",
+  "menu.file": "Файл",
+  "menu.close": "Закрыть окно",
+  "menu.edit": "Правка",
+  "menu.undo": "Отменить",
+  "menu.redo": "Повторить",
+  "menu.cut": "Вырезать",
+  "menu.copy": "Скопировать",
+  "menu.paste": "Вставить",
+  "menu.pasteAndMatchStyle": "Вставить и сохранить стиль",
+  "menu.delete": "Удалить",
+  "menu.selectAll": "Выбрать все",
+  "menu.view": "Вид",
+  "menu.reload": "Перезагрузить",
+  "menu.forceReload": "Перезагрузить принудительно",
+  "menu.resetZoom": "Фактический размер",
+  "menu.zoomIn": "Увеличить",
+  "menu.zoomOut": "Уменьшить",
+  "menu.fullscreen": "Войти в полноэкранный режим",
+  "menu.window": "Окно",
+  "menu.minimize": "Свернуть",
+  "menu.zoom": "Изменить масштаб",
+  "menu.front": "Все окна — на передний план",
 };

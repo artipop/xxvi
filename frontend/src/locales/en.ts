@@ -61,8 +61,15 @@ export const en: Dict = {
   "nav.flows": "Flows",
   "nav.projects": "Projects",
   "nav.agents": "Agents",
-  "nav.updates": "Update",
+  "nav.settings": "Settings",
   "nav.updateMark": "A new version is available",
+
+  // ---- settings ----
+  "settings.title": "Settings",
+  "settings.lede": "How this application behaves on this machine.",
+  "settings.language": "Language",
+  "settings.languageHint": "The words on the screen and in notifications. «As in the system» follows the language chosen in the system settings.",
+  "lang.system": "As in the system — {name}",
 
   // ---- notifications (worded here, shown by the system) ----
   "notify.asks": "Agent asks",
@@ -209,7 +216,7 @@ export const en: Dict = {
   "ruleAction.drop": "drop",
 
   // ---- update ----
-  "updates.title": "Update",
+  "updates.title": "Updates",
   "updates.lede": "The application replaces itself with a newer version. Every release is signed, and only what matches the key this build was made with gets installed.",
   "updates.checking": "Looking for a newer version…",
   "updates.available": "Version {version} is available",
@@ -233,8 +240,7 @@ export const en: Dict = {
   "updates.skip": "Skip this version",
   "updates.check": "Check",
   "updates.checkedAt": "Checked {when}",
-  "updates.auto": "Check by itself",
-  "updates.autoHint": " — every few hours. Nothing is downloaded until you ask.",
+  "updates.auto": "Check for updates automatically",
   "updates.skipped": "Version {version} is skipped and no longer offered. This can be undone in {path}.",
 
   // ---- a task typed into the ribbon ----
@@ -379,4 +385,35 @@ export const en: Dict = {
   "flows.ifCond": "if {cond}",
   "flows.writeBranchable": "«{name}» — a fork can be pulled from here",
   "flows.writeCarried": "«{name}» travels on to later stages. To branch on it, list its values.",
+
+  // ---- the application menu (built by menu.go, worded here) ----
+  "menu.about": "About {app}",
+  "menu.settings": "Settings…",
+  "menu.services": "Services",
+  "menu.hide": "Hide {app}",
+  "menu.hideOthers": "Hide Others",
+  "menu.showAll": "Show All",
+  "menu.quit": "Quit {app}",
+  "menu.file": "File",
+  "menu.close": "Close Window",
+  "menu.edit": "Edit",
+  "menu.undo": "Undo",
+  "menu.redo": "Redo",
+  "menu.cut": "Cut",
+  "menu.copy": "Copy",
+  "menu.paste": "Paste",
+  "menu.pasteAndMatchStyle": "Paste and Match Style",
+  "menu.delete": "Delete",
+  "menu.selectAll": "Select All",
+  "menu.view": "View",
+  "menu.reload": "Reload",
+  "menu.forceReload": "Force Reload",
+  "menu.resetZoom": "Actual Size",
+  "menu.zoomIn": "Zoom In",
+  "menu.zoomOut": "Zoom Out",
+  "menu.fullscreen": "Toggle Full Screen",
+  "menu.window": "Window",
+  "menu.minimize": "Minimize",
+  "menu.zoom": "Zoom",
+  "menu.front": "Bring All to Front",
 };

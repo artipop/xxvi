@@ -6,7 +6,7 @@ import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp
 import type { Card, Flow, InboxGroup, Project, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { CardSummary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
-import { errorText, label, t } from "./i18n";
+import { applyLanguage, choose, type Choice, errorText, label, t } from "./i18n";
 
 // Everything the screens read, in one place. The backend is the only copy of
 // the truth — nothing here is computed from an earlier answer — so a reload is
@@ -62,10 +62,23 @@ export function report(e: unknown) {
   console.error(e);
 }
 
-/** syncNotificationWords hands the backend what a system notification says
- *  around an agent's question, in the language the screen is in. The backend
- *  has no words of its own for it. */
+/** MENU_KEYS are the application menu's titles (menu.go keys them the same). */
+const MENU_KEYS = [
+  "about", "settings", "services", "hide", "hideOthers", "showAll", "quit",
+  "file", "close",
+  "edit", "undo", "redo", "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll",
+  "view", "reload", "forceReload", "resetZoom", "zoomIn", "zoomOut", "fullscreen",
+  "window", "minimize", "zoom", "front",
+];
+
+/** syncNotificationWords hands the backend what the window's own parts say —
+ *  a system notification around an agent's question, and the application menu
+ *  — in the language the screen is in. The backend has no words of its own for
+ *  them. */
 export function syncNotificationWords() {
+  const menu: Record<string, string> = {};
+  for (const k of MENU_KEYS) menu[`menu.${k}`] = t(`menu.${k}`, { app: "XXVI" });
+  void API.SetMenuWords(menu).catch((e) => console.error(e));
   void API.SetNotificationWords({
     asks: t("notify.asks"),
     permission: t("notify.permission"),
@@ -73,6 +86,20 @@ export function syncNotificationWords() {
     reply: t("notify.reply"),
     replyPlaceholder: t("notify.replyPlaceholder"),
   }).catch((e) => console.error(e));
+}
+
+/** loadLanguage asks the backend what the person chose and what the system
+ *  reads, and rewords the notifications if that changed the language. */
+export async function loadLanguage() {
+  try { applyLanguage(await API.Language()); } catch (e) { report(e); }
+  syncNotificationWords();
+}
+
+/** chooseLanguage switches the screen at once and keeps the choice. */
+export async function chooseLanguage(c: Choice) {
+  choose(c);
+  syncNotificationWords();
+  await guard(() => API.SetLanguage(c));
 }
 
 /** guard runs an action and reports a refusal instead of throwing it away. */
@@ -178,6 +205,8 @@ export function subscribe() {
   Events.On("agents", () => { void loadAgents(); });
   Events.On("projects", () => { void loadProjects(); });
   Events.On("update", () => { void loadUpdateState(); });
+  // The application menu's «Settings…» (menu.go) has no screen of its own.
+  Events.On("open-settings", () => { setTab("settings"); });
 }
 
 export const [stageCards, setStageCards] = createSignal<StageCard[]>([]);
@@ -261,5 +290,5 @@ export function showRibbon(cardID: string) {
 // Which screen is open. A signal rather than a local of the shell, because
 // «Do it» is one gesture that ends on another screen: taking a card into work
 // and watching it start are the same moment.
-export type Tab = "inbox" | "ribbon" | "work" | "attention" | "flows" | "projects" | "sources" | "agents" | "updates";
+export type Tab = "inbox" | "ribbon" | "work" | "attention" | "flows" | "projects" | "sources" | "agents" | "settings";
 export const [tab, setTab] = createSignal<Tab>("inbox");

@@ -798,6 +798,18 @@ func (s *API) SetNotificationWords(words NotificationWords) {
 	n.SetWords(words)
 }
 
+// SetMenuWords hands over the application menu's titles, keyed by the UI's
+// own «menu.» keys, in the language the UI is showing. Called when the UI
+// starts and whenever the language changes; headless, there is no menu.
+func (s *API) SetMenuWords(words map[string]string) {
+	s.app.uiMu.RLock()
+	m := s.app.menu
+	s.app.uiMu.RUnlock()
+	if m != nil {
+		m.SetWords(words)
+	}
+}
+
 // Answer delivers a person's answer to an agent's question.
 func (s *API) Answer(questionID string, answer acp.Answer) error {
 	return s.app.Agents.Answer(questionID, answer)

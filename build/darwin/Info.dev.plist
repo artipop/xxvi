@@ -12,9 +12,16 @@
         <key>CFBundleVersion</key>
             <string>0.1.0</string>
         <key>CFBundleGetInfoString</key>
-            <string>Входящие и флоу с агентами</string>
+            <string>Inbox and flows with agents</string>
         <key>CFBundleShortVersionString</key>
             <string>0.1.0</string>
+        <key>CFBundleDevelopmentRegion</key>
+            <string>en</string>
+        <key>CFBundleLocalizations</key>
+            <array>
+                <string>en</string>
+                <string>ru</string>
+            </array>
         <key>CFBundleIconFile</key>
             <string>icons</string>
         <key>CFBundleIconName</key>

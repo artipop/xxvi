@@ -1,7 +1,7 @@
 import { onSettled, Show, For } from "solid-js";
 import type { JSX } from "@solidjs/web";
-import { error, loadAll, setError, subscribe, syncNotificationWords } from "./state";
-import { lang, LANGS, setLang, t } from "./i18n";
+import { error, loadAll, loadLanguage, setError, subscribe } from "./state";
+import { t } from "./i18n";
 import InboxView from "./views/inbox";
 import WorkView from "./views/work";
 import FlowsView from "./views/flows";
@@ -10,7 +10,7 @@ import SourcesView from "./views/sources";
 import ProjectsView from "./views/projects";
 import AttentionView from "./views/attention";
 import RibbonView from "./views/ribbon";
-import UpdatesView from "./views/updates";
+import SettingsView from "./views/settings";
 import CardPanel from "./views/card";
 import { openCard, tab, setTab } from "./state";
 import { NAV } from "./nav";
@@ -19,7 +19,7 @@ export default function App(): JSX.Element {
   onSettled(() => {
     void loadAll();
     subscribe();
-    syncNotificationWords();
+    void loadLanguage();
   });
 
   // The ribbon is not a document on a desk, so it does not sit on one: it takes
@@ -60,18 +60,6 @@ export default function App(): JSX.Element {
           )}
         </For>
         <div class="spacer" />
-        {/* The language is the person's, not the machine's: the system one is
-            the first guess, and this is where it is corrected. */}
-        <div class="langs">
-          <For each={LANGS}>
-            {(l) => (
-              <button class={`btn quiet tiny ${lang() === l ? "on" : ""}`}
-                      onClick={() => { setLang(l); syncNotificationWords(); }}>
-                {l.toUpperCase()}
-              </button>
-            )}
-          </For>
-        </div>
       </aside>
 
       <main class={`main ${openCard() ? "with-panel" : ""}`}>
@@ -90,7 +78,7 @@ export default function App(): JSX.Element {
           <Show when={tab() === "projects"}><ProjectsView /></Show>
           <Show when={tab() === "sources"}><SourcesView /></Show>
           <Show when={tab() === "agents"}><AgentsView /></Show>
-          <Show when={tab() === "updates"}><UpdatesView /></Show>
+          <Show when={tab() === "settings"}><SettingsView /></Show>
         </div>
 
         {/* The card opens beside what you were looking at rather than instead

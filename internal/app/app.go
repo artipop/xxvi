@@ -55,6 +55,8 @@ type App struct {
 	notifier *Notifier
 	// chooser is the native file dialog, set once the window exists.
 	chooser Chooser
+	// menu is the window's application menu, worded by the UI.
+	menu Menu
 	// updates is how the application replaces itself; nil where there is
 	// nothing to replace — a test, a headless run.
 	updates Updates
@@ -72,6 +74,13 @@ type Emitter interface {
 // test simply have no picker.
 type Chooser interface {
 	Folder(title, from string) (string, error)
+}
+
+// Menu is the window's application menu. Its words are the UI's, like every
+// other word on the screen: the UI hands them over, and the window rebuilds the
+// menu in them.
+type Menu interface {
+	SetWords(words map[string]string)
 }
 
 // Open builds the application over a data directory, creating and seeding the
@@ -181,6 +190,13 @@ func (a *App) Close() error {
 		appmcp.RemoveHandoff(a.DataDir)
 	}
 	return a.Store.Close()
+}
+
+// SetMenu supplies the window's application menu once the window exists.
+func (a *App) SetMenu(m Menu) {
+	a.uiMu.Lock()
+	defer a.uiMu.Unlock()
+	a.menu = m
 }
 
 // SetChooser supplies the native file dialog once the window exists.

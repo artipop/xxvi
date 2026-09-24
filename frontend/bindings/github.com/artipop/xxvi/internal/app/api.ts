@@ -244,6 +244,13 @@ export function KeepCardWorktree(cardID: string): $CancellablePromise<$models.Ca
 }
 
 /**
+ * Language is the person's choice of language and what the system would say.
+ */
+export function Language(): $CancellablePromise<$models.Language> {
+    return $Call.ByID(4071161989);
+}
+
+/**
  * MarkOutcome is a person answering for a stage that runs nothing: passed or
  * failed, put on the card so the flow sees it and moves.
  * 
@@ -430,6 +437,23 @@ export function SetCardProject(cardID: string, projectID: string): $CancellableP
  */
 export function SetCardWorkMode(cardID: string, mode: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(4227310037, cardID, mode);
+}
+
+/**
+ * SetLanguage keeps the person's choice: a language tag, or LangSystem. Which
+ * tags there are words for is the UI's to know, so any tag is kept as given.
+ */
+export function SetLanguage(chosen: string): $CancellablePromise<void> {
+    return $Call.ByID(3814571559, chosen);
+}
+
+/**
+ * SetMenuWords hands over the application menu's titles, keyed by the UI's
+ * own «menu.» keys, in the language the UI is showing. Called when the UI
+ * starts and whenever the language changes; headless, there is no menu.
+ */
+export function SetMenuWords(words: { [_ in string]?: string } | null): $CancellablePromise<void> {
+    return $Call.ByID(1495517587, words);
 }
 
 /**

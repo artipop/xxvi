@@ -8,9 +8,9 @@ info:
   companyName: "artipop"
   productName: "XXVI"
   productIdentifier: "io.deffun.xxvi"
-  description: "Входящие и флоу с агентами"
+  description: "Inbox and flows with agents"
   copyright: "Copyright (c) 2026 Artem"
-  comments: "Входящие и флоу с агентами"
+  comments: "Inbox and flows with agents"
   version: "0.1.0"
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension

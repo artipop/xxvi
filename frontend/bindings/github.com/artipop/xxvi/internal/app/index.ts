@@ -10,6 +10,7 @@ export type {
     AgentsView,
     CardSummary,
     CardView,
+    Language,
     NotificationWords,
     StageCard,
     TerminalHandle,

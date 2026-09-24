@@ -1,7 +1,8 @@
 [Desktop Entry]
 Version=1.0
 Name=XXVI
-Comment=Входящие и флоу с агентами
+Comment=Inbox and flows with agents
+Comment[ru]=Входящие и флоу с агентами
 # The Exec line includes %u to pass the URL to the application
 Exec=/usr/local/bin/xxvi %u
 Terminal=false

@@ -102,6 +102,7 @@ func main() {
 	core.SetUI(emitter{wails})
 
 	core.SetChooser(chooser{wails})
+	core.SetMenu(menubar{wails})
 	if notifier != nil {
 		core.SetNotifier(app.NewNotifier(core, notifier))
 	}

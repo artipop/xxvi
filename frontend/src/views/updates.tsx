@@ -4,7 +4,8 @@ import type { UpdateState } from "../../bindings/github.com/artipop/xxvi/interna
 import { loadUpdateState, updateState } from "../state";
 import { errorText, t, when } from "../i18n";
 
-// Replacing this application with a newer one, in its own words.
+// Replacing this application with a newer one, in its own words. A section of
+// the settings rather than a screen: it is set up once and then left alone.
 //
 // The framework has a window of its own for this and it is not used: it is
 // hard-coded English. What the framework does keep is the part worth keeping —
@@ -56,7 +57,7 @@ function megabytes(bytes?: number): string {
   return bytes ? t("updates.megabytes", { n: (bytes / (1024 * 1024)).toFixed(1) }) : "";
 }
 
-export default function UpdatesView() {
+export default function UpdatesSection() {
   const [failed, setFailed] = createSignal("");
   const s = updateState;
 
@@ -89,7 +90,7 @@ export default function UpdatesView() {
 
   return (
     <>
-      <div class="row"><h1>{t("updates.title")}</h1></div>
+      <h2>{t("updates.title")}</h2>
       <p class="lede">{t("updates.lede")}</p>
 
       <Show
@@ -154,21 +155,17 @@ export default function UpdatesView() {
               <span class="update-when">{t("updates.checkedAt", { when: when(s().lastCheckedAt, false) })}</span>
             </Show>
           </div>
-        </div>
 
-        <div class="card">
           <label class="row">
             <input
               type="checkbox"
               checked={s().enabled}
               onChange={(e) => run(() => API.SetUpdatesEnabled(e.currentTarget.checked))}
             />
-            <span>
-              <span class="title">{t("updates.auto")}</span>
-              <span class="update-hint">{t("updates.autoHint")}</span>
-            </span>
+            <span>{t("updates.auto")}</span>
           </label>
         </div>
+
 
         <Show when={s().skippedVersion}>
           <p class="lede">
