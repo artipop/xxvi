@@ -5,7 +5,7 @@ import {
   agents, flows, guard, list, loadFlowCards, loadFlows, openCardByID, stageCards, vocabulary,
 } from "../state";
 import FlowCanvas, { type Selection, type StageWrite, condLabel, edgeIndexOf } from "./flowCanvas";
-import { errorText, label, propName, t } from "../i18n";
+import { actionLabel, errorText, label, propName, t } from "../i18n";
 
 // The flow editor. The canvas is the flow itself: a box is a stage — a place a
 // card stands and the work done there — an arrow is what moves a card on, and
@@ -143,6 +143,10 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
   const addReview = () =>
     addStage({ name: t("flows.review"), action: "none", screens: [{ kind: "diff", ref: "" } as Screen] });
 
+  // Push and MR are the application's own step (docs/system.md §15.2): there
+  // is nothing to configure on it, so the button is the whole of it.
+  const addPublish = () => addStage({ name: t("flows.mrStage"), action: "publish" });
+
   const cardsOn = (stageID: string) => stageCards().filter((c) => c.stageId === stageID);
 
   const counts = createMemo(() =>
@@ -216,6 +220,7 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
       <div class="row toolbar">
         <button class="btn" onClick={() => addStage()}>{t("flows.addStage")}</button>
         <button class="btn" onClick={addReview} title={t("flows.addReviewTitle")}>{t("flows.addReview")}</button>
+        <button class="btn" onClick={addPublish} title={t("flows.addMRTitle")}>{t("flows.addMR")}</button>
         <div class="spacer" />
         <Show when={dirty()}><span class="meta">{t("flows.unsaved")}</span></Show>
         <Show when={draft.id}>
@@ -443,7 +448,7 @@ function StagePanel(props: {
                       : set({ final: false, action: v, work: v === "agent" ? (stage().work || "terminal") : "" });
                   }}>
             <For each={list(vocabulary().actions)}>
-              {(a) => <option value={a}>{a === "agent" ? t("flows.agentWorks") : t("flows.waitsEvent")}</option>}
+              {(a) => <option value={a}>{actionLabel(a)}</option>}
             </For>
             <option value="final">{t("flows.finalOption")}</option>
           </select>

@@ -412,6 +412,9 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 			"To take the step over, cancel it in the application."), nil, nil
 	}
 
+	if stage.Action == model.ActionPublish || stage.Action == model.ActionVerdict {
+		return errorf("the application works this step itself — it talks to the hosting and moves the card when done"), nil, nil
+	}
 	if stage.Action == model.ActionAgent {
 		if missing := missingRequired(stage.Writes, ok, in.Properties); missing != "" {
 			return errorf("the step is not finished: %s missing. Add the value and call again.", missing), nil, nil
@@ -581,6 +584,10 @@ func describeFlow(f model.Flow) string {
 			if st.ID == f.EntryStage {
 				b.WriteString(", entry")
 			}
+		case st.Action == model.ActionPublish:
+			b.WriteString(" — the application pushes the branch and opens or updates the MR")
+		case st.Action == model.ActionVerdict:
+			b.WriteString(" — the application sends the review's verdict to the MR")
 		default:
 			b.WriteString(" — nothing runs, the stage waits for an answer")
 			if st.ID == f.EntryStage {

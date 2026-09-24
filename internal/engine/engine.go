@@ -29,6 +29,17 @@ type Job struct {
 	// Prompt is what the agent is told: its own prompt, then the stage's, then
 	// the card's task. Composed here so the runner has nothing to decide.
 	Prompt string
+	// Visit is the transition that put the card on this stage. A step that
+	// ends after the card was moved elsewhere by hand reports into a visit
+	// that is over, and is not allowed to move the card from where it now is.
+	Visit int64
+}
+
+// Publisher does what a hosting stage says: push and open the MR, or send a
+// review's verdict to one (docs/system.md §15). Like Runner it returns at
+// once, and the outcome comes back through StepDone.
+type Publisher interface {
+	Publish(job Job)
 }
 
 // Runner does what a stage says. Start must return as soon as the work is under
@@ -61,10 +72,16 @@ const (
 
 // Engine ties the store, the runner and the UI together.
 type Engine struct {
-	store  *store.Store
-	runner Runner
-	ui     Emitter
-	log    *slog.Logger
+	store     *store.Store
+	runner    Runner
+	publisher Publisher
+	ui        Emitter
+	log       *slog.Logger
+
+	// publishing is the cards a hosting stage is working now. Its own lock:
+	// it is read while the view is built, and a step reports under mu.
+	pubMu      sync.Mutex
+	publishing map[string]bool
 
 	// mu serializes deciding about one card. Every path here is a short
 	// sequence of database reads and writes ending in a non-blocking Start, so
@@ -87,6 +104,13 @@ func (e *Engine) SetRunner(r Runner) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.runner = r
+}
+
+// SetPublisher supplies what works the hosting stages.
+func (e *Engine) SetPublisher(p Publisher) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.publisher = p
 }
 
 // TakeIntoWork puts an inbox card onto a flow's entry stage. This is the one
@@ -349,7 +373,12 @@ func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
 		e.emitCard(card.ID)
 		return
 	}
-	if stage.Action != model.ActionAgent {
+	switch stage.Action {
+	case model.ActionAgent:
+	case model.ActionPublish, model.ActionVerdict:
+		e.startPublish(card, flow, stage)
+		return
+	default:
 		return // the card stands and waits for an event
 	}
 	if e.runner == nil {
@@ -402,6 +431,52 @@ func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
 	}
 	e.dequeue(card.ID)
 	e.emitCard(card.ID)
+}
+
+func (e *Engine) startPublish(card model.Card, flow model.Flow, stage model.Stage) {
+	if e.publisher == nil {
+		e.record(card.ID, model.EntryProblem, msg.New("journal.noPublisher"))
+		return
+	}
+	job := Job{Card: card, Flow: flow, Stage: stage}
+	if last, ok, err := e.store.LastFlowEvent(card.ID); err == nil && ok {
+		job.Visit = last.ID
+	}
+	e.pubMu.Lock()
+	if e.publishing == nil {
+		e.publishing = map[string]bool{}
+	}
+	e.publishing[card.ID] = true
+	e.pubMu.Unlock()
+	e.publisher.Publish(job)
+	e.emitCard(card.ID)
+}
+
+// Publishing reports whether a hosting stage is working the card now.
+func (e *Engine) Publishing(cardID string) bool {
+	e.pubMu.Lock()
+	defer e.pubMu.Unlock()
+	return e.publishing[cardID]
+}
+
+// StepDone is how a hosting stage reports. The card moves only if it still
+// stands in the visit the step was started for: a person who moved it by hand
+// meanwhile is above the graph, and the late outcome is recorded by whoever
+// sent it and otherwise dropped.
+func (e *Engine) StepDone(job Job, outcome string, detail msg.Msg) {
+	e.pubMu.Lock()
+	delete(e.publishing, job.Card.ID)
+	e.pubMu.Unlock()
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	last, ok, err := e.store.LastFlowEvent(job.Card.ID)
+	if err != nil || !ok || last.ID != job.Visit {
+		e.emitCard(job.Card.ID)
+		return
+	}
+	e.advanceLocked(job.Card.ID, outcome, detail, "")
+	e.emitCard(job.Card.ID)
 }
 
 // failStage records that a stage could not start and lets the flow take the

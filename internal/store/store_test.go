@@ -573,6 +573,8 @@ func TestStageColumnsAreAddedToADatabaseThatAlreadyHasFlows(t *testing.T) {
 		`ALTER TABLE stage DROP COLUMN reads_json`,
 		`ALTER TABLE stage DROP COLUMN screens_json`,
 		`ALTER TABLE card DROP COLUMN project`,
+		`ALTER TABLE project DROP COLUMN remote`,
+		`ALTER TABLE project DROP COLUMN provider`,
 		`DROP TABLE project`,
 		`ALTER TABLE stage DROP COLUMN work`,
 		`ALTER TABLE agent_session DROP COLUMN work`,
@@ -684,6 +686,8 @@ func TestCommentModeIsMigratedAway(t *testing.T) {
 		`ALTER TABLE card DROP COLUMN worktree`,
 		`ALTER TABLE card DROP COLUMN keep_worktree`,
 		`ALTER TABLE card_comment DROP COLUMN msg`,
+		`ALTER TABLE project DROP COLUMN remote`,
+		`ALTER TABLE project DROP COLUMN provider`,
 		`DELETE FROM schema_migration WHERE version >= 11`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -735,6 +739,8 @@ func TestDemoSourcesAreMigratedAway(t *testing.T) {
 		`ALTER TABLE card DROP COLUMN worktree`,
 		`ALTER TABLE card DROP COLUMN keep_worktree`,
 		`ALTER TABLE card_comment DROP COLUMN msg`,
+		`ALTER TABLE project DROP COLUMN remote`,
+		`ALTER TABLE project DROP COLUMN provider`,
 		`DELETE FROM schema_migration WHERE version >= 12`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -773,6 +779,8 @@ func TestOutcomeWordsAreMigratedToIdentifiers(t *testing.T) {
 		`INSERT INTO card_prop (card_id, name, value) VALUES ('` + card.ID + `', 'Флоу', '` + flow.Name + `')`,
 		`UPDATE edge SET cond_property = 'Исход', cond_value = 'прошло' WHERE flow_id = '` + flow.ID + `'`,
 		`ALTER TABLE card_comment DROP COLUMN msg`,
+		`ALTER TABLE project DROP COLUMN remote`,
+		`ALTER TABLE project DROP COLUMN provider`,
 		`DELETE FROM schema_migration WHERE version >= 15`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {

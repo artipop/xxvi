@@ -150,6 +150,8 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 
 	a.Pipeline = inbox.NewPipeline(st, a, log)
 	a.Hosting = hosting.New(st, hosting.Keyring{}, log)
+	a.Hosting.SetReporter(a.Engine)
+	a.Engine.SetPublisher(a.Hosting)
 	a.Poller = inbox.NewPoller(st, a.Pipeline, log)
 
 	// The application from outside. Opened last of the three listeners because

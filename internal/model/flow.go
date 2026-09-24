@@ -24,10 +24,35 @@ const (
 	ActionNone = "none"
 	// ActionAgent runs an ACP agent session on the card's task.
 	ActionAgent = "agent"
+	// ActionPublish pushes the card's branch and opens its MR, or brings the
+	// open one up to date (docs/system.md §15.2). Code rather than an agent
+	// told to do it: the branch, the target, the title are known exactly, and
+	// an agent that «opened the MR» may have opened a second one.
+	ActionPublish = "publish"
+	// ActionVerdict sends a person's review of somebody else's MR back to it:
+	// an approval, or the remarks (docs/system.md §15.4).
+	ActionVerdict = "verdict"
 )
 
 // Actions is every accepted action, in the order the editor offers them.
-var Actions = []string{ActionNone, ActionAgent}
+var Actions = []string{ActionNone, ActionAgent, ActionPublish, ActionVerdict}
+
+// Runs reports whether a stage with this action does anything by itself — and
+// so ends with an outcome of its own rather than waiting for somebody.
+func Runs(action string) bool { return action != ActionNone && action != "" }
+
+// What the hosting stages leave on the card. Identifiers, like the outcome
+// field: the UI words them.
+const (
+	// MRProperty is the MR's address: written by publish, brought by the
+	// review source, read by everything that asks the hosting about it.
+	MRProperty = "MR"
+	// ReviewProperty is which verdict went to the MR, since the stage's own
+	// outcome only says whether sending it worked.
+	ReviewProperty = "Review"
+	ReviewApproved = "approved"
+	ReviewChanges  = "changes"
+)
 
 // How an agent stage works: where the agent runs and who is looking at it
 // (docs/system.md §4.1.1).

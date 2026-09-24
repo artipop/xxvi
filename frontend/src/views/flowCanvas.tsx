@@ -24,7 +24,7 @@ import {
 import type { Edge, Flow, Stage, Trigger } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 
 import "@dschz/solid-flow/dist/style.css";
-import { label, propName, propValue, t } from "../i18n";
+import { actionLabel, label, propName, propValue, t } from "../i18n";
 
 // The flow as a graph. Pan, zoom and drag are Solid Flow's; the layout is ours.
 //
@@ -573,7 +573,7 @@ export function condLabel(edge: Edge): string {
 // a form field.
 export function stageLabel(stage: Stage): string {
   if (stage.final) return t("flows.final");
-  return stage.action === "agent" ? t("flows.agentWorks") : t("flows.waitsEvent");
+  return actionLabel(stage.action);
 }
 
 export default function FlowCanvas(props: Props) {

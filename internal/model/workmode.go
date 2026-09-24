@@ -21,6 +21,11 @@ const (
 	// WorkModeBranch is the card's branch checked out in the folder itself: one
 	// card at a time, and the work shows up in the person's editor straight away.
 	WorkModeBranch = "branch"
+	// WorkModeReview is somebody else's MR, checked out in a separate working
+	// tree at its last commit: nothing is branched, nothing is pushed, and a
+	// new commit in the MR moves the tree to it. Not offered to a person — a
+	// card is this because a review source brought it (docs/system.md §15.4).
+	WorkModeReview = "review"
 )
 
 // WorkModes is every accepted mode, in the order a person is offered them.

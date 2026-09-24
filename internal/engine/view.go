@@ -71,6 +71,7 @@ func (e *Engine) CardFlowFor(cardID string) (*CardFlow, error) {
 	if e.runner != nil {
 		out.Running = e.runner.RunningOnStage(st.StageID) > 0 && e.cardIsRunning(cardID)
 	}
+	out.Running = out.Running || e.Publishing(cardID)
 	if !out.Running {
 		// A stage that is working answers for itself; two buttons beside a
 		// running session would be a second way to answer for it.

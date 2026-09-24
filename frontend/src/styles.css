@@ -220,6 +220,7 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 }
 .flowbox--selected { border-color: var(--accent); }
 .flowbox--agent { box-shadow: inset 3px 0 0 var(--accent); }
+.flowbox--publish, .flowbox--verdict { box-shadow: inset 3px 0 0 var(--ansi-blue); }
 .flowbox--final { border-style: dashed; }
 .flowbox__name { font-weight: 600; font-size: 13px; }
 .flowbox__entry { color: var(--ok); }

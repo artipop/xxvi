@@ -236,6 +236,14 @@ func DescribeMove(m *msg.Msg, on string) string {
 		text = "the step could not be started"
 	case "outcome.requiredMissing":
 		text = "required values were not written: " + m.Arg("properties")
+	case "outcome.published":
+		text = "the branch was pushed and the MR " + m.Arg("mr") + " is open"
+	case "outcome.approved":
+		text = "the MR " + m.Arg("mr") + " was approved"
+	case "outcome.changesRequested":
+		text = "changes were requested in the MR " + m.Arg("mr")
+	case "outcome.hostingFailed":
+		text = "the hosting step failed"
 	case msg.CodeText:
 		text = m.Arg("text")
 	default:

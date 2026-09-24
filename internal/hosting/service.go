@@ -23,6 +23,8 @@ type Service struct {
 	secrets Secrets
 	client  *http.Client
 	log     *slog.Logger
+
+	reporter Reporter
 }
 
 func New(st *store.Store, secrets Secrets, log *slog.Logger) *Service {

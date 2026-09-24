@@ -53,7 +53,7 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 			s.Action = ActionNone
 		}
 		switch s.Action {
-		case ActionNone, ActionAgent:
+		case ActionNone, ActionAgent, ActionPublish, ActionVerdict:
 		default:
 			return Flow{}, msg.Err("stage.unknownAction",
 				"action", s.Action, "stage", s.Name, "allowed", strings.Join(Actions, ", "))

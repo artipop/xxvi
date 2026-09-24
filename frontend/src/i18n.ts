@@ -156,7 +156,15 @@ export function propName(name: string): string {
  *  value is somebody's and is shown as it is. */
 export function propValue(name: string, value: string): string {
   if (name.toLowerCase() === "outcome") return label("outcome", value);
+  if (name.toLowerCase() === "review") return label("review", value);
   return value;
+}
+
+/** actionLabel names what a stage does, for the editor's select and its box. */
+export function actionLabel(action: string): string {
+  if (action === "agent") return t("flows.agentWorks");
+  if (!action || action === "none") return t("flows.waitsEvent");
+  return label("action", action);
 }
 
 // ---- messages ----
