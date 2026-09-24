@@ -29,9 +29,9 @@ export const NAV: NavItem[] = [
   { tab: "ribbon", icon: "ribbon", label: () => t("nav.ribbon"), count: () => workRibbons().length },
   { tab: "work", icon: "work", label: () => t("nav.work"), count: () => inWork().length },
   { tab: "attention", icon: "attention", label: () => t("nav.attention"), count: () => attention().length, alert: true },
-  { tab: "flows", icon: "flows", label: () => t("nav.flows"), apart: true },
-  { tab: "projects", icon: "projects", label: () => t("nav.projects") },
+  { tab: "projects", icon: "projects", label: () => t("nav.projects"), apart: true },
   { tab: "agents", icon: "agents", label: () => t("nav.agents") },
+  { tab: "flows", icon: "flows", label: () => t("nav.flows") },
   // Updates live in the settings, so the dot that says one is waiting sits
   // there too.
   { tab: "settings", icon: "settings", label: () => t("nav.settings"), mark: updateWaiting },

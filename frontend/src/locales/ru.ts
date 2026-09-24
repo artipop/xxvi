@@ -69,7 +69,7 @@ export const ru: Dict = {
   "nav.inbox": "Входящие",
   "nav.ribbon": "Лента",
   "nav.work": "В работе",
-  "nav.attention": "Требуют внимания",
+  "nav.attention": "Ждут ответа",
   "nav.flows": "Флоу",
   "nav.projects": "Проекты",
   "nav.agents": "Агенты",
@@ -156,7 +156,7 @@ export const ru: Dict = {
   "journal.app": "приложение",
 
   // ---- needs attention ----
-  "attention.title": "Требуют внимания",
+  "attention.title": "Ждут ответа",
   "attention.lede": "Агент остановился и ждёт ответа, или после закрытой задачи осталось рабочее дерево. Сами по времени вопросы не закрываются.",
   "attention.empty": "Никто ничего не ждёт.",
   "attention.card": "Карточка",

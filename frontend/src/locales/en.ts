@@ -70,7 +70,7 @@ export const en: Dict = {
   "nav.inbox": "Inbox",
   "nav.ribbon": "Ribbon",
   "nav.work": "In work",
-  "nav.attention": "Needs attention",
+  "nav.attention": "Awaiting reply",
   "nav.flows": "Flows",
   "nav.projects": "Projects",
   "nav.agents": "Agents",
@@ -157,7 +157,7 @@ export const en: Dict = {
   "journal.app": "application",
 
   // ---- needs attention ----
-  "attention.title": "Needs attention",
+  "attention.title": "Awaiting reply",
   "attention.lede": "An agent stopped and is waiting for an answer, or a closed task left a working tree behind. Questions do not close by themselves over time.",
   "attention.empty": "Nobody is waiting for anything.",
   "attention.card": "Card",
