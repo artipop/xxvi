@@ -119,6 +119,7 @@ h3 { font-size: 13px; margin: 0 0 6px; font-weight: 600; color: var(--dim); }
   background: var(--panel-2); border: 1px solid var(--line);
   border-radius: 999px; padding: 1px 9px;
 }
+a.tag { text-decoration: none; }
 .tag.ok { color: var(--ok); }
 .tag.warn { color: var(--warn); }
 .tag.bad { color: var(--bad); }
@@ -136,7 +137,7 @@ button.btn.quiet { background: none; color: var(--dim); }
 button.btn.quiet:hover { color: var(--text); }
 button.btn:disabled { opacity: .45; cursor: default; }
 
-input[type="text"], textarea, select {
+input[type="text"], input[type="password"], textarea, select {
   background: var(--bg); border: 1px solid var(--line);
   border-radius: 6px; padding: 5px 8px; width: 100%;
 }
@@ -163,6 +164,8 @@ label.field { display: block; margin-bottom: 10px; }
 label.field > span, .field-label { display: block; color: var(--dim); font-size: 12px; margin-bottom: 3px; }
 .caption { color: var(--dim); font-size: 12px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hosting { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.hosting > .field-label { margin-bottom: -5px; }
 
 .toolbar { margin-bottom: 10px; }
 .toolbar > .field { margin: 0; }

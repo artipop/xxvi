@@ -209,8 +209,8 @@ function Hosting(props: { project: Project; onChanged: (p: Project) => void }) {
   };
 
   return (
-    <div class="field">
-      <span>{t("projects.hosting", { server: props.project.server ?? "" })}</span>
+    <div class="hosting">
+      <span class="field-label">{t("projects.hosting", { server: props.project.server ?? "" })}</span>
       <Show when={props.project.account} fallback={
         <div class="row">
           <input type="password" class="grow" placeholder={t("projects.tokenPlaceholder")} value={token()}

@@ -6,9 +6,10 @@ import { attention, inbox, inWork, list, updateWaiting, workRibbons, type Tab } 
 // Two places, one list — a section that exists in one menu and not the other is
 // a section somebody cannot find.
 //
-// «Sources» is not here on purpose: there is no real source yet, only demo
-// ones, and a section whose one use is a demo is a section that misleads. The
-// screen stays in the code and comes back with the first real source.
+// «Sources» is not here on purpose. The one real source — the MRs waiting on a
+// review — has nothing to set but on and off, and that switch is on the
+// project it reads; the rest are demos, and a section whose use is a demo
+// misleads. The screen comes back with the first source that has settings.
 
 export type NavItem = {
   tab: Tab;
