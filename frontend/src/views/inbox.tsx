@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Card, InboxGroup } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import { applyCard, flows, guard, inbox, list, loadInbox, openCardByID, projects, setInbox, showRibbon, sources } from "../state";
+import { applyCard, flows, guard, inbox, list, loadInbox, openCardByID, projects, setInbox, showRibbon, sources, openOutside } from "../state";
 import { propName, propValue, t } from "../i18n";
 
 // The inbox: what the sources brought, grouped by what brought it. A card here
@@ -196,7 +196,7 @@ function InboxCard(props: { card: Card }) {
           )}
         </For>
         <Show when={props.card.props?.MR}>
-          <a class="tag" href={props.card.props!.MR} target="_blank" rel="noreferrer">{mrNumber(props.card.externalId, props.card.props!.MR!)} ↗</a>
+          <a class="tag" href={props.card.props!.MR} onClick={(e) => openOutside(e, props.card.props!.MR)}>{mrNumber(props.card.externalId, props.card.props!.MR!)} ↗</a>
         </Show>
       </div>
 

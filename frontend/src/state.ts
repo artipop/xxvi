@@ -1,5 +1,5 @@
 import { createSignal, createStore, reconcile } from "solid-js";
-import { Events } from "@wailsio/runtime";
+import { Browser, Events } from "@wailsio/runtime";
 import * as API from "../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { AgentsView, CardView, StageCard, UpdateState, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp/models";
@@ -294,3 +294,12 @@ export function showRibbon(cardID: string) {
 // and watching it start are the same moment.
 export type Tab = "inbox" | "ribbon" | "work" | "attention" | "flows" | "projects" | "sources" | "agents" | "settings";
 export const [tab, setTab] = createSignal<Tab>("inbox");
+
+/** openOutside opens an address in the system browser. A link inside the
+ *  window does not: the webview neither follows target="_blank" nor hands it
+ *  to the system, so the click has to. */
+export function openOutside(e: MouseEvent, url: string | undefined) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (url) Browser.OpenURL(url).catch(report);
+}

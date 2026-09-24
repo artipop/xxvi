@@ -6,7 +6,7 @@ import { Events } from "@wailsio/runtime";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
 import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
-import { attention, closedRibbon, guard, list, loadAttention, loadRibbons, openRibbon, report, ribbons, setOpenRibbon, setTab } from "../state";
+import { attention, closedRibbon, guard, list, loadAttention, loadRibbons, openRibbon, report, ribbons, setOpenRibbon, setTab, openOutside } from "../state";
 import { QuestionForm } from "./attention";
 import { JournalOf } from "./journal";
 import { Compose } from "./compose";
@@ -666,7 +666,7 @@ function Pane(props: {
           />
         </Show>
         <Show when={props.screen?.kind === "browser" && waiting().length === 0}>
-          <a class="btn quiet tiny" href={props.screen!.ref} target="_blank" rel="noreferrer" title={t("ribbon.openOutside")}>↗</a>
+          <a class="btn quiet tiny" href={props.screen!.ref} onClick={(e) => openOutside(e, props.screen!.ref)} title={t("ribbon.openOutside")}>↗</a>
         </Show>
       </header>
 

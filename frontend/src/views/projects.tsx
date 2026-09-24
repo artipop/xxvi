@@ -2,7 +2,7 @@ import { createEffect, createSignal, createStore, onSettled, storePath, For, Sho
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Project } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { RemoteOption } from "../../bindings/github.com/artipop/xxvi/internal/hosting/models";
-import { guard, list, loadProjects, projects, vocabulary } from "../state";
+import { guard, list, loadProjects, projects, vocabulary, openOutside } from "../state";
 import { errorText, label, t } from "../i18n";
 
 // Where work happens. The card says what, the flow says how it travels, this
@@ -299,7 +299,7 @@ function ConnectForm(props: {
                  onInput={(e) => setToken(e.currentTarget.value)}
                  onKeyDown={(e) => { if (e.key === "Enter" && ready()) props.onConnect(remote(), server(), token()); }} />
           <Show when={tokenURL()}>
-            <a class="btn quiet" href={tokenURL()} target="_blank" rel="noreferrer">{t("projects.makeToken")}</a>
+            <a class="btn quiet" href={tokenURL()} onClick={(e) => openOutside(e, tokenURL())}>{t("projects.makeToken")}</a>
           </Show>
         </div>
       </label>
