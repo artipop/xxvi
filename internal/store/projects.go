@@ -23,11 +23,13 @@ type projectRow struct {
 	NameKey   string `db:"name_key"`
 	Kind      string `db:"kind"`
 	Path      string `db:"path"`
+	Remote    string `db:"remote"`
+	Provider  string `db:"provider"`
 	CreatedAt int64  `db:"created_at"`
 }
 
 func (r projectRow) project() model.Project {
-	return model.Project{ID: r.ID, Name: r.Name, Kind: r.Kind, Path: r.Path}
+	return model.Project{ID: r.ID, Name: r.Name, Kind: r.Kind, Path: r.Path, Remote: r.Remote, Provider: r.Provider}
 }
 
 // Projects is the registry, by name.
@@ -76,12 +78,13 @@ func (s *Store) SaveProject(p model.Project) (model.Project, error) {
 			return msg.Err("project.nameTaken", "project", p.Name)
 		}
 		_, err = tx.Exec(`
-			INSERT INTO project (id, name, name_key, kind, path, created_at)
-			VALUES (?, ?, ?, ?, ?, ?)
+			INSERT INTO project (id, name, name_key, kind, path, remote, provider, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				name = excluded.name, name_key = excluded.name_key,
-				kind = excluded.kind, path = excluded.path`,
-			p.ID, p.Name, nameKey(p.Name), p.Kind, p.Path, millis(time.Now()))
+				kind = excluded.kind, path = excluded.path,
+				remote = excluded.remote, provider = excluded.provider`,
+			p.ID, p.Name, nameKey(p.Name), p.Kind, p.Path, p.Remote, p.Provider, millis(time.Now()))
 		return err
 	})
 	if err != nil {

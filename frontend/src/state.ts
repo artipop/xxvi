@@ -38,7 +38,7 @@ export const [updateState, setUpdateState] = createSignal<UpdateState>({
 });
 export const [vocabulary, setVocabulary] = createSignal<Vocabulary>({
   triggers: [], actions: [], works: [], kinds: [], ruleActions: [],
-  outcomeProperty: "", outcomeValues: [], screenKinds: [], projectKinds: [], workModes: [],
+  outcomeProperty: "", outcomeValues: [], screenKinds: [], projectKinds: [], workModes: [], providers: [],
 });
 
 // A Go slice that was empty arrives as null, and every screen would otherwise

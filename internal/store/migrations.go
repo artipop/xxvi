@@ -348,5 +348,11 @@ UPDATE OR REPLACE card_prop SET name = 'Flow' WHERE name = 'Флоу';
 UPDATE edge SET cond_value = 'passed' WHERE cond_property IN ('Исход', 'исход') AND cond_value = 'прошло';
 UPDATE edge SET cond_value = 'failed' WHERE cond_property IN ('Исход', 'исход') AND cond_value = 'не прошло';
 UPDATE edge SET cond_property = 'Outcome' WHERE cond_property IN ('Исход', 'исход');`,
+
+		// 16. Where a project pushes and which hosting that is. The token is
+		// not here: it lives in the system keychain, keyed by server.
+		`
+ALTER TABLE project ADD COLUMN remote   TEXT NOT NULL DEFAULT '';
+ALTER TABLE project ADD COLUMN provider TEXT NOT NULL DEFAULT '';`,
 	}
 }

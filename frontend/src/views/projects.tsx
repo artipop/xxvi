@@ -28,6 +28,7 @@ export default function ProjectsView() {
         <ProjectForm
           project={editing()!}
           onDone={() => { setEditing(null); void loadProjects(); }}
+          onChanged={(p) => { setEditing({ ...p }); void loadProjects(); }}
         />
       </Show>
 
@@ -40,6 +41,14 @@ export default function ProjectsView() {
               <div class="row">
                 <span class="title">{p.name}</span>
                 <span class="tag">{label("projectKind", p.kind)}</span>
+                <Show when={p.repository}>
+                  <span class="tag">{p.provider ? label("provider", p.provider) : t("projects.noProvider")} · {p.repository}</span>
+                </Show>
+                <Show when={p.provider}>
+                  <Show when={p.account} fallback={<span class="tag warn">{t("projects.notConnected")}</span>}>
+                    <span class="tag ok"><span class="dot" />@{p.account}</span>
+                  </Show>
+                </Show>
                 <div class="spacer" />
               </div>
               <div class="mono">{p.path}</div>
@@ -58,7 +67,7 @@ function basename(path: string): string {
   return parts[parts.length - 1] ?? "";
 }
 
-function ProjectForm(props: { project: Project; onDone: () => void }) {
+function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (p: Project) => void }) {
   const [draft, setDraft] = createStore<Project>({ ...props.project });
   const [error, setError] = createSignal<unknown>(null);
   const [confirming, setConfirming] = createSignal(false);
@@ -66,7 +75,14 @@ function ProjectForm(props: { project: Project; onDone: () => void }) {
   const save = async () => {
     setError(null);
     try {
-      await API.SaveProject({ ...draft });
+      const saved = await API.SaveProject({ ...draft });
+      // A project that turned out to be on a hosting nobody is connected to
+      // stays open: the token is the next thing to ask, and it is asked here.
+      if (saved.provider && saved.server && !saved.account) {
+        setDraft((d) => { d.id = saved.id; d.remote = saved.remote; d.provider = saved.provider; });
+        props.onChanged(saved);
+        return;
+      }
       props.onDone();
     } catch (e) {
       // Shown here rather than at the top of the screen: a path with a typo in
@@ -120,6 +136,30 @@ function ProjectForm(props: { project: Project; onDone: () => void }) {
         </div>
       </label>
 
+      <div class="grid2">
+        <label class="field">
+          <span>{t("projects.remote")}</span>
+          <input type="text" class="mono" placeholder={t("projects.remotePlaceholder")} value={draft.remote ?? ""}
+                 onInput={(e) => setDraft(storePath("remote", e.currentTarget.value))} />
+        </label>
+        <label class="field">
+          <span>{t("projects.provider")}</span>
+          <select value={draft.provider ?? ""} onChange={(e) => setDraft(storePath("provider", e.currentTarget.value))}>
+            <option value="">{t("projects.noProvider")}</option>
+            <For each={list(vocabulary().providers)}>
+              {(k) => <option value={k}>{label("provider", k)}</option>}
+            </For>
+          </select>
+        </label>
+      </div>
+
+      {/* The token is asked for only once the project is saved with a hosting:
+          it belongs to the server, and the server is what the saved remote
+          says. */}
+      <Show when={draft.id && props.project.provider && props.project.server}>
+        <Hosting project={props.project} onChanged={props.onChanged} />
+      </Show>
+
       <Show when={error() !== null}>
         <div class="error"><pre>{errorText(error())}</pre></div>
       </Show>
@@ -139,6 +179,60 @@ function ProjectForm(props: { project: Project; onDone: () => void }) {
         <button class="btn quiet" onClick={props.onDone}>{t("common.close")}</button>
         <button class="btn primary" onClick={save}>{t("common.save")}</button>
       </div>
+    </div>
+  );
+}
+
+// Who the application is on the project's server. The token is checked by
+// asking the server who it belongs to, and kept in the system keychain rather
+// than in the database — one per server, shared by every project on it.
+function Hosting(props: { project: Project; onChanged: (p: Project) => void }) {
+  const [token, setToken] = createSignal("");
+  const [error, setError] = createSignal<unknown>(null);
+  const [busy, setBusy] = createSignal(false);
+
+  const run = async (fn: () => Promise<Project>) => {
+    setError(null);
+    setBusy(true);
+    try {
+      const p = await fn();
+      setToken("");
+      props.onChanged(p);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div class="field">
+      <span>{t("projects.hosting", { server: props.project.server ?? "" })}</span>
+      <Show when={props.project.account} fallback={
+        <div class="row">
+          <input type="password" class="grow" placeholder={t("projects.tokenPlaceholder")} value={token()}
+                 onInput={(e) => setToken(e.currentTarget.value)}
+                 onKeyDown={(e) => { if (e.key === "Enter") void run(() => API.ConnectHosting(props.project.id, token())); }} />
+          <button class="btn" disabled={busy() || !token().trim()}
+                  onClick={() => run(() => API.ConnectHosting(props.project.id, token()))}>
+            {t("projects.connect")}
+          </button>
+        </div>
+      }>
+        <div class="row">
+          <span>{t("projects.connectedAs", { account: props.project.account ?? "" })}</span>
+          <div class="spacer" />
+          <button class="btn quiet" disabled={busy()} onClick={() => run(() => API.DisconnectHosting(props.project.id))}>
+            {t("projects.disconnect")}
+          </button>
+        </div>
+      </Show>
+      <Show when={!props.project.account}>
+        <span class="meta">{t("projects.tokenNote")}</span>
+      </Show>
+      <Show when={error() !== null}>
+        <div class="error"><pre>{errorText(error())}</pre></div>
+      </Show>
     </div>
   );
 }

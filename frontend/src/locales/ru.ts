@@ -193,6 +193,18 @@ export const ru: Dict = {
   "projects.pick": "Выбрать…",
   "projects.note": "Агент работает прямо в этой папке.",
   "projects.confirmDelete": "Удалить «{name}»?",
+  "projects.remote": "Куда пушится",
+  "projects.remotePlaceholder": "git@gitlab.com:group/repo.git — возьмётся из origin",
+  "projects.provider": "Хостинг",
+  "projects.noProvider": "не знаю",
+  "projects.notConnected": "не подключён",
+  "projects.hosting": "Доступ к {server}",
+  "projects.tokenPlaceholder": "Личный токен доступа (scope api)",
+  "projects.tokenNote": "Токен хранится в системной связке ключей, один на сервер. Нужен, чтобы открывать MR, видеть назначенные вам ревью и ставить вердикт. Push идёт вашим git, как обычно.",
+  "projects.connect": "Подключить",
+  "projects.connectedAs": "Подключено как @{account}",
+  "projects.disconnect": "Отключить",
+  "provider.gitlab": "GitLab",
 
   // ---- sources ----
   "sources.title": "Источники",

@@ -15,6 +15,7 @@ import (
 	"github.com/artipop/xxvi/internal/acp"
 	"github.com/artipop/xxvi/internal/appmcp"
 	"github.com/artipop/xxvi/internal/engine"
+	"github.com/artipop/xxvi/internal/hosting"
 	"github.com/artipop/xxvi/internal/inbox"
 	"github.com/artipop/xxvi/internal/stagemcp"
 	"github.com/artipop/xxvi/internal/store"
@@ -41,6 +42,9 @@ type App struct {
 	Outside  *appmcp.Server
 	Pipeline *inbox.Pipeline
 	Poller   *inbox.Poller
+	// Hosting is where projects push: merge requests opened, watched and
+	// reviewed (docs/system.md §15).
+	Hosting *hosting.Service
 
 	log *slog.Logger
 
@@ -145,6 +149,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	a.Agents.SetTerminals(a.Terminals, a.Tools)
 
 	a.Pipeline = inbox.NewPipeline(st, a, log)
+	a.Hosting = hosting.New(st, hosting.Keyring{}, log)
 	a.Poller = inbox.NewPoller(st, a.Pipeline, log)
 
 	// The application from outside. Opened last of the three listeners because

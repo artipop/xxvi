@@ -201,4 +201,9 @@ export interface Vocabulary {
      * WorkModes are how a card may work in a repository (model/workmode.go).
      */
     "workModes": string[] | null;
+
+    /**
+     * Providers are the hostings a project's remote can be (docs/system.md §15).
+     */
+    "providers": string[] | null;
 }

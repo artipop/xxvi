@@ -194,6 +194,18 @@ export const en: Dict = {
   "projects.pick": "Choose…",
   "projects.note": "The agent works right in this folder.",
   "projects.confirmDelete": "Delete «{name}»?",
+  "projects.remote": "Pushes to",
+  "projects.remotePlaceholder": "git@gitlab.com:group/repo.git — read from origin",
+  "projects.provider": "Hosting",
+  "projects.noProvider": "unknown",
+  "projects.notConnected": "not connected",
+  "projects.hosting": "Access to {server}",
+  "projects.tokenPlaceholder": "Personal access token (api scope)",
+  "projects.tokenNote": "The token is kept in the system keychain, one per server. It is what opens MRs, sees the reviews assigned to you and sends a verdict. Pushing goes through your own git, as always.",
+  "projects.connect": "Connect",
+  "projects.connectedAs": "Connected as @{account}",
+  "projects.disconnect": "Disconnect",
+  "provider.gitlab": "GitLab",
 
   // ---- sources ----
   "sources.title": "Sources",

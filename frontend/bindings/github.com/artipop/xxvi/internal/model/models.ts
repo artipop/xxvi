@@ -385,6 +385,38 @@ export interface Project {
      * the registry is read, since a folder can become one at any time.
      */
     "repo"?: boolean;
+
+    /**
+     * Remote is where the folder pushes — origin's address, read from git when
+     * the project is saved. Provider is which hosting that is, stored rather
+     * than guessed every time, because a company's own GitLab rarely says
+     * «gitlab» in its name and a person has to be able to correct the guess.
+     * Empty for a folder that pushes nowhere, or nowhere this application
+     * speaks to.
+     */
+    "remote"?: string;
+    "provider"?: string;
+
+    /**
+     * Server and Repository are Remote taken apart — «https://gitlab.com»
+     * and «group/repo» — for the screen, which shows them rather than the
+     * address git uses. Not stored: they are the remote, read another way.
+     */
+    "server"?: string;
+    "repository"?: string;
+
+    /**
+     * Account is who the application is on the hosting, when a token is kept
+     * for its server. Not stored with the project: the token belongs to the
+     * server, and every project on it shares the answer.
+     */
+    "account"?: string;
+
+    /**
+     * ReviewInbox says the merge requests waiting on this account's review
+     * come into the inbox. Read off the source registry, where it lives.
+     */
+    "reviewInbox"?: boolean;
 }
 
 /**

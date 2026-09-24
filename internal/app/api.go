@@ -12,6 +12,7 @@ import (
 	"github.com/artipop/xxvi/internal/acp"
 	"github.com/artipop/xxvi/internal/engine"
 	"github.com/artipop/xxvi/internal/gitdiff"
+	"github.com/artipop/xxvi/internal/hosting"
 	"github.com/artipop/xxvi/internal/inbox"
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
@@ -461,6 +462,8 @@ type Vocabulary struct {
 	ProjectKinds []string `json:"projectKinds"`
 	// WorkModes are how a card may work in a repository (model/workmode.go).
 	WorkModes []string `json:"workModes"`
+	// Providers are the hostings a project's remote can be (docs/system.md §15).
+	Providers []string `json:"providers"`
 }
 
 // Vocabulary returns those sets.
@@ -476,6 +479,7 @@ func (s *API) Vocabulary() Vocabulary {
 		OutcomeValues:   model.OutcomeValues,
 		ScreenKinds:     model.ScreenKinds,
 		ProjectKinds:    model.ProjectKinds,
+		Providers:       model.Providers,
 		WorkModes:       model.WorkModes,
 	}
 }
@@ -600,9 +604,14 @@ func (s *API) Projects() ([]model.Project, error) {
 		return nil, err
 	}
 	for i := range list {
-		list[i].Repo = acp.IsRepo(list[i].Path)
+		s.describe(&list[i])
 	}
 	return list, nil
+}
+
+func (s *API) describe(p *model.Project) {
+	p.Repo = acp.IsRepo(p.Path)
+	s.app.Hosting.Describe(p)
 }
 
 // SaveProject adds or edits one entry.
@@ -619,12 +628,54 @@ func (s *API) SaveProject(p model.Project) (model.Project, error) {
 	if err != nil || !info.IsDir() {
 		return model.Project{}, msg.Err("project.folderNotFound", "path", checked.Path)
 	}
+	// Where it pushes is git's answer, asked when nobody gave one; which
+	// hosting that is, a guess from the server's name that a person may
+	// correct — and a correction is kept, not guessed over.
+	if checked.Remote == "" {
+		checked.Remote = hosting.DetectRemote(checked.Path)
+	}
+	if checked.Provider == "" {
+		if r, ok := hosting.ParseRemote(checked.Remote); ok {
+			checked.Provider = hosting.GuessProvider(r)
+		}
+	}
 	saved, err := s.app.Store.SaveProject(checked)
 	if err != nil {
 		return model.Project{}, err
 	}
+	s.describe(&saved)
 	s.app.Emit(EventProjects, map[string]any{"project": saved.ID})
 	return saved, nil
+}
+
+// ConnectHosting gives the application a token for the server a project
+// pushes to. The server is asked who the token belongs to before anything is
+// kept, so a wrong one is refused where it was typed.
+func (s *API) ConnectHosting(projectID, token string) (model.Project, error) {
+	p, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return model.Project{}, err
+	}
+	if _, err := s.app.Hosting.Connect(p, token); err != nil {
+		return model.Project{}, err
+	}
+	s.describe(&p)
+	s.app.Emit(EventProjects, map[string]any{"project": p.ID})
+	return p, nil
+}
+
+// DisconnectHosting forgets the token of a project's server.
+func (s *API) DisconnectHosting(projectID string) (model.Project, error) {
+	p, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return model.Project{}, err
+	}
+	if err := s.app.Hosting.Disconnect(p); err != nil {
+		return model.Project{}, err
+	}
+	s.describe(&p)
+	s.app.Emit(EventProjects, map[string]any{"project": p.ID})
+	return p, nil
 }
 
 // PickFolder opens the system's own folder dialog and returns what was chosen,
