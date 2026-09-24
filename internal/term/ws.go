@@ -105,10 +105,8 @@ func (m *Manager) replay(w http.ResponseWriter, r *http.Request, tail []byte) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	if len(tail) > 0 {
-		if err := write(ctx, conn, websocket.MessageBinary, tail); err != nil {
-			return
-		}
+	if err := write(ctx, conn, websocket.MessageBinary, append(tail, releaseInput...)); err != nil {
+		return
 	}
 	_ = write(ctx, conn, websocket.MessageText, []byte(`{"type":"exit"}`))
 }
@@ -190,6 +188,7 @@ func (m *Manager) pipe(conn *websocket.Conn, s *Session) {
 				// The subscription ends with the process. Say so, so the screen
 				// draws it as a shell that finished rather than a connection
 				// that broke.
+				_ = write(ctx, conn, websocket.MessageBinary, []byte(releaseInput))
 				_ = write(ctx, conn, websocket.MessageText, []byte(`{"type":"exit"}`))
 				return
 			}

@@ -27,6 +27,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/artipop/xxvi/internal/msg"
 	"github.com/aymanbagabas/go-pty"
@@ -57,9 +58,12 @@ type Session struct {
 
 	mu      sync.Mutex
 	history []byte
-	subs    map[chan []byte]struct{}
-	cols    int
-	rows    int
+	// cut is what the history's cap has cut off, read for the modes it set
+	// (modes.go): the history is always handed out behind them.
+	cut  modes
+	subs map[chan []byte]struct{}
+	cols int
+	rows int
 	// spoke is when the process last drew anything. It is what a stage in a
 	// terminal is watched by: its CLI asks a person inside its own interface,
 	// where nothing of ours can see the question, so silence is the only signal
@@ -443,7 +447,15 @@ func (s *Session) publish(chunk []byte) {
 	s.spoke = time.Now()
 	s.history = append(s.history, chunk...)
 	if len(s.history) > historyCap {
-		s.history = append([]byte(nil), s.history[len(s.history)-historyCap:]...)
+		drop := len(s.history) - historyCap
+		s.cut.feed(s.history[:drop])
+		// The cut moves on to where a sequence or a character ends: a history
+		// starting halfway through one begins with garbage printed as text.
+		for drop < len(s.history) && (!s.cut.settled() || !utf8.RuneStart(s.history[drop])) {
+			s.cut.step(s.history[drop])
+			drop++
+		}
+		s.history = append([]byte(nil), s.history[drop:]...)
 	}
 
 	// Sent under the lock, because the lock is what closes these channels: a
@@ -471,7 +483,7 @@ func (s *Session) publish(chunk []byte) {
 func (s *Session) Subscribe() (history []byte, updates <-chan []byte, cancel func()) {
 	ch := make(chan []byte, 64)
 	s.mu.Lock()
-	history = append([]byte(nil), s.history...)
+	history = s.snapshot()
 	s.subs[ch] = struct{}{}
 	s.mu.Unlock()
 
@@ -498,7 +510,14 @@ func (s *Session) Quiet() time.Duration {
 func (s *Session) History() []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]byte(nil), s.history...)
+	return s.snapshot()
+}
+
+// snapshot is the history as a new emulator must be fed it. Called with mu held.
+func (s *Session) snapshot() []byte {
+	preamble := s.cut.preamble()
+	out := make([]byte, 0, len(preamble)+len(s.history))
+	return append(append(out, preamble...), s.history...)
 }
 
 // Write is a keystroke on its way to the process.
