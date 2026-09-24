@@ -494,7 +494,16 @@ func (e *Engine) arrival(cardID string, flow model.Flow, stage model.Stage) stri
 			break
 		}
 	}
-	return ArrivalNote(flow, event, revisit)
+	note := ArrivalNote(flow, event, revisit)
+	if note == "" {
+		return ""
+	}
+	if card, err := e.store.Card(cardID); err == nil && event.On == model.TriggerCardChanged {
+		if remarks := card.Prop(model.RemarksProperty); remarks != "" {
+			note += "\n\nWhat the reviewer says is wrong:\n" + remarks
+		}
+	}
+	return note
 }
 
 // withCond adds the condition that chose the edge to why the card moved: «the

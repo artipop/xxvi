@@ -132,6 +132,10 @@ const (
 	EntryProps EntryKind = "props"
 	// EntrySource: the source the card came from changed its item.
 	EntrySource EntryKind = "source"
+	// EntryReview: a person sent the work back and said what is wrong with
+	// it. A plaque on the segment it was said on, because it is the reason the
+	// next one exists.
+	EntryReview EntryKind = "review"
 )
 
 // FlowState is where a card stands on its route.

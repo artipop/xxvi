@@ -742,3 +742,28 @@ func TestPromptSaysTheCardIsOnItsOwnBranch(t *testing.T) {
 		t.Fatalf("в папке как есть про ветку молчат:\n%s", got)
 	}
 }
+
+// A person who sends the work back says what is wrong with it, and the agent
+// the card returns to is told — otherwise the second attempt starts knowing
+// only that the first one was not accepted.
+func TestRemarksReachTheAgentTheCardReturnsTo(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Починить кран")
+	if err := f.engine.TakeIntoWork(card.ID, f.flow.ID); err != nil {
+		t.Fatalf("взять в работу: %v", err)
+	}
+	f.runner.finish(card.ID, model.TriggerSuccess, "готово")
+
+	props := map[string]string{model.RemarksProperty: "Кран всё ещё течёт", "Одобрено": "Нет"}
+	if _, err := f.store.UpdateCard(card.ID, store.CardEdit{Props: props}); err != nil {
+		t.Fatalf("ответить: %v", err)
+	}
+	f.engine.CardChanged(card.ID, "Одобрено", "Нет")
+
+	if got := f.stageOf(t, card.ID); got != "work" {
+		t.Fatalf("«нет» возвращает карточку агенту, а она на %q", got)
+	}
+	if prompt := f.runner.lastJob(t).Prompt; !strings.Contains(prompt, "What the reviewer says is wrong:\nКран всё ещё течёт") {
+		t.Fatalf("замечаний нет в брифе:\n%s", prompt)
+	}
+}

@@ -131,6 +131,12 @@ const (
 	OutcomeFailed   = "failed"
 )
 
+// RemarksProperty is what a person wrote when they sent the work back: the
+// «what exactly» that the outcome field cannot carry. On the card rather than
+// only in the journal, because the agent the card returns to reads the card,
+// and so does a stage that sends the verdict somewhere else.
+const RemarksProperty = "Remarks"
+
 // OutcomeValues is the closed set, for the editor and for anything checking a
 // person's answer.
 var OutcomeValues = []string{OutcomePassed, OutcomeFailed}

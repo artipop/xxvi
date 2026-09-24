@@ -546,6 +546,11 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .screen-problems.now { color: var(--warn); background: #241f14; border-bottom-color: #4a3d22; }
 .screen-problems p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .screen-problems p + p { margin-top: 4px; }
+.screen-problems p.review, .screen-problems.now p.review { color: var(--text); }
+
+.screen-remarks { flex: 0 0 auto; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.remarks-form { display: flex; flex-direction: column; gap: 8px; }
+.remarks-form textarea { width: 100%; box-sizing: border-box; }
 
 .screen-report {
   flex: 0 0 auto; padding: 6px 12px;

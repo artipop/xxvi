@@ -73,6 +73,12 @@ export interface FlowOverview {
  * the step broke.
  */
 export interface Notice {
+    /**
+     * Kind tells a problem from a reviewer's remarks: both explain the
+     * segment, but one is the application saying it stopped and the other is
+     * a person saying what to fix.
+     */
+    "kind": model$0.EntryKind;
     "msg"?: msg$0.Msg | null;
     "text"?: string;
     "author"?: string;

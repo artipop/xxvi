@@ -258,9 +258,14 @@ export function Language(): $CancellablePromise<$models.Language> {
  * point: the engine's own write of the outcome is silent, because the machine
  * recording a fact must not set the card's own automation off. This one has to
  * — it is a person's edit, and it goes the way a person's edit goes.
+ * 
+ * Remarks are what is wrong, said with «failed». They go on the card before the
+ * outcome does, because the outcome moves the card and whoever it lands on
+ * reads them from there; and into the journal on the segment they were said on.
+ * A pass clears them: remarks from an earlier round are not about this one.
  */
-export function MarkOutcome(cardID: string, value: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(4204052738, cardID, value);
+export function MarkOutcome(cardID: string, value: string, remarks: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(4204052738, cardID, value, remarks);
 }
 
 /**

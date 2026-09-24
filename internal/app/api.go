@@ -131,10 +131,27 @@ func (s *API) SetProp(cardID, name, value string) (CardView, error) {
 // point: the engine's own write of the outcome is silent, because the machine
 // recording a fact must not set the card's own automation off. This one has to
 // — it is a person's edit, and it goes the way a person's edit goes.
-func (s *API) MarkOutcome(cardID, value string) (CardView, error) {
+//
+// Remarks are what is wrong, said with «failed». They go on the card before the
+// outcome does, because the outcome moves the card and whoever it lands on
+// reads them from there; and into the journal on the segment they were said on.
+// A pass clears them: remarks from an earlier round are not about this one.
+func (s *API) MarkOutcome(cardID, value, remarks string) (CardView, error) {
 	value = strings.TrimSpace(value)
 	if value != model.OutcomePassed && value != model.OutcomeFailed {
 		return CardView{}, msg.Err("outcome.unknown", "value", value)
+	}
+	remarks = strings.TrimSpace(remarks)
+	if value == model.OutcomePassed {
+		remarks = ""
+	}
+	if _, err := s.app.Store.UpdateCard(cardID, store.CardEdit{Props: map[string]string{model.RemarksProperty: remarks}}); err != nil {
+		return CardView{}, err
+	}
+	if remarks != "" {
+		if _, err := s.app.Store.Record(model.JournalEntry{CardID: cardID, Kind: model.EntryReview, Text: remarks}); err != nil {
+			return CardView{}, err
+		}
 	}
 	return s.SetProp(cardID, model.OutcomeProperty, value)
 }

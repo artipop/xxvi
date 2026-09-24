@@ -1,8 +1,8 @@
 import { For, Show } from "solid-js";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { CardSummary } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
 import { done, guard, inWork, list, loadDone, loadInWork, openCardByID, showRibbon } from "../state";
-import { markTitle, t, waitText } from "../i18n";
+import { t, waitText } from "../i18n";
+import { Marks } from "./marks";
 
 // What is moving right now. Every row answers the same question the card screen
 // answers in full: where it stands, and what it is waiting for.
@@ -76,32 +76,14 @@ function WorkRow(props: { row: CardSummary }) {
           answer it sends somebody into the card to press one of two buttons,
           and this list is where they are looking. */}
       <Show when={list(flow()?.marks).length > 0}>
-        <div class="row wrap actions">
-          <For each={list(flow()?.marks)}>
-            {(mark) => (
-              <button
-                class={`btn ${mark.forward ? "primary" : "quiet"}`}
-                title={markTitle(mark)}
-                onClick={(e) => {
-                  // The row itself opens the card; the button answers it. Both
-                  // on one element would make the answer a way to open the card
-                  // that also changed it.
-                  e.stopPropagation();
-                  void guard(async () => {
-                    await API.MarkOutcome(props.row.card.id, mark.value);
-                    // Re-read rather than patch the row: the answer goes to the
-                    // flow, the flow moves the card, and what comes back is a
-                    // card standing somewhere else — with different answers, or
-                    // none. The card is not opened, only the list refreshed.
-                    await Promise.all([loadInWork(), loadDone()]);
-                  });
-                }}
-              >
-                {mark.forward ? `${mark.stage} →` : `← ${mark.stage}`}
-              </button>
-            )}
-          </For>
-        </div>
+        {/* Re-read rather than patch the row: the answer goes to the flow, the
+            flow moves the card, and what comes back is a card standing
+            somewhere else — with different answers, or none. */}
+        <Marks
+          cardId={props.row.card.id}
+          marks={list(flow()?.marks)}
+          answer={(fn) => void guard(async () => { await fn(); await Promise.all([loadInWork(), loadDone()]); })}
+        />
       </Show>
     </div>
   );

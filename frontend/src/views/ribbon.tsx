@@ -11,8 +11,10 @@ import { QuestionForm } from "./attention";
 import { JournalOf } from "./journal";
 import { Compose } from "./compose";
 import { NAV } from "../nav";
-import { entryText, label, markTitle, propName, questionText, say, t } from "../i18n";
+import { entryText, label, propName, questionText, say, t } from "../i18n";
+import { MarkButtons, RemarksForm, sendMark } from "./marks";
 import type { Msg } from "../../bindings/github.com/artipop/xxvi/internal/msg/models";
+import type { Mark } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 
 // The emulator is a large chunk and most screens are not terminals, so it
 // arrives only when one is opened.
@@ -620,6 +622,7 @@ function Pane(props: {
   onRelease: () => void;
 }): JSX.Element {
   const waiting = () => list(props.screen?.waiting);
+  const [back, setBack] = createSignal<Mark | null>(null);
 
   return (
     <section
@@ -654,20 +657,13 @@ function Pane(props: {
             Once per segment — they belong to the step, not to the window onto
             it — and only while the card is standing there. */}
         <Show when={props.first}>
-          <For each={list(props.segment.marks)}>
-            {(mark) => (
-              <button
-                class={`btn tiny ${mark.forward ? "primary" : "quiet"}`}
-                title={markTitle(mark)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void guard(() => API.MarkOutcome(props.cardId ?? "", mark.value));
-                }}
-              >
-                {mark.forward ? `${mark.stage} →` : `← ${mark.stage}`}
-              </button>
-            )}
-          </For>
+          <MarkButtons
+            marks={list(props.segment.marks)}
+            tiny
+            onMark={(mark) => (mark.forward
+              ? void guard(() => sendMark(props.cardId ?? "", mark))
+              : setBack(mark))}
+          />
         </Show>
         <Show when={props.screen?.kind === "browser" && waiting().length === 0}>
           <a class="btn quiet tiny" href={props.screen!.ref} target="_blank" rel="noreferrer" title={t("ribbon.openOutside")}>↗</a>
@@ -676,9 +672,29 @@ function Pane(props: {
 
       {/* Why the card stands, or why the step broke, on the step itself:
           without it a stopped strip looks exactly like a working one. */}
+      <Show when={props.first && back()}>
+        <div class="screen-remarks">
+          <RemarksForm
+            mark={back()!}
+            onSend={(remarks) => {
+              const mark = back()!;
+              setBack(null);
+              void guard(() => sendMark(props.cardId ?? "", mark, remarks));
+            }}
+            onCancel={() => setBack(null)}
+          />
+        </div>
+      </Show>
+
       <Show when={props.first && list(props.segment.problems).length > 0}>
         <div class={`screen-problems ${props.segment.current ? "now" : ""}`}>
-          <For each={list(props.segment.problems)}>{(p) => <p>{entryText(p)}</p>}</For>
+          <For each={list(props.segment.problems)}>
+            {(p) => (
+              <Show when={p.kind === "review"} fallback={<p>{entryText(p)}</p>}>
+                <p class="review"><b>{t("remarks.said")}</b> {entryText(p)}</p>
+              </Show>
+            )}
+          </For>
         </div>
       </Show>
 

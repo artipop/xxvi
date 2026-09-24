@@ -1,9 +1,10 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import { agents, applyCard, attention, closeCard, guard, list, openCard, projects, showRibbon, vocabulary, workModes } from "../state";
-import { label, markTitle, propName, propValue, t, waitText } from "../i18n";
+import { label, propName, propValue, t, waitText } from "../i18n";
 import { QuestionForm, WorktreeForm } from "./attention";
 import { JournalList } from "./journal";
+import { Marks } from "./marks";
 
 // One card, in full: where it stands, what it is waiting for, and who works it.
 // What happened to it along the way is the ribbon's to show; the journal is the
@@ -69,19 +70,7 @@ export default function CardPanel() {
               the flow already knows where each of them leads, so they are two
               buttons naming the stage they lead to. */}
           <Show when={list(flow()!.marks).length > 0}>
-            <div class="row wrap actions">
-              <For each={list(flow()!.marks)}>
-                {(mark) => (
-                  <button
-                    class={`btn ${mark.forward ? "primary" : "quiet"}`}
-                    title={markTitle(mark)}
-                    onClick={() => act(() => API.MarkOutcome(card().id, mark.value))}
-                  >
-                    {mark.forward ? `${mark.stage} →` : `← ${mark.stage}`}
-                  </button>
-                )}
-              </For>
-            </div>
+            <Marks cardId={card().id} marks={list(flow()!.marks)} answer={(fn) => void act(fn)} />
           </Show>
 
           <div class="row wrap actions">

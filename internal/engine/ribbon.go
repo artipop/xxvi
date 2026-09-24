@@ -48,10 +48,14 @@ type ScreenView struct {
 // Notice is a journal entry the strip shows: why the card stands here, or why
 // the step broke.
 type Notice struct {
-	Msg    *msg.Msg  `json:"msg,omitempty"`
-	Text   string    `json:"text,omitempty"`
-	Author string    `json:"author,omitempty"`
-	At     time.Time `json:"at"`
+	// Kind tells a problem from a reviewer's remarks: both explain the
+	// segment, but one is the application saying it stopped and the other is
+	// a person saying what to fix.
+	Kind   model.EntryKind `json:"kind"`
+	Msg    *msg.Msg        `json:"msg,omitempty"`
+	Text   string          `json:"text,omitempty"`
+	Author string          `json:"author,omitempty"`
+	At     time.Time       `json:"at"`
 }
 
 // Segment is one visit to one stage: everything that happened between this
@@ -320,7 +324,7 @@ func placeProblems(segs []Segment, events []model.FlowEvent, journal []model.Jou
 		}
 	}
 	for _, e := range journal {
-		if e.Kind != model.EntryProblem {
+		if e.Kind != model.EntryProblem && e.Kind != model.EntryReview {
 			continue
 		}
 		var visit int64
@@ -339,7 +343,7 @@ func placeProblems(segs []Segment, events []model.FlowEvent, journal []model.Jou
 		if e.SessionID == "" && e.CreatedAt.Before(started[visit]) {
 			continue
 		}
-		segs[i].Problems = append(segs[i].Problems, Notice{Msg: e.Msg, Text: e.Text, Author: e.Author, At: e.CreatedAt})
+		segs[i].Problems = append(segs[i].Problems, Notice{Kind: e.Kind, Msg: e.Msg, Text: e.Text, Author: e.Author, At: e.CreatedAt})
 	}
 }
 

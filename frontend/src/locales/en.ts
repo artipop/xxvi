@@ -52,6 +52,9 @@ export const en: Dict = {
   "common.toRibbon": "Ribbon →",
   "common.agentWorking": "agent working",
   "mark.title": "Mark «{value}» — the card moves to «{stage}»",
+  "remarks.placeholder": "What is wrong? Whoever the work goes back to reads this",
+  "remarks.hint": "⌘↵ to send, Esc to cancel",
+  "remarks.said": "Remarks:",
 
   // ---- navigation ----
   "nav.inbox": "Inbox",

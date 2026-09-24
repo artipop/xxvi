@@ -51,6 +51,9 @@ export const ru: Dict = {
   "common.toRibbon": "Лента →",
   "common.agentWorking": "агент работает",
   "mark.title": "Отметить «{value}» — карточка перейдёт в «{stage}»",
+  "remarks.placeholder": "Что не так? Это прочитает тот, к кому вернётся работа",
+  "remarks.hint": "⌘↵ — отправить, Esc — отмена",
+  "remarks.said": "Замечания:",
 
   // ---- navigation ----
   "nav.inbox": "Входящие",
