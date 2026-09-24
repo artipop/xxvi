@@ -34,10 +34,24 @@ type Item struct {
 	Props  map[string]string `json:"props,omitempty"`
 	Labels []string          `json:"labels,omitempty"`
 
+	// Workspace is where the card this item becomes will work, when the
+	// source knows better than a person could: an MR under review is in one
+	// repository, on one branch, and asking which would be asking to get it
+	// wrong. Only read when the card is made; the card owns it after that.
+	Workspace *ItemWorkspace `json:"workspace,omitempty"`
+
 	// Raw is the payload as it arrived. It is kept because the day a source
 	// changes shape, the only way to find out what it now sends is to look at
 	// what it sent.
 	Raw json.RawMessage `json:"raw,omitempty"`
+}
+
+// ItemWorkspace is a card's project and working copy, decided by its source.
+type ItemWorkspace struct {
+	Project  string `json:"project"`
+	WorkMode string `json:"workMode"`
+	Branch   string `json:"branch,omitempty"`
+	Base     string `json:"base,omitempty"`
 }
 
 // WithFallbackID gives the item an id when the sender had none to give: the

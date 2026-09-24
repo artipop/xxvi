@@ -44,7 +44,10 @@ export default function InboxView() {
 
 function Group(props: { group: InboxGroup }) {
   const [adding, setAdding] = createSignal(false);
-  const name = () => props.group.source || t("inbox.noSource");
+  const review = () => props.group.plugin === "review";
+  const name = () => (review()
+    ? t("inbox.reviewGroup", { project: props.group.source })
+    : props.group.source || t("inbox.noSource"));
 
   const poll = async () => {
     const groups = await guard(() => API.PollSource(props.group.source));
@@ -59,9 +62,11 @@ function Group(props: { group: InboxGroup }) {
         <div class="spacer" />
         <Show when={props.group.source}>
           <button class="btn quiet" onClick={poll}>{t("inbox.poll")}</button>
-          <button class="btn quiet" onClick={() => setAdding(!adding())}>
-            {adding() ? t("common.cancel") : t("inbox.addItem")}
-          </button>
+          <Show when={!review()}>
+            <button class="btn quiet" onClick={() => setAdding(!adding())}>
+              {adding() ? t("common.cancel") : t("inbox.addItem")}
+            </button>
+          </Show>
         </Show>
       </div>
 
@@ -184,8 +189,15 @@ function InboxCard(props: { card: Card }) {
         <span class="title clickable" onClick={() => openCardByID(props.card.id)}>{props.card.title}</span>
         <div class="spacer" />
         <For each={Object.entries(props.card.props ?? {})}>
-          {([name, value]) => <Show when={name !== SUGGESTED}><span class="tag">{propName(name)}: {propValue(name, value ?? "")}</span></Show>}
+          {([name, value]) => (
+            <Show when={name !== SUGGESTED && name !== "MR"}>
+              <span class="tag">{propName(name)}: {propValue(name, value ?? "")}</span>
+            </Show>
+          )}
         </For>
+        <Show when={props.card.props?.MR}>
+          <a class="tag" href={props.card.props!.MR} target="_blank" rel="noreferrer">{mrNumber(props.card.externalId, props.card.props!.MR!)} ↗</a>
+        </Show>
       </div>
 
       <Show when={props.card.body}>
@@ -196,7 +208,9 @@ function InboxCard(props: { card: Card }) {
         <select value={chosen()} onChange={(e) => setFlowID(e.currentTarget.value)} class="fit">
           <For each={flows()}>{(f) => <option value={f.id}>{f.name}</option>}</For>
         </select>
-        <Show when={projects().length > 0}>
+        {/* An MR under review is in its own repository, on its own branch:
+            where it is worked is not a question. */}
+        <Show when={projects().length > 0 && props.card.workMode !== "review"}>
           <select value={projectID()} onChange={(e) => setProjectID(e.currentTarget.value)}
                   class="fit" title={t("inbox.where")}>
             <option value="">{t("common.ownFolder")}</option>
@@ -212,6 +226,12 @@ function InboxCard(props: { card: Card }) {
       </div>
     </div>
   );
+}
+
+function mrNumber(externalId: string | undefined, url: string): string {
+  if (externalId?.startsWith("!")) return externalId;
+  const m = url.match(/merge_requests\/(\d+)/);
+  return m ? `!${m[1]}` : "MR";
 }
 
 function shorten(text: string): string {

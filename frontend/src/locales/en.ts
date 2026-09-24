@@ -91,6 +91,8 @@ export const en: Dict = {
   "notify.permissionBare": "Allow the agent's action?",
   "notify.reply": "Reply",
   "notify.replyPlaceholder": "Answer in your own words",
+  "notify.reviewAsked": "Your review is requested on {mr}",
+  "notify.mrUpdated": "New commits in {mr} — the review is yours again",
 
   // ---- inbox ----
   "inbox.title": "Inbox",
@@ -215,6 +217,9 @@ export const en: Dict = {
   "projects.connect": "Connect",
   "projects.connectedAs": "Connected as @{account}",
   "projects.disconnect": "Disconnect",
+  "projects.reviewInbox": "MRs where I am a reviewer go to the inbox",
+  "projects.reviewTag": "reviews in the inbox",
+  "inbox.reviewGroup": "To review · {project}",
   "provider.gitlab": "GitLab",
 
   // ---- sources ----

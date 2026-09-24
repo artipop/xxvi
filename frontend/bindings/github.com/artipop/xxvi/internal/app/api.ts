@@ -497,6 +497,14 @@ export function SetProp(cardID: string, name: string, value: string): $Cancellab
 }
 
 /**
+ * SetReviewInbox says whether the MRs waiting on this account's review in a
+ * project come into the inbox (docs/system.md §15.4).
+ */
+export function SetReviewInbox(projectID: string, on: boolean): $CancellablePromise<model$0.Project> {
+    return $Call.ByID(1877603571, projectID, on);
+}
+
+/**
  * SetUpdatesEnabled turns the automatic check on or off. It takes effect on the
  * next tick, not at the next launch.
  */

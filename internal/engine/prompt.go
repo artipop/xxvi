@@ -49,7 +49,10 @@ func ComposePrompt(card model.Card, flow model.Flow, stage model.Stage, agent mo
 	// A card with a branch of its own is already on it when the agent starts:
 	// the application made it. An agent that cut another one — which a stage
 	// asking for «Branch» invites — would leave the work where nothing looks.
-	if card.WorkMode != model.WorkModeFolder {
+	if card.WorkMode == model.WorkModeReview {
+		b.WriteString("\nThis is somebody else's merge request, checked out at its last commit in a working tree of its own. " +
+			"Read it and run it; do not commit, push or switch branches — the work is theirs.\n")
+	} else if card.WorkMode != model.WorkModeFolder {
 		b.WriteString("\nYou are already on this task's branch — do not create another one or switch away; commit here.")
 		if card.Branch != "" {
 			fmt.Fprintf(&b, " Branch: %s.", card.Branch)

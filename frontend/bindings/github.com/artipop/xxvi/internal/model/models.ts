@@ -266,6 +266,11 @@ export interface FlowEvent {
  */
 export interface InboxGroup {
     "source": string;
+
+    /**
+     * Plugin is what kind of source it is, for the screen to word.
+     */
+    "plugin"?: string;
     "cards": Card[] | null;
 }
 

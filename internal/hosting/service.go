@@ -25,6 +25,10 @@ type Service struct {
 	log     *slog.Logger
 
 	reporter Reporter
+	ingester Ingester
+	trees    Trees
+	notify   func(Notice)
+	emit     func(event string)
 	pollState
 }
 

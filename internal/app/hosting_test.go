@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -232,5 +233,143 @@ func TestPublishPushesAndOpensOneMR(t *testing.T) {
 	h.app.Hosting.Poll()
 	if c, _ := h.app.Store.Card(card.ID); c.State != model.StateDone {
 		t.Fatalf("влитый MR закрывает карточку, а она %s", c.State)
+	}
+}
+
+// theirCommit is somebody else's work on a branch of origin, published the way
+// GitLab publishes an MR's head: under refs/merge-requests/<iid>/head.
+func (h hosted) theirCommit(t *testing.T, branch, file, text string, iid int) string {
+	t.Helper()
+	other := filepath.Join(t.TempDir(), "them")
+	gitIn(t, filepath.Dir(other), "clone", "-q", h.bare, other)
+	if gitIn(t, other, "ls-remote", "--heads", "origin", branch) != "" {
+		gitIn(t, other, "checkout", "-q", branch)
+	} else {
+		gitIn(t, other, "checkout", "-q", "-b", branch)
+	}
+	if err := os.WriteFile(filepath.Join(other, file), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, other, "add", ".")
+	gitIn(t, other, "commit", "-q", "-m", file)
+	gitIn(t, other, "push", "-q", "origin", branch)
+	sha := gitIn(t, other, "rev-parse", "HEAD")
+	gitIn(t, h.bare, "update-ref", fmt.Sprintf("refs/merge-requests/%d/head", iid), sha)
+	return sha
+}
+
+func (h hosted) stage(t *testing.T, cardID string) string {
+	t.Helper()
+	st, _, _ := h.app.Store.FlowState(cardID)
+	return st.StageID
+}
+
+func (h hosted) mark(t *testing.T, cardID, value, remarks, from string) string {
+	t.Helper()
+	if _, err := h.api.MarkOutcome(cardID, value, remarks); err != nil {
+		t.Fatalf("отметить %s: %v", value, err)
+	}
+	return waitStage(t, h.app, cardID, from)
+}
+
+func TestAReviewAssignedToMeWalksToTheMerge(t *testing.T) {
+	h := newHosted(t)
+	h.connect(t)
+	sha := h.theirCommit(t, "their-feature", "feature.go", "package feature\n", 1)
+	h.srv.Add(gitlabtest.MR{
+		Repo: h.repo, IID: 1, Title: "Их фича", Body: "Посмотрите, пожалуйста",
+		Source: "their-feature", Target: "main", SHA: sha, Author: "colleague", Reviewers: []string{"me"},
+	})
+	h.srv.Add(gitlabtest.MR{Repo: h.repo, IID: 2, Title: "Не мне", Source: "x", Target: "main", SHA: "x", Reviewers: []string{"other"}})
+
+	if _, err := h.api.SetReviewInbox(h.project.ID, true); err != nil {
+		t.Fatalf("включить ревью во входящие: %v", err)
+	}
+	h.app.Hosting.Poll()
+	groups, _ := h.api.Inbox()
+	if len(groups) != 1 || len(groups[0].Cards) != 1 || groups[0].Plugin != "review" {
+		t.Fatalf("во входящих одно ревью, назначенное на меня: %+v", groups)
+	}
+	card := groups[0].Cards[0]
+	if card.Project != h.project.ID || card.WorkMode != model.WorkModeReview || card.Branch != "their-feature" || card.Base != "origin/main" {
+		t.Fatalf("карточка ревью знает, где и что смотреть: %+v", card)
+	}
+	if card.Prop("Flow") != "MR review" {
+		t.Fatalf("предложен флоу ревью: %q", card.Prop("Flow"))
+	}
+
+	// Polled again, nothing new: still one card.
+	h.app.Hosting.Poll()
+	if groups, _ := h.api.Inbox(); len(groups[0].Cards) != 1 {
+		t.Fatal("повторный опрос не должен заводить вторую карточку")
+	}
+
+	flow := mustFlow(t, h.app, "MR review")
+	if _, err := h.api.TakeIntoWork(card.ID, flow.ID); err != nil {
+		t.Fatal(err)
+	}
+	diff, err := h.api.Diff(card.ID, "")
+	if err != nil {
+		t.Fatalf("дифф: %v", err)
+	}
+	if len(diff.Files) != 1 || diff.Files[0].Path != "feature.go" || diff.Branch != "their-feature" {
+		t.Fatalf("дифф ревью — работа MR против main: %+v", diff)
+	}
+
+	if got := h.mark(t, card.ID, model.OutcomePassed, "", "rmr-review"); got != "rmr-try" {
+		t.Fatalf("после ревью — проверка, а карточка на %q", got)
+	}
+	if got := h.mark(t, card.ID, model.OutcomePassed, "", "rmr-try"); got != "rmr-approve" {
+		t.Fatalf("после проверки — одобрение, а карточка на %q", got)
+	}
+	if got := waitStage(t, h.app, card.ID, "rmr-approve"); got != "rmr-wait" {
+		t.Fatalf("одобрение ушло — ждём автора, а карточка на %q", got)
+	}
+	if mr, _ := h.srv.Get(h.repo, 1); len(mr.Approved) != 1 {
+		t.Fatalf("MR одобрен: %+v", mr)
+	}
+
+	// The author pushes again: the card comes back to the review, on the new
+	// head, and the diff says so.
+	newSHA := h.theirCommit(t, "their-feature", "more.go", "package feature\n", 1)
+	h.srv.Change(h.repo, 1, func(m *gitlabtest.MR) { m.SHA = newSHA; m.Approved = nil })
+	h.app.Hosting.Poll()
+	if got := h.stage(t, card.ID); got != "rmr-review" {
+		t.Fatalf("новые коммиты возвращают на ревью, а карточка на %q", got)
+	}
+	dir, _ := h.app.Agents.WorkDir(card.ID)
+	if head := gitIn(t, dir, "rev-parse", "HEAD"); head != newSHA {
+		t.Fatalf("дерево ревью должно переехать на новую голову: %s", head)
+	}
+
+	if got := h.mark(t, card.ID, model.OutcomeFailed, "Нет тестов на more.go", "rmr-review"); got != "rmr-changes" {
+		t.Fatalf("«не прошло» — замечания, а карточка на %q", got)
+	}
+	waitStage(t, h.app, card.ID, "rmr-changes")
+	if mr, _ := h.srv.Get(h.repo, 1); len(mr.Notes) != 1 || mr.Notes[0] != "Нет тестов на more.go" {
+		t.Fatalf("замечания ушли в MR: %+v", mr.Notes)
+	}
+
+	h.srv.Change(h.repo, 1, func(m *gitlabtest.MR) { m.State = "merged" })
+	h.app.Hosting.Poll()
+	if c, _ := h.app.Store.Card(card.ID); c.State != model.StateDone {
+		t.Fatalf("влитый MR закрывает ревью, а карточка %s", c.State)
+	}
+}
+
+// An MR merged or closed before anybody took it has nothing left to review.
+func TestAnUntakenReviewOfAClosedMRLeavesTheInbox(t *testing.T) {
+	h := newHosted(t)
+	h.connect(t)
+	sha := h.theirCommit(t, "f", "f.go", "package f\n", 1)
+	h.srv.Add(gitlabtest.MR{Repo: h.repo, IID: 1, Title: "Их", Source: "f", Target: "main", SHA: sha, Reviewers: []string{"me"}})
+	if _, err := h.api.SetReviewInbox(h.project.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	h.app.Hosting.Poll()
+	h.srv.Change(h.repo, 1, func(m *gitlabtest.MR) { m.State = "closed" })
+	h.app.Hosting.Poll()
+	if groups, _ := h.api.Inbox(); len(groups) != 0 {
+		t.Fatalf("закрытый MR уходит из входящих: %+v", groups)
 	}
 }

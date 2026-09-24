@@ -90,6 +90,8 @@ export const ru: Dict = {
   "notify.permissionBare": "Разрешить действие агента?",
   "notify.reply": "Ответить",
   "notify.replyPlaceholder": "Ответить своими словами",
+  "notify.reviewAsked": "Вас позвали на ревью {mr}",
+  "notify.mrUpdated": "В {mr} новые коммиты — ревью снова ждёт вас",
 
   // ---- inbox ----
   "inbox.title": "Входящие",
@@ -214,6 +216,9 @@ export const ru: Dict = {
   "projects.connect": "Подключить",
   "projects.connectedAs": "Подключено как @{account}",
   "projects.disconnect": "Отключить",
+  "projects.reviewInbox": "MR, где я ревьюер, — во входящие",
+  "projects.reviewTag": "ревью во входящих",
+  "inbox.reviewGroup": "На ревью · {project}",
   "provider.gitlab": "GitLab",
 
   // ---- sources ----

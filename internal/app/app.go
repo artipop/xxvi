@@ -151,6 +151,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	a.Pipeline = inbox.NewPipeline(st, a, log)
 	a.Hosting = hosting.New(st, hosting.Keyring{}, log)
 	a.Hosting.SetReporter(a.Engine)
+	a.Hosting.SetInbox(a.Pipeline, a.Agents, a.notifyHosting, func(event string) { a.Emit(event, map[string]any{}) })
 	a.Engine.SetPublisher(a.Hosting)
 	a.Poller = inbox.NewPoller(st, a.Pipeline, log)
 

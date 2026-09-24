@@ -10,6 +10,7 @@
 package hosting
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -91,6 +92,17 @@ func GuessProvider(r Remote) string {
 	host := strings.ToLower(r.Host())
 	if strings.Contains(host, "gitlab") {
 		return model.ProviderGitLab
+	}
+	return ""
+}
+
+// MRRef is where the server keeps an MR's head for fetching. The MR's own
+// ref rather than its source branch: a branch in somebody's fork is not on
+// this remote, and the MR ref is there either way.
+func MRRef(provider string, iid int) string {
+	switch provider {
+	case model.ProviderGitLab:
+		return fmt.Sprintf("refs/merge-requests/%d/head", iid)
 	}
 	return ""
 }

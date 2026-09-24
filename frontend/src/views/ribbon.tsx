@@ -690,9 +690,14 @@ function Pane(props: {
         <div class={`screen-problems ${props.segment.current ? "now" : ""}`}>
           <For each={list(props.segment.problems)}>
             {(p) => (
-              <Show when={p.kind === "review"} fallback={<p>{entryText(p)}</p>}>
-                <p class="review"><b>{t("remarks.said")}</b> {entryText(p)}</p>
-              </Show>
+              <Switch fallback={<p>{entryText(p)}</p>}>
+                <Match when={p.kind === "review"}>
+                  <p class="review"><b>{t("remarks.said")}</b> {entryText(p)}</p>
+                </Match>
+                <Match when={p.kind === "source"}>
+                  <p class="source">{entryText(p)}</p>
+                </Match>
+              </Switch>
             )}
           </For>
         </div>

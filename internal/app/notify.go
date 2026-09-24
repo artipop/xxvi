@@ -9,6 +9,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 
 	"github.com/artipop/xxvi/internal/acp"
+	"github.com/artipop/xxvi/internal/engine"
+	"github.com/artipop/xxvi/internal/hosting"
 )
 
 // A question an agent asked reaches a person who is not looking at the
@@ -45,6 +47,11 @@ type NotificationWords struct {
 	PermissionBare   string `json:"permissionBare"`
 	Reply            string `json:"reply"`
 	ReplyPlaceholder string `json:"replyPlaceholder"`
+	// ReviewAsked and MRUpdated are the hosting's news: somebody asked for
+	// this account's review, and an MR under review got new commits. «{mr}»
+	// is the MR's number.
+	ReviewAsked string `json:"reviewAsked"`
+	MRUpdated   string `json:"mrUpdated"`
 }
 
 func (w NotificationWords) ready() bool { return w.Asks != "" && w.Permission != "" }
@@ -224,5 +231,37 @@ func (a *App) notifyAttention(payload any) {
 	}
 	if att, ok := payload.(acp.Attention); ok {
 		n.Show(att)
+	}
+}
+
+// notifyHosting tells a person who may not be looking that a review is waiting
+// or that an MR under review moved. Plain notifications, with nothing to
+// answer from them: what to do about either is decided looking at the diff.
+func (a *App) notifyHosting(n hosting.Notice) {
+	a.Emit(engine.EventCard, map[string]any{"cardId": n.CardID})
+	a.uiMu.RLock()
+	notifier := a.notifier
+	a.uiMu.RUnlock()
+	if notifier == nil || !notifier.ok {
+		return
+	}
+	notifier.mu.Lock()
+	words := notifier.words
+	notifier.mu.Unlock()
+	subtitle := words.ReviewAsked
+	if n.Kind == hosting.NoticeUpdated {
+		subtitle = words.MRUpdated
+	}
+	if subtitle == "" {
+		return
+	}
+	err := notifier.service.SendNotification(notifications.NotificationOptions{
+		ID:       "mr-" + n.Kind + "-" + n.CardID,
+		Title:    n.CardTitle,
+		Subtitle: strings.ReplaceAll(subtitle, "{mr}", n.MR),
+		Data:     map[string]interface{}{"cardId": n.CardID},
+	})
+	if err != nil {
+		a.log.Debug("could not show a notification", "err", err)
 	}
 }

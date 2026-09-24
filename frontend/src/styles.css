@@ -548,6 +548,7 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .screen-problems p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .screen-problems p + p { margin-top: 4px; }
 .screen-problems p.review, .screen-problems.now p.review { color: var(--text); }
+.screen-problems p.source, .screen-problems.now p.source { color: var(--ansi-blue); }
 
 .screen-remarks { flex: 0 0 auto; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
 .remarks-form { display: flex; flex-direction: column; gap: 8px; }

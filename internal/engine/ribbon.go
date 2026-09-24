@@ -48,9 +48,10 @@ type ScreenView struct {
 // Notice is a journal entry the strip shows: why the card stands here, or why
 // the step broke.
 type Notice struct {
-	// Kind tells a problem from a reviewer's remarks: both explain the
-	// segment, but one is the application saying it stopped and the other is
-	// a person saying what to fix.
+	// Kind tells a problem from a reviewer's remarks and from news of the
+	// source: all three explain the segment, but one is the application saying
+	// it stopped, one a person saying what to fix, and one the MR having moved
+	// under the person reading it.
 	Kind   model.EntryKind `json:"kind"`
 	Msg    *msg.Msg        `json:"msg,omitempty"`
 	Text   string          `json:"text,omitempty"`
@@ -324,7 +325,7 @@ func placeProblems(segs []Segment, events []model.FlowEvent, journal []model.Jou
 		}
 	}
 	for _, e := range journal {
-		if e.Kind != model.EntryProblem && e.Kind != model.EntryReview {
+		if e.Kind != model.EntryProblem && e.Kind != model.EntryReview && e.Kind != model.EntrySource {
 			continue
 		}
 		var visit int64

@@ -47,7 +47,8 @@ func (s *Service) Start() {
 	}()
 }
 
-// Stop ends the timer and waits for a poll in progress.
+// Stop ends the timer and waits for any poll in progress, the timer's or one
+// started by switching a review queue on.
 func (s *Service) Stop() {
 	s.mu.Lock()
 	stop := s.stop
@@ -55,8 +56,8 @@ func (s *Service) Stop() {
 	s.mu.Unlock()
 	if stop != nil {
 		stop()
-		s.wg.Wait()
 	}
+	s.wg.Wait()
 }
 
 // Poll asks the hosting everything it is asked on the timer: the review
@@ -139,6 +140,3 @@ type pollState struct {
 	wg     sync.WaitGroup
 	pollMu sync.Mutex
 }
-
-// pollReviews reads the review queues; it lives with the review source.
-func (s *Service) pollReviews() {}

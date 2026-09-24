@@ -127,13 +127,17 @@ func (p *Pipeline) one(src model.Source, item model.Item) (Result, error) {
 		return p.update(src, existing, item, res)
 	}
 
-	card, err := p.store.CreateCard(model.Card{
+	card := model.Card{
 		Source: src.Name, ExternalID: item.ExternalID, ItemVersion: item.Version,
 		Title: itemTitle(item), Body: item.Body, URL: item.URL,
 		State: model.StateInbox, Assignee: decision.Assignee,
 		Props:     mergeProps(item.Props, decision.Props, decision.SuggestFlow),
 		CreatedAt: itemTime(item),
-	})
+	}
+	if ws := item.Workspace; ws != nil {
+		card.Project, card.WorkMode, card.Branch, card.Base = ws.Project, ws.WorkMode, ws.Branch, ws.Base
+	}
+	card, err = p.store.CreateCard(card)
 	if err != nil {
 		return Result{}, err
 	}

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/artipop/xxvi/internal/hosting"
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
 )
@@ -54,9 +55,105 @@ func (m *Manager) claimWorkspace(card model.Card, project model.Project) (string
 		return m.claimWorktree(card, project)
 	case model.WorkModeBranch:
 		return m.claimBranch(card, project)
+	case model.WorkModeReview:
+		return m.claimReviewTree(card, project)
 	}
 	return folder, nil
 }
+
+// claimReviewTree is somebody else's MR in a working tree of its own, at the
+// MR's last commit and on no branch: nothing here is going to be committed or
+// pushed, and a local branch named like theirs would only be a second copy to
+// fall out of date.
+func (m *Manager) claimReviewTree(card model.Card, project model.Project) (string, error) {
+	if card.Worktree != "" {
+		if info, err := os.Stat(card.Worktree); err == nil && info.IsDir() {
+			return card.Worktree, nil
+		}
+	}
+	ref, err := fetchMR(card, project)
+	if err != nil {
+		return "", err
+	}
+	path := card.Worktree
+	if path == "" {
+		path = filepath.Join(m.worktreeRoot(), fmt.Sprintf("%s-%s", filepath.Base(project.Path), shortID(card.ID)))
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", fmt.Errorf("create the working trees folder: %w", err)
+	}
+	_, _ = git(project.Path, "worktree", "prune")
+	if _, err := git(project.Path, "worktree", "add", "--detach", path, ref); err != nil {
+		return "", msg.Wrap(err, "worktree.createFailed")
+	}
+	if err := m.store.SetCardWorkspace(card.ID, card.Branch, card.Base, path); err != nil {
+		return "", err
+	}
+	m.note(card.ID, msg.New("journal.reviewTreeCreated", "path", path, "branch", card.Branch))
+	return path, nil
+}
+
+// RefreshReviewTree moves an MR's working tree to the MR's new last commit.
+// Not over somebody's edits: a person trying the branch may have changed a
+// file to see what happens, and that is theirs until they say otherwise — the
+// tree stays where it is, and the journal says why.
+func (m *Manager) RefreshReviewTree(cardID string) error {
+	claimMu.Lock()
+	defer claimMu.Unlock()
+	card, err := m.store.Card(cardID)
+	if err != nil {
+		return err
+	}
+	if card.WorkMode != model.WorkModeReview || card.Worktree == "" {
+		return nil
+	}
+	if info, err := os.Stat(card.Worktree); err != nil || !info.IsDir() {
+		return nil
+	}
+	project, err := m.store.Project(card.Project)
+	if err != nil {
+		return err
+	}
+	ref, err := fetchMR(card, project)
+	if err != nil {
+		return err
+	}
+	if dirty, err := git(card.Worktree, "status", "--porcelain", "--untracked-files=no"); err != nil {
+		return err
+	} else if dirty != "" {
+		m.note(card.ID, msg.New("journal.reviewTreeDirty", "path", card.Worktree))
+		return nil
+	}
+	if _, err := git(card.Worktree, "checkout", "-q", "--detach", ref); err != nil {
+		return msg.Wrap(err, "worktree.refreshFailed")
+	}
+	return nil
+}
+
+// fetchMR brings the MR's head and its target branch from origin, and names
+// the local ref the head is now under. The target too: the diff compares
+// against where the MR branched from it, and a target last fetched a week ago
+// would put a week of other people's work into the review.
+func fetchMR(card model.Card, project model.Project) (string, error) {
+	iid, ok := hosting.MRNumber(card.Prop(model.MRProperty))
+	if !ok {
+		return "", msg.Err("verdict.noMR")
+	}
+	remote := hosting.MRRef(project.Provider, iid)
+	if remote == "" {
+		return "", msg.Err("hosting.noProvider", "project", project.Name, "server", project.Remote)
+	}
+	local := fmt.Sprintf("refs/xxvi/mr/%d", iid)
+	args := []string{"fetch", "-q", "origin", "+" + remote + ":" + local}
+	if target := strings.TrimPrefix(card.Base, "origin/"); target != "" && target != card.Base {
+		args = append(args, "+refs/heads/"+target+":refs/remotes/origin/"+target)
+	}
+	if _, err := gitNet(project.Path, args...); err != nil {
+		return "", msg.Wrap(err, "review.fetchFailed")
+	}
+	return local, nil
+}
+
 
 func (m *Manager) claimWorktree(card model.Card, project model.Project) (string, error) {
 	folder := project.Path
@@ -200,9 +297,21 @@ func branchExists(folder, branch string) bool {
 }
 
 func git(folder string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), gitTimeout)
+	return gitFor(gitTimeout, folder, args...)
+}
+
+// gitNet is git that crosses the network, given longer and forbidden to ask
+// for a password on a terminal nobody sees.
+func gitNet(folder string, args ...string) (string, error) {
+	return gitFor(3*time.Minute, folder, args...)
+}
+
+func gitFor(timeout time.Duration, folder string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "git", append([]string{"-C", folder}, args...)...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", folder}, args...)...)
+	cmd.Env = append(cmd.Environ(), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}

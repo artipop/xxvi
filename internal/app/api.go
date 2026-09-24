@@ -36,7 +36,19 @@ func (s *API) Inbox() ([]model.InboxGroup, error) {
 	if err != nil {
 		return nil, err
 	}
-	return model.GroupBySource(cards), nil
+	groups := model.GroupBySource(cards)
+	// What kind of source a group is decides how the screen words it: a review
+	// queue is named after its project, and «review» is the screen's word.
+	if sources, err := s.app.Store.Sources(); err == nil {
+		plugin := map[string]string{}
+		for _, src := range sources {
+			plugin[src.Name] = src.Plugin
+		}
+		for i := range groups {
+			groups[i].Plugin = plugin[groups[i].Source]
+		}
+	}
+	return groups, nil
 }
 
 // InWork is every card currently travelling a flow.
@@ -327,7 +339,12 @@ func (s *API) Diff(cardID, ref string) (gitdiff.Diff, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), diffTimeout)
 	defer cancel()
-	return gitdiff.Read(ctx, dir, ref, base)
+	diff, err := gitdiff.Read(ctx, dir, ref, base)
+	// An MR under review is checked out on no branch; its branch is the MR's.
+	if err == nil && diff.Branch == "HEAD" {
+		diff.Branch = card.Branch
+	}
+	return diff, err
 }
 
 // TerminalHandle is what a terminal screen needs to connect: which terminal,
@@ -512,6 +529,10 @@ func (s *API) DeleteSource(name string) error {
 // PollSource reads a source now, so nobody has to wait out an interval to see a
 // change.
 func (s *API) PollSource(name string) ([]model.InboxGroup, error) {
+	if src, err := s.app.Store.Source(name); err == nil && src.Plugin == hosting.PluginReview {
+		s.app.Hosting.Poll()
+		return s.Inbox()
+	}
 	if err := s.app.Poller.PollByName(name); err != nil {
 		return nil, err
 	}
@@ -612,6 +633,25 @@ func (s *API) Projects() ([]model.Project, error) {
 func (s *API) describe(p *model.Project) {
 	p.Repo = acp.IsRepo(p.Path)
 	s.app.Hosting.Describe(p)
+	if src, ok := s.app.Hosting.ReviewSource(p.ID); ok {
+		p.ReviewInbox = src.Enabled
+	}
+}
+
+// SetReviewInbox says whether the MRs waiting on this account's review in a
+// project come into the inbox (docs/system.md §15.4).
+func (s *API) SetReviewInbox(projectID string, on bool) (model.Project, error) {
+	p, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return model.Project{}, err
+	}
+	if err := s.app.Hosting.SetReviewInbox(p, on); err != nil {
+		return model.Project{}, err
+	}
+	s.describe(&p)
+	s.app.Emit(EventProjects, map[string]any{"project": p.ID})
+	s.app.Emit(EventSources, map[string]any{})
+	return p, nil
 }
 
 // SaveProject adds or edits one entry.

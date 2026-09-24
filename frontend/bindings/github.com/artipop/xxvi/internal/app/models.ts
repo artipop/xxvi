@@ -90,6 +90,14 @@ export interface NotificationWords {
     "permissionBare": string;
     "reply": string;
     "replyPlaceholder": string;
+
+    /**
+     * ReviewAsked and MRUpdated are the hosting's news: somebody asked for
+     * this account's review, and an MR under review got new commits. «{mr}»
+     * is the MR's number.
+     */
+    "reviewAsked": string;
+    "mrUpdated": string;
 }
 
 /**

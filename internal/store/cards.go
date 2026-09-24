@@ -66,10 +66,10 @@ func (s *Store) CreateCard(c model.Card) (model.Card, error) {
 
 	err := s.tx(func(tx *sqlx.Tx) error {
 		if _, err := tx.Exec(`
-			INSERT INTO card (id, source, external_id, item_version, title, body, url, state, assignee, project, work_mode, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			INSERT INTO card (id, source, external_id, item_version, title, body, url, state, assignee, project, work_mode, branch, base_ref, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			c.ID, c.Source, c.ExternalID, c.ItemVersion, c.Title, c.Body, c.URL,
-			string(c.State), c.Assignee, c.Project, c.WorkMode, millis(c.CreatedAt), millis(c.UpdatedAt)); err != nil {
+			string(c.State), c.Assignee, c.Project, c.WorkMode, c.Branch, c.Base, millis(c.CreatedAt), millis(c.UpdatedAt)); err != nil {
 			return err
 		}
 		return writeProps(tx, c.ID, c.Props)

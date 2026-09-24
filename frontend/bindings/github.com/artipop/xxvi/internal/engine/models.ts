@@ -74,9 +74,10 @@ export interface FlowOverview {
  */
 export interface Notice {
     /**
-     * Kind tells a problem from a reviewer's remarks: both explain the
-     * segment, but one is the application saying it stopped and the other is
-     * a person saying what to fix.
+     * Kind tells a problem from a reviewer's remarks and from news of the
+     * source: all three explain the segment, but one is the application saying
+     * it stopped, one a person saying what to fix, and one the MR having moved
+     * under the person reading it.
      */
     "kind": model$0.EntryKind;
     "msg"?: msg$0.Msg | null;

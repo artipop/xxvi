@@ -85,6 +85,8 @@ export function syncNotificationWords() {
     permissionBare: t("notify.permissionBare"),
     reply: t("notify.reply"),
     replyPlaceholder: t("notify.replyPlaceholder"),
+    reviewAsked: t("notify.reviewAsked"),
+    mrUpdated: t("notify.mrUpdated"),
   }).catch((e) => console.error(e));
 }
 

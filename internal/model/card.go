@@ -165,6 +165,8 @@ type FlowEvent struct {
 // grouped by what brought them is the whole of the inbox screen.
 type InboxGroup struct {
 	Source string `json:"source"`
+	// Plugin is what kind of source it is, for the screen to word.
+	Plugin string `json:"plugin,omitempty"`
 	Cards  []Card `json:"cards"`
 }
 

@@ -49,6 +49,9 @@ export default function ProjectsView() {
                     <span class="tag ok"><span class="dot" />@{p.account}</span>
                   </Show>
                 </Show>
+                <Show when={p.reviewInbox}>
+                  <span class="tag">{t("projects.reviewTag")}</span>
+                </Show>
                 <div class="spacer" />
               </div>
               <div class="mono">{p.path}</div>
@@ -226,6 +229,11 @@ function Hosting(props: { project: Project; onChanged: (p: Project) => void }) {
             {t("projects.disconnect")}
           </button>
         </div>
+        <label class="row check">
+          <input type="checkbox" checked={props.project.reviewInbox ?? false} disabled={busy()}
+                 onChange={(e) => run(() => API.SetReviewInbox(props.project.id, e.currentTarget.checked))} />
+          <span>{t("projects.reviewInbox")}</span>
+        </label>
       </Show>
       <Show when={!props.project.account}>
         <span class="meta">{t("projects.tokenNote")}</span>
