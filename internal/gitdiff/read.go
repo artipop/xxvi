@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -40,8 +41,15 @@ type Diff struct {
 	// folder itself — a card may work in a subdirectory of one.
 	Root string `json:"root"`
 	// Ref is what was compared, as the screen asked for it. Empty is the
-	// working copy against the last commit.
-	Ref   string `json:"ref,omitempty"`
+	// working copy against the last commit, or against Base when there is one.
+	Ref string `json:"ref,omitempty"`
+	// Branch, Base and Commits say what an empty ref came to on a card with a
+	// branch: the branch checked out, what it was cut from, and how many
+	// commits it has since. Without them the header could only say "not
+	// committed" about work that mostly is.
+	Branch  string `json:"branch,omitempty"`
+	Base    string `json:"base,omitempty"`
+	Commits int    `json:"commits,omitempty"`
 	Files []File `json:"files"`
 	// Truncated says the patch was bigger than the screen keeps. The counts on
 	// each file stay true regardless: they are what a person decides by.
@@ -55,10 +63,16 @@ type Diff struct {
 // anybody committed it. Anything else is passed to git as the revisions it is:
 // «HEAD~1», «main...HEAD», «abc123 def456».
 //
+// base is what the card's branch was cut from, and it changes what an empty
+// ref means: the agent on a branch was told to commit, so its work is whatever
+// the branch holds past the point it left base, committed or not. It comes as
+// its own argument because the ref is the flow's and the base is the card's.
+// A named ref ignores it.
+//
 // Untracked files are part of the answer when the ref is empty. An agent that
 // wrote a new file wrote it; leaving it out of the review because nobody has
 // run `git add` yet would hide exactly the change most worth looking at.
-func Read(ctx context.Context, dir, ref string) (Diff, error) {
+func Read(ctx context.Context, dir, ref, base string) (Diff, error) {
 	if strings.TrimSpace(dir) == "" {
 		return Diff{}, fmt.Errorf("не задана папка, в которой смотреть изменения")
 	}
@@ -66,14 +80,26 @@ func Read(ctx context.Context, dir, ref string) (Diff, error) {
 	if err != nil {
 		return Diff{}, err
 	}
+	base = strings.TrimSpace(base)
+	if strings.HasPrefix(base, "-") {
+		return Diff{}, fmt.Errorf("«%s» — это не ревизия: основа карточки — ветка, от которой её отрезали", base)
+	}
 	root, err := repoRoot(ctx, dir)
 	if err != nil {
 		return Diff{}, err
 	}
 
 	args := []string{"diff", "--patch", "--no-color", "--no-ext-diff", "--find-renames"}
+	var fork forkPoint
 	if len(revs) > 0 {
 		args = append(args, revs...)
+	} else if base != "" {
+		if fork, err = forkOf(ctx, root, base); err != nil {
+			return Diff{}, err
+		}
+		// One revision and no second: git compares it with the working tree,
+		// which is the branch's commits and what is not committed yet together.
+		args = append(args, fork.commit)
 	} else {
 		// An empty repository has no HEAD to compare against, and the empty
 		// tree is what git itself compares against there.
@@ -90,6 +116,9 @@ func Read(ctx context.Context, dir, ref string) (Diff, error) {
 	}
 	files, overflow := Parse(patch, maxLines)
 	out := Diff{Root: root, Ref: strings.TrimSpace(ref), Files: files, Truncated: clipped || overflow}
+	if fork.commit != "" {
+		out.Branch, out.Base, out.Commits = fork.branch, base, fork.commits
+	}
 
 	if len(revs) == 0 {
 		budget := maxLines - countLines(files)
@@ -101,6 +130,37 @@ func Read(ctx context.Context, dir, ref string) (Diff, error) {
 		out.Truncated = out.Truncated || more
 	}
 	return out, nil
+}
+
+// forkPoint is where the checked-out branch left its base.
+type forkPoint struct {
+	commit  string
+	branch  string
+	commits int
+}
+
+// forkOf finds where HEAD left base.
+//
+// The merge-base rather than base itself: base keeps moving after the branch
+// is cut, and diffing against its tip would show everything merged there since
+// as if the agent had undone it.
+func forkOf(ctx context.Context, root, base string) (forkPoint, error) {
+	out, err := run(ctx, root, "merge-base", base, "HEAD")
+	if err != nil {
+		return forkPoint{}, fmt.Errorf("не нашли, где ветка задачи отошла от «%s»: %w", base, err)
+	}
+	fork := forkPoint{commit: strings.TrimSpace(out)}
+	if out, err := run(ctx, root, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
+		fork.branch = strings.TrimSpace(out)
+	}
+	out, err = run(ctx, root, "rev-list", "--count", fork.commit+"..HEAD")
+	if err != nil {
+		return forkPoint{}, err
+	}
+	if fork.commits, err = strconv.Atoi(strings.TrimSpace(out)); err != nil {
+		return forkPoint{}, fmt.Errorf("git rev-list: %w", err)
+	}
+	return fork, nil
 }
 
 // emptyTree is git's own hash of nothing, which is what a first commit is

@@ -13,9 +13,19 @@ export interface Diff {
 
     /**
      * Ref is what was compared, as the screen asked for it. Empty is the
-     * working copy against the last commit.
+     * working copy against the last commit, or against Base when there is one.
      */
     "ref"?: string;
+
+    /**
+     * Branch, Base and Commits say what an empty ref came to on a card with a
+     * branch: the branch checked out, what it was cut from, and how many
+     * commits it has since. Without them the header could only say "not
+     * committed" about work that mostly is.
+     */
+    "branch"?: string;
+    "base"?: string;
+    "commits"?: number;
     "files": File[] | null;
 
     /**

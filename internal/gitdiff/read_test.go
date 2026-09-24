@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -70,7 +71,7 @@ func TestReadUncommittedIncludesUntracked(t *testing.T) {
 	write(t, dir, "было.txt", "первая\nдругая\n")
 	write(t, dir, "новый.txt", "свежая строка\n")
 
-	diff, err := Read(context.Background(), dir, "")
+	diff, err := Read(context.Background(), dir, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +100,7 @@ func TestReadLeavesTheIndexAlone(t *testing.T) {
 	write(t, dir, "б.txt", "два\n")
 
 	before := status(t, dir)
-	if _, err := Read(context.Background(), dir, ""); err != nil {
+	if _, err := Read(context.Background(), dir, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if after := status(t, dir); after != before {
@@ -127,7 +128,7 @@ func TestReadNamedRevisions(t *testing.T) {
 	commit(t, dir, "второй")
 	write(t, dir, "мусор.txt", "не коммитили\n")
 
-	diff, err := Read(context.Background(), dir, "HEAD~1 HEAD")
+	diff, err := Read(context.Background(), dir, "HEAD~1 HEAD", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +146,7 @@ func TestReadEmptyRepository(t *testing.T) {
 	dir := repo(t)
 	write(t, dir, "первый.txt", "строка\n")
 
-	diff, err := Read(context.Background(), dir, "")
+	diff, err := Read(context.Background(), dir, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +159,7 @@ func TestReadWithoutRepositorySaysSo(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git не установлен")
 	}
-	_, err := Read(context.Background(), t.TempDir(), "")
+	_, err := Read(context.Background(), t.TempDir(), "", "")
 	if !errors.Is(err, ErrNoRepo) {
 		t.Fatalf("ошибка: %v, ждали ErrNoRepo", err)
 	}
@@ -166,7 +167,7 @@ func TestReadWithoutRepositorySaysSo(t *testing.T) {
 
 // A ref that looks like an option is refused before git sees it.
 func TestReadRefusesOptionAsRevision(t *testing.T) {
-	_, err := Read(context.Background(), t.TempDir(), "--exec=rm")
+	_, err := Read(context.Background(), t.TempDir(), "--exec=rm", "")
 	if err == nil {
 		t.Fatal("ссылка, начинающаяся с дефиса, принята")
 	}
@@ -184,7 +185,7 @@ func TestReadHonoursGitignore(t *testing.T) {
 	write(t, dir, "мусор/файл.txt", "не смотреть\n")
 	write(t, dir, "видно.txt", "смотреть\n")
 
-	diff, err := Read(context.Background(), dir, "")
+	diff, err := Read(context.Background(), dir, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +201,7 @@ func TestReadFindsRepositoryAbove(t *testing.T) {
 	commit(t, dir, "начало")
 	write(t, dir, "под/файл.txt", "два\n")
 
-	diff, err := Read(context.Background(), filepath.Join(dir, "под"), "")
+	diff, err := Read(context.Background(), filepath.Join(dir, "под"), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +215,108 @@ func TestReadFindsRepositoryAbove(t *testing.T) {
 // not a repository.
 func TestReadWithoutGitSaysSo(t *testing.T) {
 	t.Setenv("PATH", "")
-	if _, err := Read(context.Background(), t.TempDir(), ""); !errors.Is(err, ErrNoGit) {
+	if _, err := Read(context.Background(), t.TempDir(), "", ""); !errors.Is(err, ErrNoGit) {
 		t.Fatalf("ошибка: %v, ждали ErrNoGit", err)
+	}
+}
+
+func git(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// branched is a repository whose task branch has one commit of the agent's on
+// it and then one more change nobody committed.
+func branched(t *testing.T) string {
+	t.Helper()
+	dir := repo(t)
+	write(t, dir, "было.txt", "первая\n")
+	commit(t, dir, "начало")
+	git(t, dir, "switch", "-c", "задача")
+	write(t, dir, "закоммичено.txt", "агент закоммитил\n")
+	commit(t, dir, "работа агента")
+	write(t, dir, "было.txt", "первая\nдописал\n")
+	write(t, dir, "новый.txt", "ещё не добавлен\n")
+	return dir
+}
+
+// An agent on a branch was told to commit there, so its review is the whole
+// branch: what it committed and what it has not yet, side by side.
+func TestReadBaseShowsCommittedAndUncommitted(t *testing.T) {
+	dir := branched(t)
+
+	diff, err := Read(context.Background(), dir, "", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"закоммичено.txt", "было.txt", "новый.txt"} {
+		if _, ok := find(diff.Files, path); !ok {
+			t.Fatalf("нет %s: %+v", path, diff.Files)
+		}
+	}
+	if len(diff.Files) != 3 {
+		t.Fatalf("файлов %d, ждали 3: %+v", len(diff.Files), diff.Files)
+	}
+	if diff.Branch != "задача" || diff.Base != "main" || diff.Commits != 1 {
+		t.Fatalf("шапка: ветка %q, основа %q, коммитов %d", diff.Branch, diff.Base, diff.Commits)
+	}
+}
+
+// What landed on the base after the branch was cut is somebody else's work,
+// and diffing against the base's tip would show it as undone by the agent.
+func TestReadBaseIgnoresLaterBaseCommits(t *testing.T) {
+	dir := branched(t)
+	git(t, dir, "stash", "--include-untracked")
+	git(t, dir, "switch", "main")
+	write(t, dir, "чужое.txt", "пришло в main потом\n")
+	commit(t, dir, "чужая работа")
+	git(t, dir, "switch", "задача")
+	git(t, dir, "stash", "pop")
+
+	diff, err := Read(context.Background(), dir, "", "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f, ok := find(diff.Files, "чужое.txt"); ok {
+		t.Fatalf("в дифф попал коммит основы: %+v", f)
+	}
+	if len(diff.Files) != 3 {
+		t.Fatalf("файлов %d, ждали 3: %+v", len(diff.Files), diff.Files)
+	}
+}
+
+// Without a base an empty ref is what it always was: only what nobody
+// committed.
+func TestReadWithoutBaseIsUncommittedOnly(t *testing.T) {
+	dir := branched(t)
+
+	diff, err := Read(context.Background(), dir, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := find(diff.Files, "закоммичено.txt"); ok {
+		t.Fatalf("без основы видно закоммиченное: %+v", diff.Files)
+	}
+	if len(diff.Files) != 2 || diff.Branch != "" || diff.Commits != 0 {
+		t.Fatalf("файлы: %+v, ветка %q, коммитов %d", diff.Files, diff.Branch, diff.Commits)
+	}
+}
+
+// A base that is gone leaves nothing honest to compare against. Falling back to
+// HEAD would put "branch from base" in the header over a diff that is not that,
+// so the screen says what it could not find instead.
+func TestReadMissingBaseSaysSo(t *testing.T) {
+	dir := branched(t)
+
+	_, err := Read(context.Background(), dir, "", "нет-такой-ветки")
+	if err == nil {
+		t.Fatal("несуществующая основа принята")
+	}
+	if !strings.Contains(err.Error(), "нет-такой-ветки") {
+		t.Fatalf("ошибка не называет основу: %v", err)
 	}
 }

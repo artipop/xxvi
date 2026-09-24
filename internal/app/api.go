@@ -293,13 +293,23 @@ const diffTimeout = 20 * time.Second
 // answer here, and a diff remembered anywhere else would be a second answer to
 // the question the person is deciding by.
 func (s *API) Diff(cardID, ref string) (gitdiff.Diff, error) {
+	card, err := s.app.Store.Card(cardID)
+	if err != nil {
+		return gitdiff.Diff{}, err
+	}
 	dir, err := s.app.Agents.WorkDir(cardID)
 	if err != nil {
 		return gitdiff.Diff{}, err
 	}
+	// Only a card with a branch has a base worth comparing against: in the
+	// folder as it stands nobody told the agent to commit.
+	base := ""
+	if card.Branch != "" {
+		base = card.Base
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), diffTimeout)
 	defer cancel()
-	return gitdiff.Read(ctx, dir, ref)
+	return gitdiff.Read(ctx, dir, ref, base)
 }
 
 // TerminalHandle is what a terminal screen needs to connect: which terminal,

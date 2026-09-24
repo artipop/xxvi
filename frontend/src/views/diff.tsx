@@ -96,9 +96,7 @@ export default function DiffPane(props: { cardId: string; rev: string }): JSX.El
   return (
     <div class="diff">
       <div class="diff-bar row">
-        <span class="mono" title={diff()?.root}>
-          {props.rev.trim() === "" ? "не закоммичено" : props.rev}
-        </span>
+        <span class="mono" title={diff()?.root}>{compared(props.rev, diff())}</span>
         <Show when={files().length > 0}>
           <span class="meta">
             {files().length} файл(ов) <span class="plus">+{added()}</span>{" "}
@@ -132,6 +130,24 @@ export default function DiffPane(props: { cardId: string; rev: string }): JSX.El
       </div>
     </div>
   );
+}
+
+// What the pane compared, in the header. An empty ref on a card with a branch is
+// the whole branch against where it left its base, and "not committed" there
+// would describe the smaller half of what is on screen.
+function compared(rev: string, diff: Diff | null): string {
+  if (rev.trim() !== "") return rev;
+  if (!diff?.base) return "не закоммичено";
+  const n = diff.commits ?? 0;
+  return `ветка ${diff.branch || "?"} от ${diff.base}, ${n} ${commitsWord(n)}`;
+}
+
+function commitsWord(n: number): string {
+  const tens = n % 100, ones = n % 10;
+  if (tens >= 11 && tens <= 14) return "коммитов";
+  if (ones === 1) return "коммит";
+  if (ones >= 2 && ones <= 4) return "коммита";
+  return "коммитов";
 }
 
 function FileBlock(props: { file: File; foldAll: number; unfoldAll: number }): JSX.Element {
