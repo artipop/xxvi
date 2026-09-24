@@ -47,7 +47,7 @@ function Ask(props: { a: Attention }) {
       <Show
         when={props.a.questionId}
         fallback={
-          <div class="question" style={{ "margin-top": "10px" }}>
+          <div class="question">
             <div class="ask">{t("attention.quiet")}</div>
             <span class="meta">{t("attention.quietNote")}</span>
           </div>
@@ -80,7 +80,7 @@ export function WorktreeForm(props: { a: Attention; onAnswered?: (v: CardView | 
     props.onAnswered?.(view);
   };
   return (
-    <div class="question" style={{ "margin-top": "10px" }}>
+    <div class="question">
       <div class="ask">
         {t(props.a.dirty ? "attention.worktreeDirty" : "attention.worktree",
            { path: props.a.worktree, branch: props.a.branch })}
@@ -136,7 +136,7 @@ export function QuestionForm(props: {
   };
 
   return (
-    <div class="question" style={{ "margin-top": "10px" }}>
+    <div class="question">
       <div class="ask">{questionText(props.kind, props.tool, props.text)}</div>
       <div class="options">
         <For each={props.options}>
@@ -158,7 +158,7 @@ export function QuestionForm(props: {
           </button>
         </div>
       </Show>
-      <div class="row" style={{ "margin-top": "8px" }}>
+      <div class="row actions">
         <span class="meta">{t("question.declineNote")}</span>
         <div class="spacer" />
         <button class="btn quiet" disabled={busy()} onClick={decline}>{t("question.decline")}</button>

@@ -46,8 +46,7 @@ export default function App(): JSX.Element {
         <For each={NAV}>
           {(item) => (
             <>
-              <Show when={item.apart}><div style={{ height: "14px" }} /></Show>
-              <button class={`nav ${tab() === item.tab ? "on" : ""}`} onClick={() => setTab(item.tab)}>
+              <button class={`nav ${tab() === item.tab ? "on" : ""} ${item.apart ? "apart" : ""}`} onClick={() => setTab(item.tab)}>
                 <span>{item.label()}</span>
                 <Show when={item.count && item.count()! > 0}>
                   <span class={`count ${item.alert ? "alert" : ""}`}>{item.count!()}</span>

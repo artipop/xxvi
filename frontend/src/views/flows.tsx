@@ -39,7 +39,7 @@ export default function FlowsView() {
         {t("flows.lede")}
       </p>
 
-      <div class="row wrap" style={{ "margin-bottom": "14px" }}>
+      <div class="row wrap toolbar">
         <For each={flows()}>
           {(f) => (
             <button class={`btn ${f.id === selectedID() ? "primary" : ""}`} onClick={() => setSelectedID(f.id)}>
@@ -200,20 +200,20 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
 
   return (
     <>
-      <div class="row wrap" style={{ "margin-bottom": "10px" }}>
-        <label class="field" style={{ flex: "1", margin: 0 }}>
+      <div class="row wrap toolbar">
+        <label class="field grow">
           <span>{t("projects.name")}</span>
           <input type="text" value={draft.name}
                  onInput={(e) => { setDraft(storePath("name", e.currentTarget.value)); touch(); }} />
         </label>
-        <label class="field" style={{ flex: "2", margin: 0 }}>
+        <label class="field grow-2">
           <span>{t("flows.description")}</span>
           <input type="text" value={draft.description ?? ""}
                  onInput={(e) => { setDraft(storePath("description", e.currentTarget.value)); touch(); }} />
         </label>
       </div>
 
-      <div class="row" style={{ "margin-bottom": "10px" }}>
+      <div class="row toolbar">
         <button class="btn" onClick={() => addStage()}>{t("flows.addStage")}</button>
         <button class="btn" onClick={addReview} title={t("flows.addReviewTitle")}>{t("flows.addReview")}</button>
         <div class="spacer" />
@@ -246,8 +246,8 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
         </div>
       </Show>
 
-      <div class="row" style={{ "align-items": "flex-start", gap: "14px" }}>
-        <div style={{ flex: "1", "min-width": "0" }}>
+      <div class="flow-editor">
+        <div class="flow-editor__canvas">
           <FlowCanvas
             flow={draft}
             triggers={list(vocabulary().triggers)}
@@ -262,12 +262,12 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
               touch();
             }}
           />
-          <div class="meta" style={{ "margin-top": "6px" }}>
+          <div class="meta note">
             {t("flows.canvasHint")}
           </div>
         </div>
 
-        <div style={{ width: "340px", flex: "none" }}>
+        <div class="flow-editor__side">
           <Show when={selectedStage()}>
             <StagePanel draft={draft} setDraft={setDraft} stageID={selectedStage()} onChange={touch}
                         onDeleted={() => setSelected(null)} />
@@ -285,7 +285,7 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
               <h3>{t("flows.cardsOnStage")}</h3>
               <For each={cardsOn(selectedStage())}>
                 {(c) => (
-                  <div class="row" style={{ padding: "4px 0", cursor: "pointer" }}
+                  <div class="row list-item"
                        onClick={() => openCardByID(c.card.id)}>
                     <span>{c.card.title}</span>
                     <div class="spacer" />
@@ -473,7 +473,7 @@ function StagePanel(props: {
             <textarea value={stage().prompt ?? ""} onInput={(e) => set({ prompt: e.currentTarget.value })} />
           </label>
           <div class="field">
-            <span style={{ display: "block", color: "var(--dim)", "font-size": "12px", "margin-bottom": "3px" }}>
+            <span class="field-label">
               {t("flows.crew")}
             </span>
             <div class="row wrap">
@@ -498,7 +498,7 @@ function StagePanel(props: {
               about «Verdict» is pulled from the stage that must produce it. */}
           <div class="field">
             <div class="row">
-              <span style={{ color: "var(--dim)", "font-size": "12px" }}>{t("flows.writes")}</span>
+              <span class="caption">{t("flows.writes")}</span>
               <div class="spacer" />
               <button class="btn quiet" onClick={addWrite}>{t("flows.addWrite")}</button>
             </div>
@@ -507,8 +507,8 @@ function StagePanel(props: {
             }>
               <For each={writes()}>
                 {(w, i) => (
-                  <div class="row" style={{ "margin-top": "4px" }}>
-                    <input type="text" placeholder={t("flows.writePlaceholder")} value={w.property} style={{ flex: "1" }}
+                  <div class="row list-row">
+                    <input type="text" placeholder={t("flows.writePlaceholder")} value={w.property} class="grow"
                            onInput={(e) => editWrite(i(), { property: e.currentTarget.value })} />
                     <label class="meta" title={t("flows.requiredTitle")}>
                       <input type="checkbox" checked={Boolean(w.required)}
@@ -519,7 +519,7 @@ function StagePanel(props: {
                   </div>
                 )}
               </For>
-              <div class="meta" style={{ "margin-top": "4px" }}>
+              <div class="meta note">
                 {t("flows.writesNote")}
               </div>
             </Show>
@@ -530,7 +530,7 @@ function StagePanel(props: {
               value already on the card does not have to be ticked again on
               every later stage. */}
           <div class="field">
-            <span style={{ display: "block", color: "var(--dim)", "font-size": "12px", "margin-bottom": "3px" }}>
+            <span class="field-label">
               {t("flows.reads")}
             </span>
             <Show when={available().length > 0} fallback={
@@ -547,7 +547,7 @@ function StagePanel(props: {
                   )}
                 </For>
               </div>
-              <div class="meta" style={{ "margin-top": "4px" }}>
+              <div class="meta note">
                 {reads().length === 0
                   ? t("flows.readsAll")
                   : t("flows.readsSome")}
@@ -560,7 +560,7 @@ function StagePanel(props: {
             nothing runs is exactly where somebody is looking. */}
         <div class="field">
           <div class="row">
-            <span style={{ color: "var(--dim)", "font-size": "12px" }}>{t("flows.screens")}</span>
+            <span class="caption">{t("flows.screens")}</span>
             <div class="spacer" />
             <button class="btn quiet" onClick={addScreen}>{t("flows.addScreen")}</button>
           </div>
@@ -569,20 +569,20 @@ function StagePanel(props: {
           }>
             <For each={screens()}>
               {(sc, i) => (
-                <div class="row" style={{ "margin-top": "4px" }}>
-                  <select value={sc.kind} style={{ width: "auto" }}
+                <div class="row list-row">
+                  <select value={sc.kind} class="fit"
                           onChange={(e) => editScreen(i(), { kind: e.currentTarget.value })}>
                     <For each={list(vocabulary().screenKinds)}>
                       {(k) => <option value={k}>{label("screen", k)}</option>}
                     </For>
                   </select>
-                  <input type="text" placeholder={refHint(sc.kind)} value={sc.ref ?? ""} style={{ flex: "1" }}
+                  <input type="text" placeholder={refHint(sc.kind)} value={sc.ref ?? ""} class="grow"
                          onInput={(e) => editScreen(i(), { ref: e.currentTarget.value })} />
                   <button class="btn quiet" onClick={() => removeScreen(i())}>✕</button>
                 </div>
               )}
             </For>
-            <div class="meta" style={{ "margin-top": "4px" }}>
+            <div class="meta note">
               {t("flows.refNote")}
             </div>
           </Show>
@@ -641,7 +641,7 @@ function EdgePanel(props: {
     <Show when={edge()}>
       <div class="panel">
         <h3>{t("flows.edge")}</h3>
-        <div class="meta" style={{ "margin-bottom": "8px" }}>
+        <div class="meta lead">
           «{nameOf(edge().from)}» → «{nameOf(edge().to)}»{condLabel(edge()) ? ` · ${condLabel(edge())}` : ""}
         </div>
 
@@ -732,12 +732,12 @@ function Condition(props: {
           </Show>
         </datalist>
         <Show when={props.choices.length > 0}>
-          <div class="meta" style={{ "margin-top": "4px" }}>
+          <div class="meta note">
             {t("flows.writtenBefore", { list: props.choices.map((w) => `«${w.property}» (${w.from})`).join(", ") })}
           </div>
         </Show>
         <Show when={isHuman()}>
-          <div class="meta" style={{ "margin-top": "4px" }}>
+          <div class="meta note">
             {t("flows.outcomeBranch", { property: propName(outcome()) })}
           </div>
         </Show>
@@ -746,7 +746,7 @@ function Condition(props: {
       <Show when={kind() === "words"}>
         <input type="text" placeholder={t("flows.wordsPlaceholder")} value={props.edge.if?.commentContains ?? ""}
                onInput={(e) => props.onChange({ commentContains: e.currentTarget.value })} />
-        <div class="meta" style={{ "margin-top": "4px" }}>
+        <div class="meta note">
           {t("flows.wordsNote")}
         </div>
       </Show>

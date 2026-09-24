@@ -66,6 +66,7 @@ export const ru: Dict = {
   // ---- settings ----
   "settings.title": "Настройки",
   "settings.lede": "Как приложение ведёт себя на этой машине.",
+  "settings.interface": "Интерфейс",
   "settings.language": "Язык",
   "settings.languageHint": "Слова на экране и в уведомлениях. «Как в системе» следует за языком, выбранным в настройках системы.",
   "lang.system": "Как в системе — {name}",

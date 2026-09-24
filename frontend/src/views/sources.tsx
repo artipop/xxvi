@@ -16,7 +16,7 @@ export default function SourcesView() {
       <h1>{t("sources.title")}</h1>
       <p class="lede">{t("sources.lede")}</p>
 
-      <div class="row" style={{ "margin-bottom": "10px" }}>
+      <div class="row toolbar">
         <div class="spacer" />
         <button class="btn" onClick={() => setEditing({
           name: "", plugin: "demo", enabled: true, noisy: false, update: "update",
@@ -41,7 +41,7 @@ export default function SourcesView() {
               </button>
             </div>
             <Show when={src.config?.path}>
-              <div class="meta mono" style={{ "margin-top": "4px" }}>{src.config!.path}</div>
+              <div class="meta mono note">{src.config!.path}</div>
             </Show>
           </div>
         )}
@@ -96,32 +96,32 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
         </label>
       </div>
 
-      <div class="row wrap" style={{ "margin-bottom": "10px" }}>
-        <label class="row" style={{ gap: "6px" }}>
-          <input type="checkbox" checked={draft.enabled} style={{ width: "auto" }}
+      <div class="row wrap toolbar">
+        <label class="row check">
+          <input type="checkbox" checked={draft.enabled}
                  onChange={(e) => setDraft(storePath("enabled", e.currentTarget.checked))} />
           <span>{t("sources.enabled")}</span>
         </label>
-        <label class="row" style={{ gap: "6px" }}>
-          <input type="checkbox" checked={draft.noisy ?? false} style={{ width: "auto" }}
+        <label class="row check">
+          <input type="checkbox" checked={draft.noisy ?? false}
                  onChange={(e) => setDraft(storePath("noisy", e.currentTarget.checked))} />
           <span>{t("sources.noisyToggle")}</span>
         </label>
       </div>
-      <div class="meta" style={{ "margin-bottom": "12px" }}>
+      <div class="meta lead">
         {t("sources.noisyNote")}
       </div>
 
       <div class="row">
-        <h3 style={{ margin: 0 }}>{t("sources.rules")}</h3>
+        <h3>{t("sources.rules")}</h3>
         <div class="spacer" />
         <button class="btn quiet" onClick={addRule}>{t("sources.newRule")}</button>
       </div>
 
       <For each={draft.rules ?? []}>
         {(rule, i) => (
-          <div style={{ "border-top": "1px solid var(--line)", "padding-top": "10px", "margin-top": "10px" }}>
-            <div class="row" style={{ "margin-bottom": "6px" }}>
+          <div class="rule">
+            <div class="row rule-head">
               <input type="text" placeholder={t("sources.ruleName")} value={rule.name ?? ""}
                      onInput={(e) => setRule(i(), { name: e.currentTarget.value })} />
               <button class="btn quiet" onClick={() => move(i(), -1)} disabled={i() === 0}>↑</button>
@@ -164,7 +164,7 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
         <div class="empty">{t("sources.noRules")}</div>
       </Show>
 
-      <div class="row" style={{ "margin-top": "12px" }}>
+      <div class="row actions">
         <div class="spacer" />
         <button class="btn quiet" onClick={props.onDone}>{t("common.cancel")}</button>
         <button class="btn primary" onClick={save}>{t("common.save")}</button>

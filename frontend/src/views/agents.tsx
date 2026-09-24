@@ -8,8 +8,11 @@ import { say, t } from "../i18n";
 // actually run here" is the question this screen is opened with, and a missing
 // adapter would otherwise surface as a failed card minutes later.
 
+type Editing = { agent: Agent; original: string | null };
+
 export default function AgentsView() {
-  const [editing, setEditing] = createSignal<Agent | null>(null);
+  const [editing, setEditing] = createSignal<Editing | null>(null);
+  const editingName = () => editing()?.original ?? null;
 
   return (
     <>
@@ -45,30 +48,41 @@ export default function AgentsView() {
       <div class="list-head">
         <h2>{t("agents.registry")}</h2>
         <div class="spacer" />
-        <button class="btn" onClick={() => setEditing({ name: "", kind: "claude" } as Agent)}>{t("agents.new")}</button>
+        <button class="btn" disabled={Boolean(editing())}
+                onClick={() => setEditing({ agent: { name: "", kind: "claude" } as Agent, original: null })}>
+          {t("agents.new")}
+        </button>
       </div>
+
+      <Show when={editing() && editing()!.original === null}>
+        <AgentForm agent={editing()!.agent} onDone={() => setEditing(null)} />
+      </Show>
 
       <For each={agents().agents}>
         {(a) => (
-          <div class="card">
-            <div class="row wrap">
-              <span class="title">{a.name}</span>
-              <span class="tag">{a.kind}</span>
-              <Show when={a.model}><span class="tag">{a.model}</span></Show>
-              <div class="spacer" />
-              <button class="btn quiet" onClick={() => setEditing(JSON.parse(JSON.stringify(a)))}>{t("common.edit")}</button>
-              <button class="btn quiet" onClick={async () => { await guard(() => API.DeleteAgent(a.name)); await loadAgents(); }}>
-                {t("common.delete")}
-              </button>
+          <Show
+            when={editingName() !== a.name}
+            fallback={<AgentForm agent={editing()!.agent} onDone={() => setEditing(null)} />}
+          >
+            <div class="card">
+              <div class="row wrap">
+                <span class="title">{a.name}</span>
+                <span class="tag">{a.kind}</span>
+                <Show when={a.model}><span class="tag">{a.model}</span></Show>
+                <div class="spacer" />
+                <button class="btn quiet"
+                        onClick={() => setEditing({ agent: JSON.parse(JSON.stringify(a)), original: a.name })}>
+                  {t("common.edit")}
+                </button>
+                <button class="btn quiet" onClick={async () => { await guard(() => API.DeleteAgent(a.name)); await loadAgents(); }}>
+                  {t("common.delete")}
+                </button>
+              </div>
+              <Show when={a.prompt}><div class="body">{a.prompt}</div></Show>
             </div>
-            <Show when={a.prompt}><div class="body">{a.prompt}</div></Show>
-          </div>
+          </Show>
         )}
       </For>
-
-      <Show when={editing()}>
-        <AgentForm agent={editing()!} onDone={() => setEditing(null)} />
-      </Show>
     </>
   );
 }
@@ -83,7 +97,7 @@ function AgentForm(props: { agent: Agent; onDone: () => void }) {
   };
 
   return (
-    <div class="panel">
+    <div class="card">
       <h3>{t("agents.agent")}</h3>
       <div class="grid2">
         <label class="field">
@@ -129,7 +143,7 @@ function AgentForm(props: { agent: Agent; onDone: () => void }) {
       </label>
       <div class="meta">{t("agents.autoAllowNote")}</div>
 
-      <div class="row" style={{ "margin-top": "12px" }}>
+      <div class="row actions">
         <div class="spacer" />
         <button class="btn quiet" onClick={props.onDone}>{t("common.cancel")}</button>
         <button class="btn primary" onClick={save}>{t("common.save")}</button>

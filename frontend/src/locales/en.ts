@@ -67,6 +67,7 @@ export const en: Dict = {
   // ---- settings ----
   "settings.title": "Settings",
   "settings.lede": "How this application behaves on this machine.",
+  "settings.interface": "Interface",
   "settings.language": "Language",
   "settings.languageHint": "The words on the screen and in notifications. «As in the system» follows the language chosen in the system settings.",
   "lang.system": "As in the system — {name}",

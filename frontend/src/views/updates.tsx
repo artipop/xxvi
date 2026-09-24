@@ -88,91 +88,106 @@ export default function UpdatesSection() {
     return Math.min(100, Math.round((downloaded / sizeBytes) * 100));
   };
 
+  const offering = () => s().status === "available" || s().status === "ready";
+  const extra = () =>
+    offering() || (s().status === "downloading" && s().sizeBytes) || reason(s()) || s().error || failed();
+
   return (
-    <>
+    <section>
       <h2>{t("updates.title")}</h2>
-      <p class="lede">{t("updates.lede")}</p>
 
       <Show
         when={s().supported}
         fallback={
-          <div class="empty">
-            {s().currentVersion
-              ? t("updates.unsupportedVersion", { version: s().currentVersion })
-              : t("updates.unsupported")}
+          <div class="settings-group">
+            <div class="setting-row">
+              <span class="hint">
+                {s().currentVersion
+                  ? t("updates.unsupportedVersion", { version: s().currentVersion })
+                  : t("updates.unsupported")}
+              </span>
+            </div>
           </div>
         }
       >
-        <div class="card">
-          <div class="row">
-            <span class="title">{t("updates.version", { version: s().currentVersion })}</span>
-            <div class="spacer" />
-            <Show when={s().status === "available" && s().sizeBytes}>
-              <span class="tag">{megabytes(s().sizeBytes)}</span>
-            </Show>
-          </div>
-
-          <Show when={headline(s())}>
-            <div class={`update-status update-status--${s().status}`}>{headline(s())}</div>
-          </Show>
-
-          <Show when={s().status === "downloading" && s().sizeBytes}>
-            <div class="update-progress"><div class="update-progress__bar" style={{ width: `${percent()}%` }} /></div>
-          </Show>
-
-          {/* The release notes are the tag's own annotation, written for
-              whoever is about to install it. Shown only while there is
-              something to install: after that they describe what is already
-              here. */}
-          <Show when={s().notes && (s().status === "available" || s().status === "ready")}>
-            <pre class="update-notes">{s().notes}</pre>
-          </Show>
-
-          <Show when={reason(s())}>
-            <div class="warn-note">{reason(s())}</div>
-          </Show>
-          <Show when={s().error || failed()}>
-            <div class="update-detail mono">{s().error || failed()}</div>
-          </Show>
-
-          <div class="row">
-            <Show when={s().status === "ready"}>
-              <button class="btn primary" onClick={() => run(API.RestartToUpdate)}>
-                {t("updates.restart")}
-              </button>
-            </Show>
-            <Show when={s().status === "available"}>
-              <button class="btn primary" onClick={() => run(API.InstallUpdate)}>{t("updates.install")}</button>
-              <button class="btn" onClick={() => run(API.SkipUpdate)}>{t("updates.skip")}</button>
-            </Show>
+        <div class="settings-group">
+          <div class="setting-row">
+            <div class="setting-label">
+              <span class="setting-title">{t("updates.version", { version: s().currentVersion })}</span>
+              <span class="hint update-line">
+                <Show when={headline(s())}>
+                  <span class={`update-status--${s().status}`}>{headline(s())}</span>
+                </Show>
+                <Show when={s().status === "available" && s().sizeBytes}>
+                  <span>{megabytes(s().sizeBytes)}</span>
+                </Show>
+                <Show when={s().lastCheckedAt}>
+                  <span>{t("updates.checkedAt", { when: when(s().lastCheckedAt, false) })}</span>
+                </Show>
+              </span>
+            </div>
             <Show when={s().status !== "ready"}>
               <button class="btn" disabled={busy()} onClick={() => run(API.CheckForUpdate)}>
                 {t("updates.check")}
               </button>
             </Show>
-            <div class="spacer" />
-            <Show when={s().lastCheckedAt}>
-              <span class="update-when">{t("updates.checkedAt", { when: when(s().lastCheckedAt, false) })}</span>
-            </Show>
           </div>
 
-          <label class="row">
+          <Show when={extra()}>
+            <div class="setting-block">
+              <Show when={s().status === "downloading" && s().sizeBytes}>
+                <div class="update-progress"><div class="update-progress__bar" style={{ width: `${percent()}%` }} /></div>
+              </Show>
+
+              {/* The release notes are the tag's own annotation, written for
+                  whoever is about to install it. Shown only while there is
+                  something to install: after that they describe what is already
+                  here. */}
+              <Show when={s().notes && offering()}>
+                <pre class="update-notes">{s().notes}</pre>
+              </Show>
+
+              <Show when={reason(s())}>
+                <div class="warn-note">{reason(s())}</div>
+              </Show>
+              <Show when={s().error || failed()}>
+                <div class="update-detail mono">{s().error || failed()}</div>
+              </Show>
+
+              <Show when={offering()}>
+                <div class="row">
+                  <Show when={s().status === "ready"}>
+                    <button class="btn primary" onClick={() => run(API.RestartToUpdate)}>
+                      {t("updates.restart")}
+                    </button>
+                  </Show>
+                  <Show when={s().status === "available"}>
+                    <button class="btn primary" onClick={() => run(API.InstallUpdate)}>{t("updates.install")}</button>
+                    <button class="btn quiet" onClick={() => run(API.SkipUpdate)}>{t("updates.skip")}</button>
+                  </Show>
+                </div>
+              </Show>
+            </div>
+          </Show>
+
+          <label class="setting-row">
+            <span class="setting-title">{t("updates.auto")}</span>
             <input
               type="checkbox"
+              class="switch"
               checked={s().enabled}
               onChange={(e) => run(() => API.SetUpdatesEnabled(e.currentTarget.checked))}
             />
-            <span>{t("updates.auto")}</span>
           </label>
         </div>
 
-
+        <p class="settings-note">{t("updates.lede")}</p>
         <Show when={s().skippedVersion}>
-          <p class="lede">
+          <p class="settings-note">
             {t("updates.skipped", { version: s().skippedVersion, path: s().path || "updates.json" })}
           </p>
         </Show>
       </Show>
-    </>
+    </section>
   );
 }

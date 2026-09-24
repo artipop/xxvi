@@ -181,8 +181,7 @@ function InboxCard(props: { card: Card }) {
   return (
     <div class="card">
       <div class="row">
-        <span class="title clickable" onClick={() => openCardByID(props.card.id)}
-              style={{ cursor: "pointer" }}>{props.card.title}</span>
+        <span class="title clickable" onClick={() => openCardByID(props.card.id)}>{props.card.title}</span>
         <div class="spacer" />
         <For each={Object.entries(props.card.props ?? {})}>
           {([name, value]) => <Show when={name !== SUGGESTED}><span class="tag">{propName(name)}: {propValue(name, value ?? "")}</span></Show>}
@@ -193,13 +192,13 @@ function InboxCard(props: { card: Card }) {
         <div class="body">{shorten(props.card.body!)}</div>
       </Show>
 
-      <div class="row wrap" style={{ "margin-top": "10px" }}>
-        <select value={chosen()} onChange={(e) => setFlowID(e.currentTarget.value)} style={{ width: "auto" }}>
+      <div class="row wrap actions">
+        <select value={chosen()} onChange={(e) => setFlowID(e.currentTarget.value)} class="fit">
           <For each={flows()}>{(f) => <option value={f.id}>{f.name}</option>}</For>
         </select>
         <Show when={projects().length > 0}>
           <select value={projectID()} onChange={(e) => setProjectID(e.currentTarget.value)}
-                  style={{ width: "auto" }} title={t("inbox.where")}>
+                  class="fit" title={t("inbox.where")}>
             <option value="">{t("common.ownFolder")}</option>
             <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
           </select>

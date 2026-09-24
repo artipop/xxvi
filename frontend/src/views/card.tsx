@@ -20,7 +20,7 @@ export default function CardPanel() {
     <div>
       <div class="panel">
         <div class="row">
-          <h3 style={{ margin: 0 }}>{card().source || t("card.own")}</h3>
+          <h3>{card().source || t("card.own")}</h3>
           <div class="spacer" />
           {/* Any card that has been anywhere has a strip, finished or not —
               and a finished one is where its results are. */}
@@ -30,10 +30,10 @@ export default function CardPanel() {
           <button class="btn quiet" onClick={closeCard}>{t("common.close")}</button>
         </div>
 
-        <div class="title" style={{ "margin-top": "6px", "font-size": "16px" }}>{card().title}</div>
+        <div class="title card-title">{card().title}</div>
         <Show when={card().body}><div class="body">{card().body}</div></Show>
         <Show when={card().url}>
-          <div class="meta mono" style={{ "margin-top": "6px" }}>{card().url}</div>
+          <div class="meta mono note">{card().url}</div>
         </Show>
 
         <Show when={flow()}>
@@ -58,7 +58,7 @@ export default function CardPanel() {
           </div>
 
           <Show when={(flow()!.waitingFor?.length ?? 0) > 0}>
-            <div class="meta" style={{ "margin-top": "8px" }}>
+            <div class="meta note">
               {t("card.stageWaits", { what: list(flow()!.waitingFor).map(waitText).join("; ") })}
             </div>
           </Show>
@@ -69,7 +69,7 @@ export default function CardPanel() {
               the flow already knows where each of them leads, so they are two
               buttons naming the stage they lead to. */}
           <Show when={list(flow()!.marks).length > 0}>
-            <div class="row wrap" style={{ "margin-top": "10px" }}>
+            <div class="row wrap actions">
               <For each={list(flow()!.marks)}>
                 {(mark) => (
                   <button
@@ -84,7 +84,7 @@ export default function CardPanel() {
             </div>
           </Show>
 
-          <div class="row wrap" style={{ "margin-top": "10px" }}>
+          <div class="row wrap actions">
             <Show when={flow()!.running}>
               <button class="btn quiet" onClick={() => act(async () => {
                 await API.CancelCard(card().id);
@@ -154,7 +154,7 @@ function Props() {
       <h3>{t("card.props")}</h3>
 
       <Show when={awaited().length > 0}>
-        <div class="row wrap" style={{ "margin-bottom": "10px" }}>
+        <div class="row wrap toolbar">
           <For each={awaited()}>
             {(a) => (
               <button class="btn primary" onClick={() => set(a.property, a.value)}>
@@ -188,7 +188,7 @@ function Props() {
         </For>
       </div>
 
-      <div class="row" style={{ "margin-top": "10px" }}>
+      <div class="row actions">
         <input type="text" placeholder={t("card.propName")} value={name()} onInput={(e) => setName(e.currentTarget.value)} />
         <input type="text" placeholder={t("card.propValue")} value={value()} onInput={(e) => setValue(e.currentTarget.value)} />
         <button class="btn" onClick={add}>{t("card.setProp")}</button>
@@ -214,12 +214,11 @@ function Place() {
       <Show when={projects().length > 0} fallback={
         <div class="meta">{t("card.noProjects")}</div>
       }>
-        <select value={view().card.project ?? ""} onChange={(e) => set(e.currentTarget.value)}
-                style={{ width: "auto" }}>
+        <select value={view().card.project ?? ""} onChange={(e) => set(e.currentTarget.value)} class="fit">
           <option value="">{t("common.ownFolder")}</option>
           <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
         </select>
-        <div class="meta" style={{ "margin-top": "6px" }}>
+        <div class="meta note">
           {current() ? t("card.opensIn", { path: where() }) : t("card.ownFolderNote")}
         </div>
         <Show when={current()?.repo}>
@@ -243,7 +242,7 @@ function WorkMode() {
   const asked = () => attention().find((a) => a.cardId === view().card.id && a.worktree);
 
   return (
-    <div style={{ "margin-top": "10px" }}>
+    <div class="subsection">
       <Show when={!view().card.branch} fallback={
         <div class="meta">
           {view().card.worktree ? t("card.onWorktree") : t("card.onBranch")}:{" "}
@@ -255,10 +254,10 @@ function WorkMode() {
         </div>
       }>
         <select value={view().card.workMode ?? ""} onChange={(e) => set(e.currentTarget.value)}
-                style={{ width: "auto" }} title={t("card.workModeTitle")}>
+                class="fit" title={t("card.workModeTitle")}>
           <For each={workModes()}>{(m) => <option value={m.value}>{m.label}</option>}</For>
         </select>
-        <div class="meta" style={{ "margin-top": "6px" }}>
+        <div class="meta note">
           {workModes().find((m) => m.value === (view().card.workMode ?? ""))?.why}
         </div>
       </Show>
@@ -275,8 +274,7 @@ function Assignee() {
     <div class="panel">
       <h3>{t("card.assignee")}</h3>
       <div class="row wrap">
-        <select value={view().card.assignee ?? ""} onChange={(e) => set(e.currentTarget.value)}
-                style={{ width: "auto" }}>
+        <select value={view().card.assignee ?? ""} onChange={(e) => set(e.currentTarget.value)} class="fit">
           <option value="">{t("card.unassigned")}</option>
           <For each={agents().agents}>{(a) => <option value={a.name}>{a.name}</option>}</For>
         </select>
@@ -284,7 +282,7 @@ function Assignee() {
                value={isAgent(view().card.assignee ?? "") ? "" : (view().card.assignee ?? "")}
                onChange={(e) => set(e.currentTarget.value)} />
       </div>
-      <div class="meta" style={{ "margin-top": "6px" }}>
+      <div class="meta note">
         {t("card.assigneeNote")}
       </div>
     </div>

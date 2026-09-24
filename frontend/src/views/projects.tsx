@@ -111,8 +111,7 @@ function ProjectForm(props: { project: Project; onDone: () => void }) {
       <label class="field">
         <span>{t("projects.folder")}</span>
         <div class="row">
-          <input type="text" placeholder={t("projects.pathPlaceholder")} value={draft.path}
-                 style={{ flex: "1" }}
+          <input type="text" class="grow" placeholder={t("projects.pathPlaceholder")} value={draft.path}
                  onInput={(e) => setDraft(storePath("path", e.currentTarget.value))} />
           {/* Typed only when there is no other way: somebody who knows where
               their project is knows it as a place they can point at, not as a

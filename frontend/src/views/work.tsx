@@ -66,7 +66,7 @@ function WorkRow(props: { row: CardSummary }) {
       </div>
 
       <Show when={(flow()?.waitingFor?.length ?? 0) > 0}>
-        <div class="meta" style={{ "margin-top": "6px" }}>
+        <div class="meta note">
           {t("work.waits", { what: list(flow()!.waitingFor).map(waitText).join("; ") })}
         </div>
       </Show>
@@ -76,7 +76,7 @@ function WorkRow(props: { row: CardSummary }) {
           answer it sends somebody into the card to press one of two buttons,
           and this list is where they are looking. */}
       <Show when={list(flow()?.marks).length > 0}>
-        <div class="row wrap" style={{ "margin-top": "8px" }}>
+        <div class="row wrap actions">
           <For each={list(flow()?.marks)}>
             {(mark) => (
               <button

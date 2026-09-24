@@ -360,7 +360,7 @@ export default function Ribbon(): JSX.Element {
     <div class="ribbon" onWheel={onWheel}>
       {/* The only chrome: room for the window's own buttons, the name of the
           job in front of you, and the one offer the ribbon ever makes. */}
-      <header class="ribbon-bar" style={{ "--wails-draggable": "drag" }}>
+      <header class="ribbon-bar">
         <Sections open={menu()} setOpen={setMenu} />
         <span class="ribbon-where">
           <Show when={openRibbon() === DRAFT || ribbons.length === 0}>{t("ribbon.newTask")}</Show>
@@ -376,7 +376,7 @@ export default function Ribbon(): JSX.Element {
         </span>
         <div class="spacer" />
         <Show when={ribbons.length > 0}>
-          <button class="btn quiet tiny" style={{ "--wails-draggable": "no-drag" }}
+          <button class="btn quiet tiny"
                   onClick={newTask} title={t("ribbon.newTaskKey")}>{t("ribbon.addTask")}</button>
         </Show>
         <Show when={current()}>
@@ -387,12 +387,8 @@ export default function Ribbon(): JSX.Element {
           />
         </Show>
         <Show when={behind()}>
-          {/* The bar is the window's drag handle, and a button inside one has
-              to say it is not: dragging the window from a button is not what
-              pressing it means. */}
           <button
             class="btn primary tiny"
-            style={{ "--wails-draggable": "no-drag" }}
             onClick={() => { setPinned(false); flyTo(current()!.focusId ?? ""); }}
           >
             {t("ribbon.next")}
@@ -523,7 +519,7 @@ function Sections(props: { open: boolean; setOpen: (v: boolean) => void }): JSX.
   });
 
   return (
-    <div class="sections" ref={box} style={{ "--wails-draggable": "no-drag" }}>
+    <div class="sections" ref={box}>
       <button class="chevron" onClick={() => props.setOpen(!props.open)} title={t("ribbon.sections")}>
         XXVI <span class={`caret ${props.open ? "up" : ""}`}>⌄</span>
       </button>
@@ -578,7 +574,7 @@ function CardMenu(props: { cardId: string; closed: boolean; onJournal: () => voi
   };
 
   return (
-    <div class="card-menu" ref={box} style={{ "--wails-draggable": "no-drag" }}>
+    <div class="card-menu" ref={box}>
       <button class="btn quiet tiny" onClick={() => { setOpen(!open()); setSure(false); }} title={t("attention.card")}>⋯</button>
       <Show when={open()}>
         <div class="menu">
