@@ -55,37 +55,88 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---- shell ---- */
 
-.shell { display: grid; grid-template-columns: 210px 1fr; grid-template-rows: minmax(0, 1fr); height: 100%; }
+.shell { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); height: 100%; }
 
+/* On the right, so the window's own buttons keep the left corner to
+   themselves. Narrow is icons alone, and the names come over the work as pills
+   on hover; wide is the old sidebar. Not animated between the two: a terminal
+   refits on every frame of a width that is changing. */
 .sidebar {
+  position: relative; z-index: 6; /* the pills go out over whatever is beside it */
+  width: 52px;
   background: var(--panel);
-  border-right: 1px solid var(--line);
-  display: flex; flex-direction: column;
-  padding: 44px 10px 10px; /* room for the hidden macOS title bar */
+  border-left: 1px solid var(--line);
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0 8px 10px;
   gap: 2px;
 }
+.sidebar.wide { width: 228px; align-items: stretch; padding: 0 10px 10px; }
 
-.brand {
-  font-weight: 600; letter-spacing: .12em; color: var(--faint);
-  padding: 6px 10px 14px; font-size: 12px;
+/* As tall as the ribbon's bar, and a handle for the window like it. */
+.sidebar-head {
+  flex: 0 0 44px; align-self: stretch;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 6px;
+  --wails-draggable: drag;
 }
+.sidebar-head button { --wails-draggable: no-drag; }
+.sidebar.wide .sidebar-head { justify-content: space-between; padding-left: 10px; }
+
+.brand { font-weight: 600; letter-spacing: .12em; color: var(--faint); font-size: 12px; }
 
 .nav {
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 10px; border-radius: var(--radius);
-  background: none; border: 0; cursor: pointer; text-align: left; width: 100%;
+  position: relative;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 36px; height: 36px; flex: none;
+  border-radius: var(--radius);
+  background: none; border: 0; cursor: pointer; text-align: left;
   color: var(--dim);
 }
+.sidebar.wide .nav { width: 100%; height: auto; justify-content: flex-start; padding: 7px 10px; }
+.sidebar.wide .nav.toggle { width: 32px; height: 32px; padding: 0; justify-content: center; }
+.nav.toggle { color: var(--faint); }
 .nav.apart { margin-top: 14px; }
 .nav:hover { background: var(--panel-2); color: var(--text); }
 .nav.on { background: var(--panel-2); color: var(--text); }
+.nav .icon { width: 18px; height: 18px; flex: none; }
+.nav .nav-label { display: none; }
+.sidebar.wide .nav .nav-label { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav .count {
   margin-left: auto; font-size: 12px; color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
 .nav .count.alert { color: var(--warn); }
 
-.main { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 44px 24px 40px; }
+/* Narrow, the count and the update dot sit on the icon's corner. */
+.sidebar:not(.wide) .nav .count {
+  position: absolute; top: 1px; right: 0;
+  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px;
+  font-size: 10px; line-height: 15px; text-align: center; font-weight: 600;
+  background: var(--line); color: var(--dim);
+}
+.sidebar:not(.wide) .nav .count.alert { background: var(--warn); color: var(--bg); }
+.sidebar:not(.wide) .nav .mark { position: absolute; top: 5px; right: 5px; margin: 0; }
+.sidebar:not(.wide) .nav .count + .mark { top: auto; bottom: 5px; }
+
+.tip {
+  position: absolute; right: calc(100% + 12px); top: 50%;
+  transform: translate(4px, -50%);
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 5px 13px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid #3a4056;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+  color: var(--text); font-size: 12.5px; font-weight: 500; white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity .12s, transform .12s;
+}
+.tip-note { color: var(--accent); font-size: 11.5px; font-weight: 400; }
+.nav:hover .tip, .nav:focus-visible .tip { opacity: 1; transform: translate(0, -50%); }
+.sidebar.wide .tip { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tip { transition: none; transform: translate(0, -50%); }
+}
+
+.main { min-height: 0; isolation: isolate; overflow: auto; overscroll-behavior: contain; padding: 44px 24px 40px; }
 .main.with-panel { display: grid; grid-template-columns: 1fr minmax(360px, 460px); gap: 20px; align-items: start; }
 
 h1 { font-size: 19px; margin: 0 0 4px; font-weight: 600; }
@@ -348,8 +399,8 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 
    Two axes, and the scrolling says which is which. Sideways is one card's steps;
    up and down is between cards. The band fills the window because it is the
-   work rather than a document about it — the sidebar is not hidden to look
-   clean, it is absent because there is nothing beside the job you are doing.
+   work rather than a document about it: nothing sits beside the job but the
+   narrow sidebar, the way out.
 
    This is the only place in the stylesheet that moves. A screen appearing
    instantly at a new scroll position leaves no way to know you moved, so the
@@ -364,7 +415,9 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
    It is a band, not a page — a band whose bottom edge you have to go looking
    for is a page pretending to be one. */
 
-.shell.full { display: block; position: relative; height: 100dvh; overflow: hidden; }
+/* Isolated, like .main, so nothing inside — xterm's own layers go up to z-index
+   7 — can climb over the sidebar's pills. */
+.full { position: relative; isolation: isolate; min-width: 0; height: 100dvh; overflow: hidden; }
 
 .ribbon {
   --bar: 44px;      /* what the window reserves for its hidden title bar */
@@ -386,22 +439,8 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
   --wails-draggable: drag;
 }
 /* Dragging the window from a button is not what pressing it means. */
-.ribbon-bar button, .ribbon-bar .sections, .ribbon-bar .card-menu { --wails-draggable: no-drag; }
+.ribbon-bar button, .ribbon-bar .card-menu { --wails-draggable: no-drag; }
 .ribbon-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* The way out. Folded away because a bar with seven buttons in it would be the
-   sidebar again, lying down. */
-.sections { position: relative; flex: none; }
-
-.chevron {
-  display: flex; align-items: center; gap: 5px;
-  padding: 2px 7px; border: 0; border-radius: 6px;
-  background: none; color: var(--faint); cursor: pointer;
-  font-size: 11px; font-weight: 600; letter-spacing: .1em;
-}
-.chevron:hover { background: var(--panel-2); color: var(--text); }
-.chevron .caret { font-weight: 400; letter-spacing: 0; font-size: 12px; line-height: 1; }
-.chevron .caret.up { transform: rotate(180deg); }
 
 .menu {
   position: absolute; top: 26px; left: 0; z-index: 5;
@@ -694,14 +733,12 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .diff-row.note { color: var(--faint); font-style: italic; }
 
 /* Update. A dot beside the section rather than a number: a waiting version
- * is one thing, not a pile of them, and «1» there reads as a count of nothing.
- * The same mark in the sidebar and in the ribbon's menu, because it is the same
- * list. */
-.nav .mark, .menu .mark {
+ * is one thing, not a pile of them, and «1» there reads as a count of nothing. */
+.nav .mark {
   margin-left: auto; width: 7px; height: 7px; border-radius: 50%;
   background: var(--accent); flex: none;
 }
-.nav .count + .mark, .menu .count + .mark { margin-left: 6px; }
+.nav .count + .mark { margin-left: 6px; }
 
 .update-line { display: flex; flex-wrap: wrap; column-gap: 6px; }
 .update-line > * + *::before { content: "·"; margin-right: 6px; color: var(--faint); }

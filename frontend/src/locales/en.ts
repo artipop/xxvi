@@ -76,6 +76,8 @@ export const en: Dict = {
   "nav.agents": "Agents",
   "nav.settings": "Settings",
   "nav.updateMark": "A new version is available",
+  "nav.expand": "Expand the sidebar",
+  "nav.collapse": "Collapse the sidebar",
 
   // ---- settings ----
   "settings.title": "Settings",
@@ -314,7 +316,6 @@ export const en: Dict = {
   "ribbon.next": "Next →",
   "ribbon.draftKeys": "Enter starts, Shift+Enter is a new line",
   "ribbon.journalKeys": "J or Esc",
-  "ribbon.sections": "Sections (Esc goes to the inbox)",
   "ribbon.sureDrop": "Really drop?",
   "ribbon.keysHereTitle": "Keys go here. Click the header to give them back to the ribbon",
   "ribbon.keysHere": "keys here",

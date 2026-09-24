@@ -75,6 +75,8 @@ export const ru: Dict = {
   "nav.agents": "Агенты",
   "nav.settings": "Настройки",
   "nav.updateMark": "Есть новая версия",
+  "nav.expand": "Развернуть панель",
+  "nav.collapse": "Свернуть панель",
 
   // ---- settings ----
   "settings.title": "Настройки",
@@ -319,7 +321,6 @@ export const ru: Dict = {
   "ribbon.next": "Дальше →",
   "ribbon.draftKeys": "Enter — начать, Shift+Enter — новая строка",
   "ribbon.journalKeys": "J или Esc",
-  "ribbon.sections": "Разделы (Esc — во входящие)",
   "ribbon.sureDrop": "Точно отбросить?",
   "ribbon.keysHereTitle": "Клавиши уходят сюда. Нажмите на заголовок, чтобы вернуть их ленте",
   "ribbon.keysHere": "клавиши здесь",

@@ -10,7 +10,6 @@ import { attention, closedRibbon, guard, list, loadAttention, loadRibbons, openR
 import { QuestionForm } from "./attention";
 import { JournalOf } from "./journal";
 import { Compose } from "./compose";
-import { NAV } from "../nav";
 import { entryText, label, propName, questionText, say, t } from "../i18n";
 import { MarkButtons, RemarksForm, sendMark } from "./marks";
 import type { Msg } from "../../bindings/github.com/artipop/xxvi/internal/msg/models";
@@ -91,7 +90,6 @@ export default function Ribbon(): JSX.Element {
   const [moved, setMoved] = createSignal<Record<string, boolean>>({});
   const [widths, setWidths] = createSignal<Record<string, number>>({});
 
-  const [menu, setMenu] = createSignal(false);
   const [journal, setJournal] = createSignal(false);
   // A new task is a ribbon of its own, not a dialog over somebody else's: it
   // sits at the end of the stack with one empty window to write it in, and
@@ -339,8 +337,7 @@ export default function Ribbon(): JSX.Element {
         e.preventDefault(); setJournal(!journal()); break;
       case "Escape":
         e.preventDefault();
-        if (menu()) setMenu(false);
-        else if (journal()) setJournal(false);
+        if (journal()) setJournal(false);
         else setTab("inbox");
         break;
     }
@@ -363,7 +360,6 @@ export default function Ribbon(): JSX.Element {
       {/* The only chrome: room for the window's own buttons, the name of the
           job in front of you, and the one offer the ribbon ever makes. */}
       <header class="ribbon-bar">
-        <Sections open={menu()} setOpen={setMenu} />
         <span class="ribbon-where">
           <Show when={openRibbon() === DRAFT || ribbons.length === 0}>{t("ribbon.newTask")}</Show>
           {current()?.title}
@@ -500,54 +496,6 @@ export default function Ribbon(): JSX.Element {
           </For>
         </nav>
         </Show>
-    </div>
-  );
-}
-
-// The ribbon has no sidebar, so the way out of it is a chevron: the sections
-// are still one list (see nav.ts), just folded away until asked for. A bar with
-// seven buttons in it would be the sidebar again, lying down.
-function Sections(props: { open: boolean; setOpen: (v: boolean) => void }): JSX.Element {
-  let box: HTMLDivElement | undefined;
-
-  // Clicking anywhere else is an answer too — «not this», and a menu that
-  // needs to be dismissed on its own terms is a menu in the way.
-  onSettled(() => {
-    const away = (e: MouseEvent) => {
-      if (box && !box.contains(e.target as Node)) props.setOpen(false);
-    };
-    document.addEventListener("mousedown", away);
-    return () => document.removeEventListener("mousedown", away);
-  });
-
-  return (
-    <div class="sections" ref={box}>
-      <button class="chevron" onClick={() => props.setOpen(!props.open)} title={t("ribbon.sections")}>
-        XXVI <span class={`caret ${props.open ? "up" : ""}`}>⌄</span>
-      </button>
-      <Show when={props.open}>
-        <div class="menu">
-          <For each={NAV}>
-            {(item) => (
-              <>
-                <Show when={item.apart}><hr /></Show>
-                <button
-                  class={item.tab === "ribbon" ? "on" : ""}
-                  onClick={() => { props.setOpen(false); setTab(item.tab); }}
-                >
-                  <span>{item.label()}</span>
-                  <Show when={item.count && item.count()! > 0}>
-                    <span class={`count ${item.alert ? "alert" : ""}`}>{item.count!()}</span>
-                  </Show>
-                  <Show when={item.mark && item.mark()}>
-                    <span class="mark" title={t("nav.updateMark")} />
-                  </Show>
-                </button>
-              </>
-            )}
-          </For>
-        </div>
-      </Show>
     </div>
   );
 }
