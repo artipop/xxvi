@@ -453,6 +453,15 @@ export function SetAssignee(cardID: string, who: string): $CancellablePromise<$m
 }
 
 /**
+ * SetBriefLanguage keeps the language the screen is showing, in English. Kept
+ * rather than held in memory, so a card that starts before the window has
+ * loaded — or with no window at all — is still briefed in it.
+ */
+export function SetBriefLanguage(name: string): $CancellablePromise<void> {
+    return $Call.ByID(139583429, name);
+}
+
+/**
  * SetCardProject says where a card's work happens. Beside the assignee on
  * purpose: both are about by whom and where, and both are a person's answer
  * rather than the graph's.

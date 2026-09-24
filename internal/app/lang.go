@@ -43,34 +43,27 @@ func (s *API) SetLanguage(chosen string) error {
 	return s.app.Store.SetSetting(langSetting, chosen)
 }
 
-// briefLanguages names the UI's languages in English, which is what every brief
-// is written in. The keys are i18n.ts's LANGS: a language the UI has no words
-// for is not one the person reads this app in.
-var briefLanguages = map[string]string{"en": "English", "ru": "Russian"}
+// briefLangSetting is the language the screen is showing, named in English for
+// a brief. The UI says it rather than this side working it out: which
+// languages there are words for, and what «system» came to, are the UI's to
+// know, and a second copy of that list here would drift from the first.
+const briefLangSetting = "ui.lang.brief"
 
-// AgentLanguage is the language the person reads the app in, named for a brief.
-func (a *App) AgentLanguage() string {
-	chosen, err := a.Store.Setting(langSetting, LangSystem)
-	if err != nil {
-		chosen = LangSystem
-	}
-	return agentLanguage(chosen, systemLanguages())
+// SetBriefLanguage keeps the language the screen is showing, in English. Kept
+// rather than held in memory, so a card that starts before the window has
+// loaded — or with no window at all — is still briefed in it.
+func (s *API) SetBriefLanguage(name string) error {
+	return s.app.Store.SetSetting(briefLangSetting, strings.TrimSpace(name))
 }
 
-// agentLanguage resolves «system» the way the UI does (i18n.ts pick), so the
-// agent answers in the language the screen is showing and not in a second
-// guess at it.
-func agentLanguage(chosen string, system []string) string {
-	if name, ok := briefLanguages[chosen]; ok {
-		return name
+// AgentLanguage is the language the person reads the app in, as the UI last
+// named it. Empty until it ever has, and the brief then says nothing.
+func (a *App) AgentLanguage() string {
+	name, err := a.Store.Setting(briefLangSetting, "")
+	if err != nil {
+		return ""
 	}
-	for _, tag := range system {
-		base, _, _ := strings.Cut(strings.ToLower(strings.ReplaceAll(tag, "_", "-")), "-")
-		if name, ok := briefLanguages[base]; ok {
-			return name
-		}
-	}
-	return briefLanguages["en"]
+	return name
 }
 
 // envLanguages reads the POSIX locale variables in the order they win. On macOS

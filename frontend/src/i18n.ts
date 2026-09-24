@@ -77,6 +77,16 @@ export const lang = (): Lang => {
   return c === "system" ? systemLang() : c;
 };
 
+/** langInEnglish names a language for an agent's brief, which is written in
+ *  English. The runtime knows every name, so no list of them is kept here. */
+export function langInEnglish(l: Lang): string {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "language" }).of(l) ?? l;
+  } catch {
+    return l;
+  }
+}
+
 /** applyLanguage takes what the backend knows: the person's choice and the
  *  system's languages. An empty system list means the backend could not learn
  *  them, and the webview's guess stays. */

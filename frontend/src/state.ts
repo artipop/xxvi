@@ -6,7 +6,7 @@ import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp
 import type { Card, Flow, InboxGroup, Project, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { CardSummary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
-import { applyLanguage, choose, type Choice, errorText, label, t } from "./i18n";
+import { applyLanguage, choose, type Choice, errorText, label, lang, langInEnglish, t } from "./i18n";
 
 // Everything the screens read, in one place. The backend is the only copy of
 // the truth — nothing here is computed from an earlier answer — so a reload is
@@ -95,13 +95,21 @@ export function syncNotificationWords() {
 export async function loadLanguage() {
   try { applyLanguage(await API.Language()); } catch (e) { report(e); }
   syncNotificationWords();
+  syncBriefLanguage();
 }
 
 /** chooseLanguage switches the screen at once and keeps the choice. */
 export async function chooseLanguage(c: Choice) {
   choose(c);
   syncNotificationWords();
+  syncBriefLanguage();
   await guard(() => API.SetLanguage(c));
+}
+
+/** syncBriefLanguage tells the backend what the screen resolved to, so agents
+ *  write in it: «system» is only resolved here. */
+function syncBriefLanguage() {
+  API.SetBriefLanguage(langInEnglish(lang())).catch((e) => console.error(e));
 }
 
 /** guard runs an action and reports a refusal instead of throwing it away. */
