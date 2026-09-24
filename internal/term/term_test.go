@@ -2,6 +2,7 @@ package term
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -172,10 +173,12 @@ func TestTheSocketRefusesAWrongToken(t *testing.T) {
 // screen of that step addresses the terminal by the session it is.
 func TestAttachRunsTheArgvUnderTheGivenID(t *testing.T) {
 	m := manager(t)
-	s, err := m.Attach("run-1", "card-1", t.TempDir(), []string{"echo", "привет из шага"}, nil)
+	// Kept alive: a terminal whose process has ended is replaced, not handed back.
+	s, err := m.Attach("run-1", "card-1", t.TempDir(), []string{"sh", "-c", "echo привет из шага; sleep 30"}, nil)
 	if err != nil {
 		t.Fatalf("открыть терминал шага: %v", err)
 	}
+	defer s.Close()
 	if s.ID != "run-1" || m.Get("run-1") != s {
 		t.Fatalf("терминал должен зваться идентификатором запуска: %q", s.ID)
 	}
@@ -276,5 +279,103 @@ func TestCloseWaitsForTheTail(t *testing.T) {
 	m.Close()
 	if tail := m.transcript("run-4"); !strings.Contains(string(tail), "шаг идёт") {
 		t.Fatalf("после Close хвост уже должен лежать на диске: %q", tail)
+	}
+}
+
+// The last thing a CLI prints before it exits is usually the one that matters —
+// its answer, its final frame — and it is still in the pty when the process is
+// reaped. Reaping must not be what closes the pty on it.
+func TestTheLastOutputOutlivesTheProcess(t *testing.T) {
+	m := manager(t)
+	script := `i=0; while [ $i -lt 3000 ]; do echo "строка $i"; i=$((i+1)); done; echo КОНЕЦ`
+	for run := 0; run < 50; run++ {
+		s, err := m.Attach(fmt.Sprintf("run-tail-%d", run), "card-1", t.TempDir(), []string{"sh", "-c", script}, nil)
+		if err != nil {
+			t.Fatalf("открыть терминал шага: %v", err)
+		}
+		select {
+		case <-s.Done():
+		case <-time.After(15 * time.Second):
+			t.Fatal("скрипт должен был закончиться")
+		}
+		if !strings.Contains(string(s.History()), "КОНЕЦ") {
+			t.Fatalf("прогон %d: последняя строка потерялась, хвост: %q", run, tail(s.History()))
+		}
+	}
+}
+
+func tail(b []byte) string {
+	if len(b) > 200 {
+		b = b[len(b)-200:]
+	}
+	return string(b)
+}
+
+// Windows come and go while the process prints, and each one leaving closes a
+// channel the reader may be sending to that very moment. That race used to be
+// a panic, and a panic here is the whole application gone.
+func TestViewersComingAndGoingDuringOutput(t *testing.T) {
+	m := manager(t)
+	s, err := m.Attach("run-busy", "card-1", t.TempDir(), []string{"yes", "шум"}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	defer s.Close()
+	for i := 0; i < 20000; i++ {
+		_, _, cancel := s.Subscribe()
+		cancel()
+	}
+}
+
+// A viewer that stops reading is let go rather than skipped past: a skipped
+// chunk is a screen drawn wrong for the rest of the session, a closed
+// subscription is a signal to start over from the history.
+func TestASlowViewerIsLetGoNotSkipped(t *testing.T) {
+	m := manager(t)
+	s, err := m.Attach("run-flood", "card-1", t.TempDir(), []string{"yes", "шум"}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	defer s.Close()
+	_, updates, cancel := s.Subscribe()
+	defer cancel()
+
+	time.Sleep(500 * time.Millisecond)
+	deadline := time.After(15 * time.Second)
+	for {
+		select {
+		case _, ok := <-updates:
+			if !ok {
+				if !s.Alive() {
+					t.Fatal("подписка должна закрыться из-за отставания, а не из-за конца процесса")
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("отстающего зрителя должны были отпустить")
+		}
+	}
+}
+
+// Close hangs up before it kills, so a CLI gets to leave the way it would when
+// its window is closed: saving what it has and drawing its last frame.
+func TestCloseHangsUpBeforeKilling(t *testing.T) {
+	m := manager(t)
+	s, err := m.Attach("run-hup", "card-1", t.TempDir(),
+		[]string{"sh", "-c", `trap 'echo прощай; exit 0' HUP; echo готов; while :; do sleep 0.1; done`}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	history, updates, cancel := s.Subscribe()
+	read(t, updates, history, "готов")
+	cancel()
+
+	started := time.Now()
+	s.Close()
+	if took := time.Since(started); took >= closeGrace {
+		t.Fatalf("процесс, ушедший сам, не должен ждать убийства: %v", took)
+	}
+	if !strings.Contains(string(s.History()), "прощай") {
+		t.Fatalf("процесс должен был успеть ответить на hangup: %q", tail(s.History()))
 	}
 }

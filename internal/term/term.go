@@ -33,6 +33,13 @@ import (
 	"github.com/google/uuid"
 )
 
+// closeGrace is how long a hung-up process has to leave on its own before it
+// is killed, and drainWait how long its output is read after it has gone.
+const (
+	closeGrace = 2 * time.Second
+	drainWait  = time.Second
+)
+
 // historyCap is how much of what a terminal printed is kept for a screen that
 // is opened again. Enough to see how a build ended, not so much that a chatty
 // process becomes the application's memory profile.
@@ -66,6 +73,8 @@ type Session struct {
 	// tail, if any, is on disk — what Close waits for.
 	forgotten chan struct{}
 
+	// drained closes when everything the process printed has been read.
+	drained  chan struct{}
 	done     chan struct{}
 	closeOne sync.Once
 	log      *slog.Logger
@@ -276,9 +285,7 @@ func (m *Manager) CloseCard(cardID string) {
 		}
 	}
 	m.mu.Unlock()
-	for _, s := range doomed {
-		s.Close()
-	}
+	closeAll(doomed)
 }
 
 // Close ends everything. Called when the application does.
@@ -289,10 +296,25 @@ func (m *Manager) Close() {
 		doomed = append(doomed, s)
 	}
 	m.mu.Unlock()
+	closeAll(doomed)
 	for _, s := range doomed {
-		s.Close()
 		s.waitBrief()
 	}
+}
+
+// closeAll hangs up on every terminal at once: each is given closeGrace, and
+// giving it to them one after another would make quitting take that many times
+// as long.
+func closeAll(doomed []*Session) {
+	var wg sync.WaitGroup
+	for _, s := range doomed {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.Close()
+		}()
+	}
+	wg.Wait()
 }
 
 // start opens a pty and runs a shell in it.
@@ -341,13 +363,24 @@ func newSession(tty pty.Pty, cmd *pty.Cmd, log *slog.Logger) *Session {
 		cmd:       cmd,
 		subs:      map[chan []byte]struct{}{},
 		done:      make(chan struct{}),
+		drained:   make(chan struct{}),
 		forgotten: make(chan struct{}),
 		log:       log,
 		spoke:     time.Now(),
 	}
+	// Our copy of the slave end would keep the pty open after the process is
+	// gone, and then the reader never hears the end: it is what made reaping
+	// the only signal, and reaping closes the pty on output not yet read.
+	releaseSlave(tty)
 	go s.pump()
 	go func() {
 		_ = cmd.Wait()
+		// Whatever it printed last is still in the pty. A child it left behind
+		// can hold the pty open forever, so the wait for it is bounded.
+		select {
+		case <-s.drained:
+		case <-time.After(drainWait):
+		}
 		s.finish()
 	}()
 	return s
@@ -388,6 +421,7 @@ func loginShell() string {
 // pump reads the pty until it ends, keeping the tail for whoever opens the
 // screen next and handing every chunk to whoever is watching now.
 func (s *Session) pump() {
+	defer close(s.drained)
 	buf := make([]byte, 32<<10)
 	for {
 		n, err := s.tty.Read(buf)
@@ -405,24 +439,28 @@ func (s *Session) pump() {
 
 func (s *Session) publish(chunk []byte) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.spoke = time.Now()
 	s.history = append(s.history, chunk...)
 	if len(s.history) > historyCap {
 		s.history = append([]byte(nil), s.history[len(s.history)-historyCap:]...)
 	}
-	subs := make([]chan []byte, 0, len(s.subs))
-	for c := range s.subs {
-		subs = append(subs, c)
-	}
-	s.mu.Unlock()
 
-	for _, c := range subs {
-		// A viewer that cannot keep up is dropped from this chunk rather than
-		// allowed to stall the pty: the terminal is a live thing, and blocking
-		// its reader to spare one window would freeze the process itself.
+	// Sent under the lock, because the lock is what closes these channels: a
+	// viewer leaving and the process ending both close them, and a send racing
+	// either is a panic that takes the application down. The sends never block,
+	// so holding it costs nothing.
+	for c := range s.subs {
 		select {
 		case c <- chunk:
 		default:
+			// A viewer that cannot keep up loses its subscription, not a chunk.
+			// Blocking would freeze the process on one slow window, and a chunk
+			// skipped is an escape sequence cut in half — a screen drawn wrong
+			// for the rest of the session. A closed subscription on a live
+			// terminal is how the viewer learns to start over from the history.
+			delete(s.subs, c)
+			close(c)
 		}
 	}
 }
@@ -496,12 +534,26 @@ func (s *Session) Alive() bool {
 // Done closes when the process ends.
 func (s *Session) Done() <-chan struct{} { return s.done }
 
-// Close ends the process and the pty.
+// Close ends the process and the pty. It hangs up first, the way a terminal
+// window closing does, and kills only what is still there after closeGrace: a
+// CLI killed outright gets no chance to save its conversation or draw its last
+// frame, and a conversation it did not save is one the next visit cannot
+// continue.
 func (s *Session) Close() {
-	_ = s.tty.Close()
-	if s.cmd != nil && s.cmd.Process != nil {
-		_ = s.cmd.Process.Kill()
+	if !s.Alive() {
+		return
 	}
+	if s.cmd != nil && s.cmd.Process != nil && hangup(s.cmd.Process) == nil {
+		select {
+		case <-s.done:
+			return
+		case <-time.After(closeGrace):
+		}
+	}
+	if s.cmd != nil && s.cmd.Process != nil {
+		kill(s.cmd.Process)
+	}
+	_ = s.tty.Close()
 	s.finish()
 }
 

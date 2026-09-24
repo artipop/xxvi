@@ -113,6 +113,10 @@ func (m *Manager) replay(w http.ResponseWriter, r *http.Request, tail []byte) {
 	_ = write(ctx, conn, websocket.MessageText, []byte(`{"type":"exit"}`))
 }
 
+// resetScreen is RIS: the emulator forgets what it drew and every mode the
+// process had set, so the history replayed after it lands on a blank screen.
+const resetScreen = "\x1bc"
+
 // control is the one message that is not raw bytes.
 type control struct {
 	Type string `json:"type"`
@@ -126,7 +130,7 @@ func (m *Manager) pipe(conn *websocket.Conn, s *Session) {
 	defer conn.Close(websocket.StatusNormalClosure, "")
 
 	history, updates, unsubscribe := s.Subscribe()
-	defer unsubscribe()
+	defer func() { unsubscribe() }()
 
 	// Keystrokes in, and the one thing that is not a keystroke: how big the
 	// window is. Without it the process keeps the default eighty columns while
@@ -171,6 +175,17 @@ func (m *Manager) pipe(conn *websocket.Conn, s *Session) {
 	for {
 		select {
 		case chunk, ok := <-updates:
+			if !ok && s.Alive() {
+				// Dropped for falling behind, with a gap in what it was sent.
+				// The screen is reset and drawn again from the history, which is
+				// whole — the same thing a window opened just now would get.
+				history, updates, unsubscribe = s.Subscribe()
+				redraw := append([]byte(resetScreen), history...)
+				if err := write(ctx, conn, websocket.MessageBinary, redraw); err != nil {
+					return
+				}
+				continue
+			}
 			if !ok {
 				// The subscription ends with the process. Say so, so the screen
 				// draws it as a shell that finished rather than a connection
