@@ -733,13 +733,29 @@ func TestACardCanGoRoundALoopTwice(t *testing.T) {
 // «Ветка» invites it to cut another one where nothing looks for the work.
 func TestPromptSaysTheCardIsOnItsOwnBranch(t *testing.T) {
 	card := model.Card{Title: "Т", WorkMode: model.WorkModeWorktree, Branch: "t-1"}
-	got := ComposePrompt(card, model.Flow{}, model.Stage{}, model.Agent{}, "")
+	got := ComposePrompt(card, model.Flow{}, model.Stage{}, model.Agent{}, "", "")
 	if !strings.Contains(got, "do not create another one") || !strings.Contains(got, "Branch: t-1.") {
 		t.Fatalf("агенту не сказано про ветку задачи:\n%s", got)
 	}
 	card.WorkMode, card.Branch = model.WorkModeFolder, ""
-	if got := ComposePrompt(card, model.Flow{}, model.Stage{}, model.Agent{}, ""); strings.Contains(strings.ToLower(got), "branch") {
+	if got := ComposePrompt(card, model.Flow{}, model.Stage{}, model.Agent{}, "", ""); strings.Contains(strings.ToLower(got), "branch") {
 		t.Fatalf("в папке как есть про ветку молчат:\n%s", got)
+	}
+}
+
+// The language is the app's: the brief carries it, so no agent has to be told in
+// its own prompt, and it does not reach into the repository's own conventions.
+func TestPromptSaysWhichLanguageToWriteIn(t *testing.T) {
+	card := model.Card{Title: "Т", WorkMode: model.WorkModeFolder}
+	got := ComposePrompt(card, model.Flow{}, model.Stage{}, model.Agent{}, "", "Russian")
+	if !strings.Contains(got, "messages to the person in Russian") {
+		t.Fatalf("агенту не сказано, на каком языке писать:\n%s", got)
+	}
+	if !strings.Contains(got, "repository's own conventions") {
+		t.Fatalf("язык сообщений не должен перекрывать правила репозитория:\n%s", got)
+	}
+	if got := ComposePrompt(card, model.Flow{}, model.Stage{}, model.Agent{}, "", ""); strings.Contains(got, "Write your messages") {
+		t.Fatalf("без языка бриф о нём молчит:\n%s", got)
 	}
 }
 

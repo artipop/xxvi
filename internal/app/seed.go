@@ -42,8 +42,6 @@ func defaultAgent() model.Agent {
 	return model.Agent{
 		Name: "Claude",
 		Kind: model.KindClaude,
-		Prompt: "You are working on a task from XXVI. " +
-			"End your message with a short summary of what was done.",
 	}
 }
 

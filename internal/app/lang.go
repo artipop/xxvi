@@ -43,6 +43,36 @@ func (s *API) SetLanguage(chosen string) error {
 	return s.app.Store.SetSetting(langSetting, chosen)
 }
 
+// briefLanguages names the UI's languages in English, which is what every brief
+// is written in. The keys are i18n.ts's LANGS: a language the UI has no words
+// for is not one the person reads this app in.
+var briefLanguages = map[string]string{"en": "English", "ru": "Russian"}
+
+// AgentLanguage is the language the person reads the app in, named for a brief.
+func (a *App) AgentLanguage() string {
+	chosen, err := a.Store.Setting(langSetting, LangSystem)
+	if err != nil {
+		chosen = LangSystem
+	}
+	return agentLanguage(chosen, systemLanguages())
+}
+
+// agentLanguage resolves «system» the way the UI does (i18n.ts pick), so the
+// agent answers in the language the screen is showing and not in a second
+// guess at it.
+func agentLanguage(chosen string, system []string) string {
+	if name, ok := briefLanguages[chosen]; ok {
+		return name
+	}
+	for _, tag := range system {
+		base, _, _ := strings.Cut(strings.ToLower(strings.ReplaceAll(tag, "_", "-")), "-")
+		if name, ok := briefLanguages[base]; ok {
+			return name
+		}
+	}
+	return briefLanguages["en"]
+}
+
 // envLanguages reads the POSIX locale variables in the order they win. On macOS
 // they describe the terminal, not the person's choice in System Settings, so
 // there they are only the fallback.

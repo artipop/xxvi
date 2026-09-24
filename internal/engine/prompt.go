@@ -22,7 +22,12 @@ import (
 // After them come the three things the *route* knows and the agent cannot: what
 // earlier stages left on the card (StageInputs), what this stage owes back
 // (StageOutputs), and — for a card that came back here — why (arrival).
-func ComposePrompt(card model.Card, flow model.Flow, stage model.Stage, agent model.Agent, arrival string) string {
+//
+// Last, the language the person reads the app in (lang, empty for none). It is
+// the app's and not the agent's: the same agent is read in whatever language
+// the screen is showing, and a rule every agent needs is not a line to copy
+// into each of them.
+func ComposePrompt(card model.Card, flow model.Flow, stage model.Stage, agent model.Agent, arrival, lang string) string {
 	var b strings.Builder
 	write := func(text string) {
 		if text = strings.TrimSpace(text); text != "" {
@@ -87,6 +92,12 @@ func ComposePrompt(card model.Card, flow model.Flow, stage model.Stage, agent mo
 	if hint := outcomeHint(flow, stage); hint != "" {
 		b.WriteString("\n")
 		b.WriteString(hint)
+	}
+	// Messages only: a repository says in what language its code, comments and
+	// commits are written, and a brief overriding that would be wrong in every
+	// repository with a rule of its own.
+	if lang = strings.TrimSpace(lang); lang != "" {
+		fmt.Fprintf(&b, "\nWrite your messages to the person in %s; code, comments and commits follow the repository's own conventions.\n", lang)
 	}
 	return strings.TrimSpace(b.String()) + "\n"
 }

@@ -77,6 +77,9 @@ type Engine struct {
 	publisher Publisher
 	ui        Emitter
 	log       *slog.Logger
+	// language names the language the person reads, for the brief. Nil in a
+	// test that does not care, and then the brief says nothing about it.
+	language func() string
 
 	// publishing is the cards a hosting stage is working now. Its own lock:
 	// it is read while the view is built, and a step reports under mu.
@@ -111,6 +114,13 @@ func (e *Engine) SetPublisher(p Publisher) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.publisher = p
+}
+
+// SetLanguage supplies what the brief tells an agent to write in.
+func (e *Engine) SetLanguage(f func() string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.language = f
 }
 
 // TakeIntoWork puts an inbox card onto a flow's entry stage. This is the one
@@ -448,8 +458,12 @@ func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
 		return
 	}
 
+	lang := ""
+	if e.language != nil {
+		lang = e.language()
+	}
 	job := Job{Card: card, Flow: flow, Stage: stage, Agent: agent,
-		Prompt: ComposePrompt(card, flow, stage, agent, e.arrival(card.ID, flow, stage))}
+		Prompt: ComposePrompt(card, flow, stage, agent, e.arrival(card.ID, flow, stage), lang)}
 	if err := e.runner.Start(job); err != nil {
 		e.failStage(card, flow, stage, err)
 		return

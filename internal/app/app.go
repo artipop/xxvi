@@ -123,6 +123,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	}, log)
 	// The two know about each other, so one of them is wired second.
 	a.Engine.SetRunner(a.Agents)
+	a.Engine.SetLanguage(a.AgentLanguage)
 
 	// A terminal opens in the card's own working folder — the same one its
 	// agent works in, so what a person types and what the agent did are one

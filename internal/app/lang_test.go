@@ -5,6 +5,25 @@ import (
 	"testing"
 )
 
+// «system» means what the screen shows: the first system language the UI has
+// words for, English when there is none.
+func TestAgentLanguage(t *testing.T) {
+	for _, c := range []struct {
+		chosen string
+		system []string
+		want   string
+	}{
+		{chosen: "ru", system: []string{"en-US"}, want: "Russian"},
+		{chosen: LangSystem, system: []string{"de-DE", "ru_RU", "en"}, want: "Russian"},
+		{chosen: LangSystem, system: []string{"de-DE"}, want: "English"},
+		{chosen: LangSystem, want: "English"},
+	} {
+		if got := agentLanguage(c.chosen, c.system); got != c.want {
+			t.Fatalf("%q %q: got %q, want %q", c.chosen, c.system, got, c.want)
+		}
+	}
+}
+
 func TestEnvLanguages(t *testing.T) {
 	for _, c := range []struct {
 		name                     string
