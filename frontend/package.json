@@ -11,15 +11,19 @@
   },
   "dependencies": {
     "@dschz/solid-flow": "1.0.0-next.19",
-    "@solidjs/web": "2.0.0-rc.1",
+    "@solidjs/web": "2.0.0-rc.2",
     "@wailsio/runtime": "latest",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
-    "solid-js": "2.0.0-rc.1"
+    "solid-js": "2.0.0-rc.2"
   },
   "devDependencies": {
     "@solidjs/vite-plugin": "3.0.0-next.31",
     "typescript": "^5.9.3",
     "vite": "^7.3.6"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true
   }
 }

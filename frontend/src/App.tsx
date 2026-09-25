@@ -1,18 +1,19 @@
-import { onSettled, Show } from "solid-js";
+import { lazy, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { error, loadAll, loadLanguage, setError, subscribe } from "./state";
 import InboxView from "./views/inbox";
 import WorkView from "./views/work";
-import FlowsView from "./views/flows";
 import AgentsView from "./views/agents";
 import SourcesView from "./views/sources";
 import ProjectsView from "./views/projects";
 import AttentionView from "./views/attention";
-import RibbonView from "./views/ribbon";
 import SettingsView from "./views/settings";
 import CardPanel from "./views/card";
 import { openCard, tab } from "./state";
 import Sidebar from "./sidebar";
+
+const FlowsView = lazy(() => import("./views/flows"));
+const RibbonView = lazy(() => import("./views/ribbon"));
 
 export default function App(): JSX.Element {
   onSettled(() => {
