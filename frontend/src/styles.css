@@ -305,6 +305,10 @@ input[type="radio"]:checked::after { content: ""; width: 8px; height: 8px; borde
 label.field { display: block; margin-bottom: 10px; }
 label.field > span, .field-label { display: block; color: var(--dim); font-size: 12px; margin-bottom: 3px; }
 .caption { color: var(--dim); font-size: 12px; }
+/* A setting the plugin refused (sources.tsx): the form points at it. */
+label.field.refused input, label.field.refused select { border-color: var(--bad); }
+label.field.refused > span { color: var(--bad); }
+.bad-text { color: var(--bad); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .hosting { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
 .hosting > .field-label { margin-bottom: -5px; }

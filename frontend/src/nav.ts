@@ -4,11 +4,6 @@ import { attention, inbox, list, updateWaiting, workRibbons, type Tab } from "./
 
 // The sections, named once, for the sidebar on the right of every screen.
 //
-// «Sources» is not here on purpose. The one real source — the MRs waiting on a
-// review — has nothing to set but on and off, and that switch is on the
-// project it reads; the rest are demos, and a section whose use is a demo
-// misleads. The screen comes back with the first source that has settings.
-
 export type NavItem = {
   tab: Tab;
   /** label is a function so the menu follows the language as it changes. */
@@ -29,6 +24,7 @@ export const NAV: NavItem[] = [
   { tab: "ribbon", icon: "ribbon", label: () => t("nav.ribbon"), count: () => workRibbons().length },
   { tab: "attention", icon: "attention", label: () => t("nav.attention"), count: () => attention().length, alert: true },
   { tab: "projects", icon: "projects", label: () => t("nav.projects"), apart: true },
+  { tab: "sources", icon: "sources", label: () => t("nav.sources") },
   { tab: "agents", icon: "agents", label: () => t("nav.agents") },
   { tab: "flows", icon: "flows", label: () => t("nav.flows") },
   // Updates live in the settings, so the dot that says one is waiting sits

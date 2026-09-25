@@ -4,7 +4,8 @@ import * as API from "../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { AgentsView, CardView, UpdateState, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp/models";
 import type { Card, Flow, Folder, InboxGroup, Project, Source, StageTemplate } from "../bindings/github.com/artipop/xxvi/internal/model/models";
-import type { CardSummary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
+import type { CardSummary, SourcePlugin } from "../bindings/github.com/artipop/xxvi/internal/app/models";
+import type { Status as SourceStatus } from "../bindings/github.com/artipop/xxvi/internal/sources/models";
 import type { RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
 import { applyLanguage, choose, type Choice, errorText, label, lang, langInEnglish, t } from "./i18n";
 
@@ -19,6 +20,11 @@ export const [flows, setFlows] = createSignal<Flow[]>([]);
 export const [sources, setSources] = createSignal<Source[]>([]);
 // The flow editor's palette: the kinds of node, as rows a person edits.
 export const [templates, setTemplates] = createSignal<StageTemplate[]>([]);
+// What each plugin source is doing, by name, and the plugins a source can be
+// made from. Both live in the runner rather than the database, so they are read
+// separately from the registry.
+export const [sourceStatus, setSourceStatus] = createSignal<Record<string, SourceStatus>>({});
+export const [sourcePlugins, setSourcePlugins] = createSignal<SourcePlugin[]>([]);
 export const [agents, setAgents] = createSignal<AgentsView>({ agents: [], adapters: [], proxies: [] });
 export const [attention, setAttention] = createSignal<Attention[]>([]);
 export const [projects, setProjects] = createSignal<Project[]>([]);
@@ -162,6 +168,12 @@ export async function loadFlows() {
 }
 export async function loadSources() {
   try { setSources(list(await API.Sources())); } catch (e) { report(e); }
+  try {
+    const all: Record<string, SourceStatus> = {};
+    for (const s of list(await API.SourceStatuses())) all[s.source] = s;
+    setSourceStatus(all);
+    setSourcePlugins(list(await API.SourcePlugins()));
+  } catch (e) { report(e); }
 }
 export async function loadTemplates() {
   try { setTemplates(list(await API.StageTemplates())); } catch (e) { report(e); }
@@ -253,6 +265,10 @@ export function subscribe() {
   Events.On("attention", () => { void loadAttention(); void refreshCard(); });
   Events.On("flows", () => { void loadFlows(); });
   Events.On("sources", () => { void loadSources(); });
+  Events.On("sourceStatus", (e) => {
+    const s = e.data as SourceStatus;
+    setSourceStatus((all) => ({ ...all, [s.source]: s }));
+  });
   Events.On("agents", () => { void loadAgents(); });
   Events.On("templates", () => { void loadTemplates(); });
   Events.On("projects", () => { void loadProjects(); });

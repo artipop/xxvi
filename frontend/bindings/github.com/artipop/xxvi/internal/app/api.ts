@@ -33,6 +33,9 @@ import * as launch$0 from "../launch/models.js";
 import * as model$0 from "../model/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as sources$0 from "../sources/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as store$0 from "../store/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -716,6 +719,14 @@ export function SetReviewInbox(projectID: string, on: boolean): $CancellableProm
 }
 
 /**
+ * SetSourceToken keeps a source's token in the keychain and starts the source
+ * again with it. An empty token forgets the one kept.
+ */
+export function SetSourceToken(name: string, token: string): $CancellablePromise<void> {
+    return $Call.ByID(1772905961, name, token);
+}
+
+/**
  * SetUpdatesEnabled turns the automatic check on or off. It takes effect on the
  * next tick, not at the next launch.
  */
@@ -739,6 +750,29 @@ export function ShowNativeTerminal(id: string, url: string, x: number, y: number
  */
 export function SkipUpdate(): $CancellablePromise<void> {
     return $Call.ByID(1510861001);
+}
+
+/**
+ * SourceHasToken says whether a token is kept for a source — never the token.
+ */
+export function SourceHasToken(name: string): $CancellablePromise<boolean> {
+    return $Call.ByID(1981689811, name);
+}
+
+/**
+ * SourcePlugins is every manifest there is. The demo file and the review
+ * queue are not in it: one is offered by the form itself, the other made by
+ * connecting a project's hosting.
+ */
+export function SourcePlugins(): $CancellablePromise<$models.SourcePlugin[] | null> {
+    return $Call.ByID(3228240310);
+}
+
+/**
+ * SourceStatuses is what every plugin source is doing now.
+ */
+export function SourceStatuses(): $CancellablePromise<sources$0.Status[] | null> {
+    return $Call.ByID(1795282636);
 }
 
 /**
