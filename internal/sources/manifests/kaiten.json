@@ -1,0 +1,34 @@
+{
+  "name": "kaiten",
+  "title": "Kaiten",
+  "kind": "mcp",
+  "command": "$self",
+  "args": ["mcp", "kaiten"],
+  "tokenEnv": "KAITEN_TOKEN",
+  "env": {
+    "KAITEN_SITE": "{{.Config.site}}"
+  },
+  "auth": {"type": "token"},
+  "fields": [
+    {"key": "site", "title": "Адрес Kaiten", "type": "string", "default": "https://company.kaiten.ru"},
+    {"key": "boardId", "title": "Доска Kaiten (id, необязательно)", "type": "number"},
+    {"key": "spaceId", "title": "Пространство (id, необязательно)", "type": "number"},
+    {"key": "responsibleOnly", "title": "Только где я ответственный", "type": "bool"}
+  ],
+  "mcp": {
+    "tool": "list_my_cards",
+    "arguments": {
+      "boardId": "{{.Config.boardId}}",
+      "spaceId": "{{.Config.spaceId}}",
+      "responsibleOnly": "{{.Config.responsibleOnly}}"
+    },
+    "itemsAt": "cards",
+    "item": {
+      "id": "{{.id}}",
+      "version": "{{.updated}}",
+      "title": "{{.title}}",
+      "body": "{{.description}}",
+      "url": "{{.url}}"
+    }
+  }
+}

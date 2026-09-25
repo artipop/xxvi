@@ -11,6 +11,7 @@ import (
 
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/xxvi/internal/secrets"
 	"github.com/artipop/xxvi/internal/store"
 )
 
@@ -20,7 +21,7 @@ import (
 // that wait on a review.
 type Service struct {
 	store   *store.Store
-	secrets Secrets
+	secrets secrets.Store
 	client  *http.Client
 	log     *slog.Logger
 
@@ -32,14 +33,14 @@ type Service struct {
 	pollState
 }
 
-func New(st *store.Store, secrets Secrets, log *slog.Logger) *Service {
+func New(st *store.Store, tokens secrets.Store, log *slog.Logger) *Service {
 	if log == nil {
 		log = slog.Default()
 	}
-	if secrets == nil {
-		secrets = &Memory{}
+	if tokens == nil {
+		tokens = &secrets.Memory{}
 	}
-	return &Service{store: st, secrets: secrets, client: &http.Client{}, log: log}
+	return &Service{store: st, secrets: tokens, client: &http.Client{}, log: log}
 }
 
 // accountKey is where the account a server's token belongs to is remembered:
@@ -61,7 +62,7 @@ func (s *Service) Describe(p *model.Project) {
 
 // UseSecrets replaces where tokens are kept. A test uses it to stay out of
 // the keychain of the machine it runs on.
-func (s *Service) UseSecrets(secrets Secrets) { s.secrets = secrets }
+func (s *Service) UseSecrets(tokens secrets.Store) { s.secrets = tokens }
 
 // RemoteOption is one of a repository's remotes, as the connect form offers
 // it: the name, the address, and the server and repository it suggests.

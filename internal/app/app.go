@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sync"
 	"unsafe"
+	"time"
 
 	"github.com/artipop/xxvi/internal/acp"
 	"github.com/artipop/xxvi/internal/appmcp"
@@ -20,6 +21,8 @@ import (
 	"github.com/artipop/xxvi/internal/hosting"
 	"github.com/artipop/xxvi/internal/inbox"
 	"github.com/artipop/xxvi/internal/ptyhold"
+	"github.com/artipop/xxvi/internal/secrets"
+	"github.com/artipop/xxvi/internal/sources"
 	"github.com/artipop/xxvi/internal/stagemcp"
 	"github.com/artipop/xxvi/internal/store"
 	"github.com/artipop/xxvi/internal/term"
@@ -48,6 +51,9 @@ type App struct {
 	// Hosting is where projects push: merge requests opened, watched and
 	// reviewed (docs/system.md §15).
 	Hosting *hosting.Service
+	// Sources runs the sources that are programs: plugins and MCP servers
+	// read through a manifest (docs/system.md §8.1).
+	Sources *sources.Runner
 
 	log *slog.Logger
 
@@ -175,11 +181,16 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	a.Agents.SetTerminals(a.Terminals, a.Tools)
 
 	a.Pipeline = inbox.NewPipeline(st, a, log)
-	a.Hosting = hosting.New(st, hosting.Keyring{}, log)
+	a.Hosting = hosting.New(st, secrets.Keyring{}, log)
 	a.Hosting.SetReporter(a.Engine)
 	a.Hosting.SetInbox(a.Pipeline, a.Agents, a.notifyHosting, func(event string) { a.Emit(event, map[string]any{}) })
 	a.Engine.SetPublisher(a.Hosting)
 	a.Poller = inbox.NewPoller(st, a.Pipeline, log)
+	catalog := sources.LoadCatalog(filepath.Join(dataDir, sources.ManifestsDir), inbox.PluginDemo, hosting.PluginReview)
+	for _, problem := range catalog.Problems() {
+		log.Warn("source manifest skipped", "why", problem)
+	}
+	a.Sources = sources.NewRunner(st, catalog, a.Pipeline, secrets.Keyring{}, a.Emit, log)
 
 	// The application from outside. Opened last of the three listeners because
 	// it hands out everything above it, and left out of the way when it cannot
@@ -232,6 +243,7 @@ func (a *App) Start() {
 	a.Poller.Start()
 	a.Hosting.Start()
 	a.startReminders()
+	a.Sources.Start()
 }
 
 // Close stops everything, agents first: a session still writing while the
@@ -240,6 +252,7 @@ func (a *App) Close() error {
 	a.stopReminders()
 	a.Poller.Stop()
 	a.Hosting.Stop()
+	a.Sources.Stop(5 * time.Second)
 	a.Agents.Close()
 	a.Terminals.Close()
 	a.Tools.Close()

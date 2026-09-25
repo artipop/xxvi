@@ -18,6 +18,7 @@ import (
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/nativeterm"
+	"github.com/artipop/xxvi/internal/sources"
 	"github.com/artipop/xxvi/internal/store"
 )
 
@@ -613,6 +614,7 @@ func (s *API) SaveSource(src model.Source) (model.Source, error) {
 	if err != nil {
 		return model.Source{}, err
 	}
+	s.app.Sources.Restart(saved.Name)
 	s.app.Emit(EventSources, map[string]any{"source": saved.Name})
 	return saved, nil
 }
@@ -623,6 +625,7 @@ func (s *API) DeleteSource(name string) error {
 	if err := s.app.Store.DeleteSource(name); err != nil {
 		return err
 	}
+	s.app.Sources.Forget(name)
 	s.app.Emit(EventSources, map[string]any{"source": name})
 	return nil
 }
@@ -633,12 +636,55 @@ func (s *API) PollSource(name string) ([]model.InboxGroup, error) {
 	if src, err := s.app.Store.Source(name); err == nil && src.Plugin == hosting.PluginReview {
 		s.app.Hosting.Poll()
 		return s.Inbox()
+	} else if err == nil && s.app.Sources.Owns(src) {
+		// What it brings arrives on its own, as the inbox event: a plugin may
+		// take a while, and the button is not what should wait for it.
+		if err := s.app.Sources.PollNow(src.Name); err != nil {
+			return nil, err
+		}
+		return s.Inbox()
 	}
 	if err := s.app.Poller.PollByName(name); err != nil {
 		return nil, err
 	}
 	return s.Inbox()
 }
+
+// SourcePlugin is a plugin a source can be made from, as the source form needs
+// it: what to call it and what to ask.
+type SourcePlugin struct {
+	Name       string          `json:"name"`
+	Title      string          `json:"title,omitempty"`
+	Fields     []sources.Field `json:"fields,omitempty"`
+	NeedsToken bool            `json:"needsToken"`
+}
+
+// SourcePlugins is every manifest there is. The demo file and the review
+// queue are not in it: one is offered by the form itself, the other made by
+// connecting a project's hosting.
+func (s *API) SourcePlugins() []SourcePlugin {
+	all := s.app.Sources.Catalog().All()
+	out := make([]SourcePlugin, 0, len(all))
+	for _, m := range all {
+		out = append(out, SourcePlugin{Name: m.Name, Title: m.Title, Fields: m.Fields, NeedsToken: m.NeedsToken()})
+	}
+	return out
+}
+
+// SourceStatuses is what every plugin source is doing now.
+func (s *API) SourceStatuses() []sources.Status { return s.app.Sources.Statuses() }
+
+// SetSourceToken keeps a source's token in the keychain and starts the source
+// again with it. An empty token forgets the one kept.
+func (s *API) SetSourceToken(name, token string) error {
+	if _, err := s.app.Store.Source(name); err != nil {
+		return err
+	}
+	return s.app.Sources.SetToken(name, strings.TrimSpace(token))
+}
+
+// SourceHasToken says whether a token is kept for a source — never the token.
+func (s *API) SourceHasToken(name string) bool { return s.app.Sources.HasToken(name) }
 
 // AddItem files an item into a source by hand. It goes through the source's own
 // file rather than straight into a card, so a hand-added item is an item like

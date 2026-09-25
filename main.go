@@ -34,6 +34,7 @@ import (
 	"github.com/artipop/xxvi/internal/ptyhold"
 	"github.com/artipop/xxvi/internal/stagemcp"
 	"github.com/artipop/xxvi/internal/userpath"
+	"github.com/artipop/xxvi/internal/sources/kaiten"
 )
 
 //go:embed all:frontend/dist
@@ -211,9 +212,17 @@ func main() {
 // of its own: the cards it moves are the cards on the screen, and a second copy
 // of XXVI over the same database would be a second application disagreeing with
 // the first (internal/appmcp).
+//
+// `xxvi mcp kaiten` is the other server this binary carries: the feed a Kaiten
+// source reads (internal/sources/manifests/kaiten.json). The bare `xxvi mcp`
+// stays the application's, because that is the line people have already
+// written into their agents' configuration.
 func maybeRunMCP(args []string) {
 	if len(args) == 0 || args[0] != "mcp" {
 		return
+	}
+	if len(args) > 1 && args[1] == kaiten.ServerName {
+		runKaitenMCP()
 	}
 	dataDir, err := app.DefaultDataDir()
 	if err != nil {
@@ -271,6 +280,24 @@ func maybeAttachTerminal(args []string) {
 		os.Exit(1)
 	}
 	os.Exit(0)
+}
+
+// runKaitenMCP serves the Kaiten feed and exits. The site and the token arrive
+// in the environment, from the fields and the token of the source.
+func runKaitenMCP() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	err := kaiten.ServeStdio(ctx, kaiten.Config{
+		Site:  os.Getenv(kaiten.EnvSite),
+		Token: os.Getenv(kaiten.EnvToken),
+	})
+	switch {
+	case err == nil, errors.Is(err, context.Canceled), errors.Is(err, io.EOF):
+		os.Exit(0)
+	default:
+		fmt.Fprintf(os.Stderr, "mcp kaiten: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 // emitter adapts the Wails event bus to what the packages expect.

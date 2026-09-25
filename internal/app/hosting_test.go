@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/hosting"
 	"github.com/artipop/xxvi/internal/hosting/gitlabtest"
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/xxvi/internal/secrets"
 )
 
 // hosted is a project whose origin is a bare repository on disk — what git
@@ -32,7 +32,7 @@ type hosted struct {
 func newHosted(t *testing.T) hosted {
 	t.Helper()
 	a := open(t)
-	a.Hosting.UseSecrets(&hosting.Memory{})
+	a.Hosting.UseSecrets(&secrets.Memory{})
 	srv := gitlabtest.New()
 	t.Cleanup(srv.Close)
 
