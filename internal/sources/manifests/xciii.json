@@ -1,0 +1,34 @@
+{
+  "name": "xciii",
+  "title": "XCIII: колонка доски",
+  "kind": "mcp",
+  "command": "{{.Config.binary}}",
+  "args": ["mcp", "feed"],
+  "env": {
+    "XCIII_URL": "{{.Config.url}}"
+  },
+  "tokenEnv": "XCIII_FEED_TOKEN",
+  "auth": {"type": "token"},
+  "fields": [
+    {"key": "board", "title": "Доска"},
+    {"key": "column", "title": "Колонка (пусто — вся доска)"},
+    {"key": "binary", "title": "Где лежит XCIII", "default": "/Applications/XCIII.app/Contents/MacOS/XCIII"},
+    {"key": "url", "title": "Адрес сервера XCIII (пусто — приложение на этой машине)"}
+  ],
+  "mcp": {
+    "tool": "list_column_cards",
+    "arguments": {
+      "board": "{{.Config.board}}",
+      "column": "{{.Config.column}}"
+    },
+    "itemsAt": "cards",
+    "item": {
+      "id": "{{.id}}",
+      "version": "{{.updated}}",
+      "title": "{{.title}}",
+      "body": "{{range $name, $value := .properties}}{{$name}}: {{$value}}\n{{end}}",
+      "url": "{{.url}}",
+      "labels": ["{{.column}}"]
+    }
+  }
+}

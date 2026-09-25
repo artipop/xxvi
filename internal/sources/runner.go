@@ -338,13 +338,36 @@ func (r *Runner) loop(ctx context.Context, src model.Source, kick <-chan struct{
 	}
 
 	handler := &pluginHandler{runner: r, source: src.Name}
-	client, err := r.dial(ctx, src, manifest, cred, handler)
-	if err != nil {
-		r.fail(src.Name, err)
-		return
+	// A plugin that did not start, or died, is started again after a pause
+	// rather than given up on: the likeliest reason is another application
+	// that is not open yet — XCIII, for one — and a source that stays broken
+	// after it opens is one somebody has to notice and restart by hand.
+	wait := time.Duration(0)
+	for {
+		if wait > 0 && !sleep(ctx, kick, wait) {
+			return
+		}
+		client, err := r.dial(ctx, src, manifest, cred, handler)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			r.fail(src.Name, err)
+			wait = backoff(wait, src)
+			continue
+		}
+		redial := r.serve(ctx, src, client, handler, kick)
+		client.Close()
+		if !redial {
+			return
+		}
+		wait = backoff(wait, src)
 	}
-	defer client.Close()
+}
 
+// serve polls one running plugin until the source is stopped, it needs a
+// person, or the plugin is gone — and reports whether to start it again.
+func (r *Runner) serve(ctx context.Context, src model.Source, client conn, handler *pluginHandler, kick <-chan struct{}) bool {
 	caps := client.Capabilities()
 	r.setStatus(src.Name, func(s *Status) {
 		s.State, s.Error, s.Field = StateRunning, nil, ""
@@ -353,34 +376,33 @@ func (r *Runner) loop(ctx context.Context, src model.Source, kick <-chan struct{
 		// A plugin that only pushes talks when it has something; the loop only
 		// keeps it alive until the app stops.
 		<-ctx.Done()
-		return
+		return false
 	}
 
 	// The first poll is immediate: a source that was just switched on has been
 	// waiting for whoever switched it on, not for the schedule.
 	wait := time.Duration(0)
 	for {
-		if wait > 0 {
-			select {
-			case <-ctx.Done():
-				return
-			case <-kick:
-			case <-time.After(wait):
-			}
+		if wait > 0 && !sleep(ctx, kick, wait) {
+			return false
 		} else if ctx.Err() != nil {
-			return
+			return false
 		}
 
 		pollCtx, cancel := context.WithTimeout(ctx, pollTimeout)
 		result, err := client.Poll(pollCtx, handler.Cursor())
 		cancel()
 		if ctx.Err() != nil {
-			return
+			return false
 		}
 		if err != nil {
+			if gone(err) {
+				r.fail(src.Name, err)
+				return true
+			}
 			next, stop := r.afterPollError(src, err, wait)
 			if stop {
-				return
+				return false
 			}
 			wait = next
 			continue
@@ -400,6 +422,37 @@ func (r *Runner) loop(ctx context.Context, src model.Source, kick <-chan struct{
 			wait = time.Duration(result.RetryAfterSeconds) * time.Second
 		}
 	}
+}
+
+// gone reports a plugin whose process is no longer there to ask.
+func gone(err error) bool {
+	return msg.Is(err, "plugin.exited") || msg.Is(err, "plugin.stopped")
+}
+
+// sleep waits out a pause, cut short by «read now». False when the source is
+// being stopped.
+func sleep(ctx context.Context, kick <-chan struct{}, d time.Duration) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-kick:
+		return true
+	case <-time.After(d):
+		return true
+	}
+}
+
+// backoff doubles a pause, starting from the source's schedule and never
+// beyond maxBackoff.
+func backoff(wait time.Duration, src model.Source) time.Duration {
+	next := wait * 2
+	if next < interval(src) {
+		next = interval(src)
+	}
+	if next > maxBackoff {
+		next = maxBackoff
+	}
+	return next
 }
 
 // afterPollError decides what a failed poll costs: how long to wait, and
@@ -434,14 +487,7 @@ func (r *Runner) afterPollError(src model.Source, err error, wait time.Duration)
 	})
 	// The backoff doubles the schedule, not the wait that failed: the first
 	// poll waits nothing, and doubling nothing is still nothing.
-	next := wait * 2
-	if next < interval(src) {
-		next = interval(src)
-	}
-	if next > maxBackoff {
-		next = maxBackoff
-	}
-	return next, false
+	return backoff(wait, src), false
 }
 
 // deliver turns what a plugin sent into items and files them. One payload that

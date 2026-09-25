@@ -3,10 +3,13 @@ package sources
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,6 +28,10 @@ import (
 const pluginModeEnv = "XXVI_TEST_SOURCE_PLUGIN"
 
 func servePlugin(mode string) {
+	if mode == "dies" {
+		fmt.Fprintln(os.Stderr, "XCIII не запущен: откройте его")
+		os.Exit(1)
+	}
 	sdk.Serve(sdk.Source{
 		Capabilities: protocol.Capabilities{Poll: true},
 		Poll: func(_ context.Context, req sdk.PollRequest) (sdk.PollResult, error) {
@@ -310,4 +317,88 @@ func TestTheShippedKaitenSourceFillsTheInbox(t *testing.T) {
 	if card.Title != "Починить логин" || card.Body != "падает" || card.URL != api.URL+"/ticket/41" || card.ExternalID != "41" {
 		t.Fatalf("card: %+v", card)
 	}
+}
+
+// The shipped XCIII manifest: the form's fields reach the bridge's command
+// line, its environment and the tool's arguments, and a row of the feed
+// becomes an item whose version is the card's last change.
+func TestTheShippedXCIIIManifestMapsTheFeed(t *testing.T) {
+	m, ok := LoadCatalog("").Get("xciii")
+	if !ok {
+		t.Fatal("the shipped XCIII manifest is missing")
+	}
+	src := m.WithDefaults(model.Source{Name: "Доска", Config: map[string]string{
+		"board": "Работа", "column": "Сегодня", "url": "https://board.example",
+	}})
+	argv, err := m.Argv(src)
+	if err != nil || argv[0] != "/Applications/XCIII.app/Contents/MacOS/XCIII" || argv[1] != "mcp" || argv[2] != "feed" {
+		t.Fatalf("argv: %v, %v", argv, err)
+	}
+	env, _ := m.RenderEnv(src)
+	if env["XCIII_URL"] != "https://board.example" {
+		t.Fatalf("env: %v", env)
+	}
+	args, _ := m.MCP.renderArguments(src)
+	if args["board"] != "Работа" || args["column"] != "Сегодня" {
+		t.Fatalf("arguments: %v", args)
+	}
+
+	row := map[string]any{"id": "c1", "title": "Починить логин", "updated": "1700", "column": "Сегодня",
+		"url": "https://board.example/team/0/b1/0/c1", "properties": map[string]any{"Проект": "xxvi"}}
+	raw, err := m.MCP.Item.render(row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var item model.Item
+	if err := json.Unmarshal(raw, &item); err != nil {
+		t.Fatal(err)
+	}
+	if item.ExternalID != "c1" || item.Version != "1700" || item.Body != "Проект: xxvi" ||
+		item.URL != "https://board.example/team/0/b1/0/c1" || len(item.Labels) != 1 || item.Labels[0] != "Сегодня" {
+		t.Fatalf("item: %+v", item)
+	}
+
+	// On this machine, with no server address, nothing tells the bridge where
+	// to go but the file the running app leaves.
+	local := m.WithDefaults(model.Source{Config: map[string]string{"board": "Работа"}})
+	if env, _ := m.RenderEnv(local); env["XCIII_URL"] != "" {
+		t.Fatalf("an empty address reached the bridge: %v", env)
+	}
+}
+
+// A plugin that dies before it says anything has said why on stderr, and that
+// is what the source's status shows.
+func TestAPluginThatDiesSaysWhy(t *testing.T) {
+	f := setup(t, pluginManifest("dies", false))
+	f.addSource(t, nil)
+	f.runner.Start()
+
+	eventually(t, "the failure reached the status", func() bool { return f.status("Трекер").State == StateError })
+	if e := f.status("Трекер").Error; e == nil || !strings.Contains(e.Arg("stderr"), "XCIII не запущен") {
+		t.Fatalf("status error: %+v", e)
+	}
+}
+
+// A source whose plugin did not start is tried again, and «read now» does not
+// wait out the pause: the application it reads was probably just not open yet.
+func TestASourceThatDidNotStartIsTriedAgain(t *testing.T) {
+	f := setup(t, pluginManifest("ok", false))
+	f.addSource(t, nil)
+	var dials atomic.Int32
+	f.runner.dial = func(context.Context, model.Source, Manifest, plugin.Credentials, plugin.Handler) (conn, error) {
+		if dials.Add(1) == 1 {
+			return nil, errors.New("connection refused")
+		}
+		return fakeConn{poll: func() plugin.PollResult {
+			raw, _ := json.Marshal(model.Item{ExternalID: "1", Title: "Пришло"})
+			return plugin.PollResult{Items: []json.RawMessage{raw}}
+		}}, nil
+	}
+	f.runner.Start()
+	eventually(t, "the first start failed", func() bool { return f.status("Трекер").State == StateError })
+
+	if err := f.runner.PollNow("Трекер"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the second start brought the item", func() bool { return len(f.inbox(t)) == 1 })
 }

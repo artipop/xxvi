@@ -205,7 +205,7 @@ func (c *Client) call(ctx context.Context, method string, params any, out any) e
 		return ctx.Err()
 	case <-c.done:
 		c.forget(id)
-		return msg.Err("plugin.exited", "method", method)
+		return msg.Err("plugin.exited", "method", method, "stderr", c.proc.StderrTail())
 	case resp := <-reply:
 		if resp.Error != nil {
 			return toError(resp.Error)

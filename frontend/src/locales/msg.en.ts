@@ -210,7 +210,7 @@ export const msgEn: Dict = {
   "msg.plugin.noCommand": "Nothing says how to start the plugin",
   "msg.plugin.notStarted": "Could not start {command}",
   "msg.plugin.stopped": "The plugin has already stopped",
-  "msg.plugin.exited": "The plugin exited without answering {method}",
+  "msg.plugin.exited": (a) => a.stderr ? `The plugin exited: ${a.stderr}` : `The plugin exited without answering ${a.method}`,
   "msg.plugin.badAnswer": "Could not read the answer to {method}",
   "msg.plugin.newerProtocol": "The plugin speaks protocol version {theirs} and this app knows {ours}: update the app",
   "msg.plugin.mappingWithoutMCP": "Plugin «{plugin}»: an mcp mapping on a plugin that does not speak MCP",

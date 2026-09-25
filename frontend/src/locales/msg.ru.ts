@@ -209,7 +209,7 @@ export const msgRu: Dict = {
   "msg.plugin.noCommand": "Не сказано, чем запускать плагин",
   "msg.plugin.notStarted": "Не удалось запустить {command}",
   "msg.plugin.stopped": "Плагин уже остановлен",
-  "msg.plugin.exited": "Плагин завершился, не ответив на {method}",
+  "msg.plugin.exited": (a) => a.stderr ? `Плагин завершился: ${a.stderr}` : `Плагин завершился, не ответив на ${a.method}`,
   "msg.plugin.badAnswer": "Не удалось разобрать ответ на {method}",
   "msg.plugin.newerProtocol": "Плагин говорит на версии протокола {theirs}, а приложение понимает {ours}: обновите приложение",
   "msg.plugin.mappingWithoutMCP": "Плагин «{plugin}»: отображение mcp у плагина, который говорит не по MCP",
