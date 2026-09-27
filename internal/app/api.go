@@ -584,20 +584,56 @@ func (s *API) StartTask(text, projectID, workMode, agent, flowID string) (CardVi
 	if text == "" {
 		return CardView{}, msg.Err("task.empty")
 	}
-	if err := s.checkWorkMode(projectID, workMode); err != nil {
+	title, body := taskTitle(text), ""
+	if title != text {
+		body = text
+	}
+	return s.startCard(model.Card{
+		Title: title, Body: body,
+		Assignee: strings.TrimSpace(agent), Project: projectID, WorkMode: workMode,
+	}, flowID)
+}
+
+// ContinueSession starts a card from a conversation somebody already had with
+// the agent's own CLI: its first terminal stage for that agent resumes it by
+// id. The text is optional, because the conversation is the task; without it
+// the card is named after the conversation.
+func (s *API) ContinueSession(sessionID, sessionTitle, text, projectID, workMode, agent, flowID string) (CardView, error) {
+	sessionID, agent = strings.TrimSpace(sessionID), strings.TrimSpace(agent)
+	if sessionID == "" {
+		return CardView{}, msg.Err("sessions.noneChosen")
+	}
+	// The conversation is the assignee's: another agent could not open it.
+	if _, err := s.app.Store.Agent(agent); err != nil {
+		return CardView{}, err
+	}
+	text = strings.TrimSpace(text)
+	title, body := taskTitle(text), ""
+	switch {
+	case text == "" && strings.TrimSpace(sessionTitle) != "":
+		title = taskTitle(sessionTitle)
+	case text == "":
+		title = sessionID
+	case title != text:
+		body = text
+	}
+	return s.startCard(model.Card{
+		Title: title, Body: body, Session: sessionID,
+		Assignee: agent, Project: projectID, WorkMode: workMode,
+	}, flowID)
+}
+
+// startCard makes the card and puts it on the flow, refusing a bad project or
+// flow before anything exists.
+func (s *API) startCard(c model.Card, flowID string) (CardView, error) {
+	if err := s.checkWorkMode(c.Project, c.WorkMode); err != nil {
 		return CardView{}, err
 	}
 	if _, err := s.app.Store.Flow(flowID); err != nil {
 		return CardView{}, err
 	}
-	title, body := taskTitle(text), ""
-	if title != text {
-		body = text
-	}
-	card, err := s.app.Store.CreateCard(model.Card{
-		Title: title, Body: body, State: model.StateInbox,
-		Assignee: strings.TrimSpace(agent), Project: projectID, WorkMode: workMode,
-	})
+	c.State = model.StateInbox
+	card, err := s.app.Store.CreateCard(c)
 	if err != nil {
 		return CardView{}, err
 	}
@@ -863,6 +899,30 @@ func (s *API) checkWorkMode(projectID, mode string) error {
 }
 
 // ---- agents ----
+
+// pastSessionsTimeout bounds asking an agent for its conversations: an adapter
+// run through npx for the first time downloads itself before it answers.
+const pastSessionsTimeout = 90 * time.Second
+
+// PastSessions lists the conversations an agent already had in a project's
+// folder, for a card to continue one of them. A project is required: a card
+// with no project works in a fresh folder, where nobody has talked to anyone.
+func (s *API) PastSessions(agentName, projectID string) ([]acp.PastSession, error) {
+	agent, err := s.app.Store.Agent(agentName)
+	if err != nil {
+		return nil, err
+	}
+	if projectID == "" {
+		return nil, msg.Err("sessions.needProject")
+	}
+	project, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), pastSessionsTimeout)
+	defer cancel()
+	return acp.PastSessions(ctx, agent, project.Path)
+}
 
 // AgentsView is the registry and what this machine can actually run.
 type AgentsView struct {

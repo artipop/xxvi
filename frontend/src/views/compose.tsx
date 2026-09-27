@@ -1,8 +1,9 @@
-import { createSignal, For, onSettled, Show } from "solid-js";
+import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
+import type { PastSession } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
 import { agents, applyCard, flows, guard, list, projects, showRibbon, workModes } from "../state";
-import { t } from "../i18n";
+import { errorText, t, when } from "../i18n";
 
 // A task typed where the work is watched, not filed first and fetched back from
 // the inbox: the inbox is for what arrived and waits for a decision, and a task
@@ -26,6 +27,11 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   const [agent, setAgent] = createSignal(was.agent ?? "");
   const [flow, setFlow] = createSignal(was.flow ?? "");
   const [busy, setBusy] = createSignal(false);
+  // A conversation the agent already had, to be continued rather than begun.
+  const [fromSession, setFromSession] = createSignal(false);
+  const [sessions, setSessions] = createSignal<PastSession[] | undefined>();
+  const [sessionsError, setSessionsError] = createSignal("");
+  const [session, setSession] = createSignal<PastSession | undefined>();
   let box: HTMLTextAreaElement | undefined;
 
   // A remembered choice that is no longer in the registry is not a choice.
@@ -33,25 +39,51 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   // A branch of its own is a question about a repository; anywhere else the
   // answer is the folder as it stands, whatever was remembered.
   const isRepo = () => projects().find((p) => p.id === projectID())?.repo ?? false;
-  const mode = () => (isRepo() && workModes().some((m) => m.value === workMode()) ? workMode() : "");
+  // A conversation's unfinished work is in the project folder itself; a fresh
+  // branch or tree would continue it somewhere that work is not.
+  const mode = () =>
+    !fromSession() && isRepo() && workModes().some((m) => m.value === workMode()) ? workMode() : "";
   const agentName = () =>
     list(agents().agents).find((a) => a.name === agent())?.name ?? list(agents().agents)[0]?.name ?? "";
   const flowID = () => flows().find((f) => f.id === flow())?.id ?? flows()[0]?.id ?? "";
+
+  // Asked of the agent itself, whenever whose conversations or where changes.
+  // The answer to an older question is dropped: a slow adapter must not fill
+  // the list for an agent that is no longer chosen.
+  let asked = 0;
+  createEffect(() => [fromSession(), agentName(), projectID()] as const, ([on, who, where]) => {
+    setSession(undefined);
+    setSessions(undefined);
+    setSessionsError("");
+    if (!on || !who || !where) return;
+    const n = ++asked;
+    API.PastSessions(who, where).then(
+      (got) => { if (n === asked) setSessions(got ?? []); },
+      (err) => { if (n === asked) setSessionsError(errorText(err)); },
+    );
+  });
+
+  const ready = () => !busy() && !!flowID() && (fromSession() ? !!session() : !!text().trim());
 
   // Without scrolling: the stack moves by whole ribbons and only when asked,
   // and a focus that dragged it would land it between two of them.
   onSettled(() => { box?.focus({ preventScroll: true }); });
 
   const start = async () => {
-    if (busy() || !text().trim() || !flowID()) return;
+    if (!ready()) return;
     setBusy(true);
-    const view = await guard(() => API.StartTask(text(), projectID(), mode(), agentName(), flowID()));
+    const from = fromSession() ? session() : undefined;
+    const view = await guard(() =>
+      from
+        ? API.ContinueSession(from.id, from.title ?? "", text(), projectID(), mode(), agentName(), flowID())
+        : API.StartTask(text(), projectID(), mode(), agentName(), flowID()));
     setBusy(false);
     if (!view) return;
     try {
       localStorage.setItem(KEY, JSON.stringify({ project: projectID(), workMode: workMode(), agent: agentName(), flow: flowID() }));
     } catch { /* a convenience, not a record */ }
     setText("");
+    setFromSession(false);
     applyCard(view);
     props.onStarted?.();
     showRibbon(view.card.id);
@@ -62,7 +94,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
       <textarea
         ref={box}
         class="compose-text"
-        placeholder={t("compose.placeholder")}
+        placeholder={t(fromSession() ? "compose.sessionPlaceholder" : "compose.placeholder")}
         value={text()}
         onInput={(e) => setText(e.currentTarget.value)}
         onKeyDown={(e) => {
@@ -72,12 +104,40 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
           if (e.key === "Escape" && props.onCancel) { e.stopPropagation(); props.onCancel(); }
         }}
       />
+      <Show when={fromSession()}>
+        <div class="compose-sessions">
+          <Show when={!projectID()}>
+            <p class="empty">{t("compose.sessionsNeedProject")}</p>
+          </Show>
+          <Show when={projectID() && sessionsError()}>
+            <p class="empty">{sessionsError()}</p>
+          </Show>
+          <Show when={projectID() && !sessionsError() && !sessions()}>
+            <p class="empty">{t("compose.sessionsLoading")}</p>
+          </Show>
+          <Show when={sessions()?.length === 0}>
+            <p class="empty">{t("compose.sessionsNone")}</p>
+          </Show>
+          <For each={sessions() ?? []}>
+            {(s) => (
+              <button
+                class={`compose-session ${session()?.id === s.id ? "on" : ""}`}
+                onClick={() => setSession(s)}
+                title={s.cwd}
+              >
+                <span class="meta">{when(s.updatedAt, false)}</span>
+                <span class="compose-session-title">{s.title || s.id}</span>
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
       <div class="row wrap">
         <select value={projectID()} onChange={(e) => setProject(e.currentTarget.value)} title={t("inbox.where")}>
           <option value="">{t("common.ownFolder")}</option>
           <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
         </select>
-        <Show when={isRepo()}>
+        <Show when={isRepo() && !fromSession()}>
           <select value={mode()} onChange={(e) => setWorkMode(e.currentTarget.value)}
                   title={workModes().find((m) => m.value === mode())?.why}>
             <For each={workModes()}>{(m) => <option value={m.value}>{m.label}</option>}</For>
@@ -89,8 +149,15 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
         <select value={flowID()} onChange={(e) => setFlow(e.currentTarget.value)} title={t("compose.flow")}>
           <For each={flows()}>{(f) => <option value={f.id}>{f.name}</option>}</For>
         </select>
+        <button
+          class={`btn quiet ${fromSession() ? "on" : ""}`}
+          onClick={() => setFromSession(!fromSession())}
+          title={t("compose.fromSessionWhy")}
+        >
+          {t("compose.fromSession")}
+        </button>
         <div class="spacer" />
-        <button class="btn primary" onClick={start} disabled={busy() || !text().trim() || !flowID()}>
+        <button class="btn primary" onClick={start} disabled={!ready()}>
           {t("compose.start")}
         </button>
       </div>

@@ -10,6 +10,7 @@ import (
 
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/stagemcp"
+	"github.com/artipop/xxvi/internal/store"
 )
 
 // ---- the command line a stage's CLI is started with ----
@@ -19,7 +20,7 @@ func TestTerminalArgvPutsTheBriefLast(t *testing.T) {
 	if !ok {
 		t.Fatal("у claude должен быть интерактивный CLI")
 	}
-	argv, taken := terminalArgv(cli, "claude", false, []string{"--mcp-config", "/tmp/mcp.json"}, "почини вход")
+	argv, taken := terminalArgv(cli, "claude", nil, []string{"--mcp-config", "/tmp/mcp.json"}, "почини вход")
 	if !taken {
 		t.Fatal("бриф должен уехать на командную строку")
 	}
@@ -41,7 +42,7 @@ func TestTerminalArgvPutsTheBriefLast(t *testing.T) {
 // combination — so it is typed in afterwards, and the caller has to be told.
 func TestTerminalArgvResumesWithoutTheBrief(t *testing.T) {
 	cli, _ := cliFor(model.KindClaude)
-	argv, taken := terminalArgv(cli, "claude", true, []string{"--mcp-config", "/tmp/mcp.json"}, "продолжай")
+	argv, taken := terminalArgv(cli, "claude", cli.cliResumeArgs, []string{"--mcp-config", "/tmp/mcp.json"}, "продолжай")
 	if taken {
 		t.Fatal("в продолженный разговор бриф на командной строке не уходит")
 	}
@@ -197,5 +198,57 @@ func TestClosedTerminalIsAFailureOnlyAtTheStart(t *testing.T) {
 	}
 	if closedByPerson(errors.New("что-то другое"), 10*time.Minute) {
 		t.Fatal("другая ошибка — не закрытый терминал")
+	}
+}
+
+// ---- a card started from a conversation somebody already had ----
+
+// The conversation is opened by its id, and the brief is typed in afterwards,
+// as it is for any conversation that already has a transcript.
+func TestTerminalArgvResumesAConversationByID(t *testing.T) {
+	for _, kind := range []string{model.KindClaude, model.KindCodex} {
+		cli, _ := cliFor(kind)
+		argv, taken := terminalArgv(cli, kind, cli.cliResumeID("abc-123"), nil, "дальше")
+		if taken {
+			t.Fatalf("%s: в продолженный разговор бриф на командной строке не уходит", kind)
+		}
+		if !slices.Contains(argv, "abc-123") {
+			t.Fatalf("%s: разговор открывается по id: %v", kind, argv)
+		}
+	}
+}
+
+// The conversation belongs to the first stage the card's agent worked, and to
+// every return to it. Another stage, or another agent, starts its own.
+func TestCardSessionGoesOnInTheStageThatFirstTookIt(t *testing.T) {
+	m, st := newWorkspaceManager(t)
+	card, err := st.CreateCard(model.Card{Title: "Продолжить", State: model.StateFlow, Assignee: "Claude", Session: "abc-123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claude := model.Agent{Name: "Claude", Kind: model.KindClaude}
+	run := func(id, stage string, agent model.Agent) *session {
+		s := &session{id: id, card: card, stage: model.Stage{ID: stage}, agent: agent, work: model.WorkTerminal}
+		if err := st.InsertSession(store.Session{
+			ID: id, CardID: card.ID, StageID: stage, AgentName: agent.Name, AgentKind: agent.Kind,
+			Work: model.WorkTerminal, Status: store.StatusDone, StartedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(2 * time.Millisecond) // started_at orders the runs
+		return s
+	}
+
+	if !m.continuesCardSession(run("1", "plan", claude)) {
+		t.Fatal("первая терминальная стадия агента продолжает разговор карточки")
+	}
+	if m.continuesCardSession(run("2", "code", claude)) {
+		t.Fatal("следующая стадия начинает свой разговор")
+	}
+	if !m.continuesCardSession(run("3", "plan", claude)) {
+		t.Fatal("возврат на ту же стадию продолжает тот же разговор")
+	}
+	if m.continuesCardSession(run("4", "plan", model.Agent{Name: "Codex", Kind: model.KindCodex})) {
+		t.Fatal("чужой разговор другой агент не открывает")
 	}
 }

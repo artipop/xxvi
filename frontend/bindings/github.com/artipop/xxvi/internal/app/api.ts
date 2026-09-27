@@ -133,6 +133,16 @@ export function ConnectHosting(projectID: string, provider: string, remote: stri
 }
 
 /**
+ * ContinueSession starts a card from a conversation somebody already had with
+ * the agent's own CLI: its first terminal stage for that agent resumes it by
+ * id. The text is optional, because the conversation is the task; without it
+ * the card is named after the conversation.
+ */
+export function ContinueSession(sessionID: string, sessionTitle: string, text: string, projectID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(562019854, sessionID, sessionTitle, text, projectID, workMode, agent, flowID);
+}
+
+/**
  * DeleteAgent removes an entry, refusing while a flow still names it: a stage
  * whose crew is nobody is a card that silently never starts, and finding that
  * out here is better than finding it out mid-run.
@@ -347,6 +357,15 @@ export function OpenClient(name: string): $CancellablePromise<void> {
  */
 export function OpenTerminal(cardID: string, screenID: string, command: string): $CancellablePromise<$models.TerminalHandle> {
     return $Call.ByID(3998944851, cardID, screenID, command);
+}
+
+/**
+ * PastSessions lists the conversations an agent already had in a project's
+ * folder, for a card to continue one of them. A project is required: a card
+ * with no project works in a fresh folder, where nobody has talked to anyone.
+ */
+export function PastSessions(agentName: string, projectID: string): $CancellablePromise<acp$0.PastSession[] | null> {
+    return $Call.ByID(4283328862, agentName, projectID);
 }
 
 /**

@@ -9,6 +9,7 @@ export type {
     AdapterStatus,
     Answer,
     Attention,
+    PastSession,
     Question,
     QuestionOption
 } from "./models.js";

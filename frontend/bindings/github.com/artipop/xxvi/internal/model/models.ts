@@ -113,6 +113,14 @@ export interface Card {
     "worktree"?: string;
 
     /**
+     * Session is a conversation the card was started from: one somebody had
+     * with the assignee's own CLI before the card existed. The card's first
+     * terminal stage for that agent picks it up rather than starting fresh,
+     * which is the whole difference between «continue this» and «do this».
+     */
+    "session"?: string;
+
+    /**
      * Props are the card's own named values. A flow condition asks about these,
      * and a person answers a waiting stage by setting one.
      */

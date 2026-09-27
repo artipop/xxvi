@@ -285,6 +285,12 @@ export const ru: Dict = {
   "compose.who": "Кто делает",
   "compose.flow": "По какому флоу",
   "compose.start": "Начать ↵",
+  "compose.fromSession": "Из сессии",
+  "compose.fromSessionWhy": "Продолжить разговор, который уже был с этим агентом в папке проекта",
+  "compose.sessionPlaceholder": "Что сказать агенту дальше? Можно не писать: он получит бриф стадии.",
+  "compose.sessionsNeedProject": "Выберите проект: сессии ищутся в его папке.",
+  "compose.sessionsLoading": "Спрашиваю агента…",
+  "compose.sessionsNone": "В папке проекта у этого агента сессий нет.",
 
   // ---- terminal ----
   "terminal.shellEnded": "шелл завершился",

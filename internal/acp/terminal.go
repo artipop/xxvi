@@ -150,7 +150,13 @@ func (m *Manager) runTerminal(s *session) {
 	// already holds: the folder is the card's, so «the last conversation here»
 	// is that card's, and starting from nothing would mean asking somebody the
 	// same questions twice.
-	resume := m.workedBefore(s)
+	var resume []string
+	switch {
+	case m.continuesCardSession(s) && cli.cliResumeID != nil:
+		resume = cli.cliResumeID(s.card.Session)
+	case m.workedBefore(s):
+		resume = cli.cliResumeArgs
+	}
 	bin, err := terminalBin(cli)
 	if err != nil {
 		m.failTerminal(s, msg.New("terminal.binMissing", "bin", cli.cliBin))
@@ -292,23 +298,44 @@ func (m *Manager) workedBefore(s *session) bool {
 	return false
 }
 
+// continuesCardSession reports whether this run is where the conversation the
+// card was started from goes on. That is the stage the card's agent first
+// worked in a terminal — this one, if nothing came before — and every later
+// visit to it: one conversation belongs to one stage, the same rule as a stage
+// that began here. Other stages start their own.
+func (m *Manager) continuesCardSession(s *session) bool {
+	if s.card.Session == "" || s.agent.Name != s.card.Assignee {
+		return false
+	}
+	sessions, err := m.store.SessionsForCard(s.card.ID)
+	if err != nil {
+		return false
+	}
+	// Newest first, so the last match is the first run.
+	first := ""
+	for _, past := range sessions {
+		if past.Work == model.WorkTerminal && past.AgentName == s.agent.Name {
+			first = past.StageID
+		}
+	}
+	return first == "" || first == s.stage.ID
+}
+
 // terminalArgv assembles the CLI's command line, and says whether the brief went
 // on it. Nothing is guessed: every flag here is a column of the adapters table,
 // filled in for a CLI somebody has actually run.
-func terminalArgv(cli adapter, bin string, resume bool, toolArgs []string, prompt string) ([]string, bool) {
+func terminalArgv(cli adapter, bin string, resume, toolArgs []string, prompt string) ([]string, bool) {
 	// BinPath is deliberately not consulted: for claude and codex it names the
 	// vendor's ACP adapter, which is a different program with no terminal in
 	// it, and running that here would open a window on a process that only
 	// speaks JSON-RPC.
 	argv := []string{bin}
-	if resume {
-		argv = append(argv, cli.cliResumeArgs...)
-	}
+	argv = append(argv, resume...)
 	argv = append(argv, toolArgs...)
 	// A resumed conversation already has a transcript, and putting a task on
 	// that command line is a flag combination no vendor documents. It is typed
 	// in instead, once the CLI has settled.
-	if prompt != "" && !resume && cli.cliPromptArgs != nil {
+	if prompt != "" && len(resume) == 0 && cli.cliPromptArgs != nil {
 		return append(argv, cli.cliPromptArgs(prompt)...), true
 	}
 	return argv, false

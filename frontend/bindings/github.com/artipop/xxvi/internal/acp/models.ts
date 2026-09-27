@@ -120,6 +120,22 @@ export interface Attention {
 }
 
 /**
+ * PastSession is one conversation as the agent lists it.
+ */
+export interface PastSession {
+    "id": string;
+    "cwd": string;
+    "title"?: string;
+
+    /**
+     * UpdatedAt is what the agent says. For claude it is the file's mtime, which
+     * the CLI also bumps when it merely annotates an old conversation, so it
+     * orders roughly rather than exactly.
+     */
+    "updatedAt": string;
+}
+
+/**
  * Question is what a card shows and what the UI answers.
  */
 export interface Question {

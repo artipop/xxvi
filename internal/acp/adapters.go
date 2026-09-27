@@ -57,6 +57,11 @@ type adapter struct {
 	// — which is what makes a second visit to a stage a continuation rather
 	// than a stranger asking the same questions again.
 	cliResumeArgs []string
+	// cliResumeID opens one conversation by the id the agent's own session/list
+	// gave it — a card started from a conversation somebody already had. By id
+	// rather than by folder: that conversation was held wherever that person
+	// was, not in the card's working copy.
+	cliResumeID func(id string) []string
 	// cliTools hands the CLI our MCP server. A session gets its servers over
 	// the protocol, where session/new has a field for them; a terminal is the
 	// vendor CLI itself and has to be told in its own spelling. This is how
@@ -109,6 +114,7 @@ var adapters = map[string]adapter{
 		// which has to be installed for that and only that.
 		cliBin:        "claude",
 		cliResumeArgs: []string{"--continue"},
+		cliResumeID:   func(id string) []string { return []string{"--resume", id} },
 		cliTools:      claudeTools,
 		// `claude -- «…»` opens the TUI with that as the first message, which is
 		// exactly what a stage needs: interactive from the first frame, with the
@@ -131,6 +137,7 @@ var adapters = map[string]adapter{
 		// `codex resume --last` picks up the newest conversation of this folder,
 		// the same rule as claude's --continue.
 		cliResumeArgs: []string{"resume", "--last"},
+		cliResumeID:   func(id string) []string { return []string{"resume", id} },
 		cliTools:      codexTools,
 		// The separator for the same reason as claude's: a brief that starts
 		// with a dash must not be read as a flag.

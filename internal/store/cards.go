@@ -32,6 +32,7 @@ type cardRow struct {
 	BaseRef     string `db:"base_ref"`
 	Worktree    string `db:"worktree"`
 	KeepTree    bool   `db:"keep_worktree"`
+	Session     string `db:"session"`
 	CreatedAt   int64  `db:"created_at"`
 	UpdatedAt   int64  `db:"updated_at"`
 }
@@ -42,6 +43,7 @@ func (r cardRow) card() model.Card {
 		Title: r.Title, Body: r.Body, URL: r.URL,
 		State: model.CardState(r.State), Assignee: r.Assignee, Project: r.Project,
 		WorkMode: r.WorkMode, Branch: r.Branch, Base: r.BaseRef, Worktree: r.Worktree,
+		Session:   r.Session,
 		CreatedAt: fromMillis(r.CreatedAt), UpdatedAt: fromMillis(r.UpdatedAt),
 	}
 }
@@ -66,10 +68,10 @@ func (s *Store) CreateCard(c model.Card) (model.Card, error) {
 
 	err := s.tx(func(tx *sqlx.Tx) error {
 		if _, err := tx.Exec(`
-			INSERT INTO card (id, source, external_id, item_version, title, body, url, state, assignee, project, work_mode, branch, base_ref, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			INSERT INTO card (id, source, external_id, item_version, title, body, url, state, assignee, project, work_mode, branch, base_ref, session, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			c.ID, c.Source, c.ExternalID, c.ItemVersion, c.Title, c.Body, c.URL,
-			string(c.State), c.Assignee, c.Project, c.WorkMode, c.Branch, c.Base, millis(c.CreatedAt), millis(c.UpdatedAt)); err != nil {
+			string(c.State), c.Assignee, c.Project, c.WorkMode, c.Branch, c.Base, c.Session, millis(c.CreatedAt), millis(c.UpdatedAt)); err != nil {
 			return err
 		}
 		return writeProps(tx, c.ID, c.Props)

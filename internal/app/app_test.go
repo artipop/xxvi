@@ -516,6 +516,34 @@ func TestStartTaskGoesStraightToWork(t *testing.T) {
 	}
 }
 
+// A card started from a conversation carries its id, and needs no text: the
+// conversation is the task, and it names the card.
+func TestContinueSessionStartsACardFromAConversation(t *testing.T) {
+	a := open(t)
+	api := NewAPI(a)
+	dev := mustFlow(t, a, "Development")
+	proj, err := api.SaveProject(model.Project{Name: "Тут", Kind: model.ProjectFolder, Path: t.TempDir()})
+	if err != nil {
+		t.Fatalf("проект: %v", err)
+	}
+
+	view, err := api.ContinueSession("abc-123", "Форма входа падает", "", proj.ID, "", "Claude", dev.ID)
+	if err != nil {
+		t.Fatalf("продолжить разговор: %v", err)
+	}
+	c := view.Card
+	if c.State != model.StateFlow || c.Session != "abc-123" || c.Title != "Форма входа падает" || c.Assignee != "Claude" {
+		t.Fatalf("карточка в работе, с разговором и его названием: %+v", c)
+	}
+
+	if _, err := api.ContinueSession("", "", "", proj.ID, "", "Claude", dev.ID); err == nil {
+		t.Fatal("без выбранного разговора — отказ")
+	}
+	if _, err := api.ContinueSession("abc-123", "", "", proj.ID, "", "нет-такого", dev.ID); err == nil {
+		t.Fatal("разговор открывает только агент, который его вёл, — и он должен существовать")
+	}
+}
+
 // A branch of its own is asked of a repository and answered before the work
 // starts: a folder with no git cannot have it, and a card whose branch exists
 // keeps it.

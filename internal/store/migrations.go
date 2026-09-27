@@ -355,5 +355,10 @@ UPDATE edge SET cond_property = 'Outcome' WHERE cond_property IN ('Исход', 
 ALTER TABLE project ADD COLUMN remote   TEXT NOT NULL DEFAULT '';
 ALTER TABLE project ADD COLUMN server   TEXT NOT NULL DEFAULT '';
 ALTER TABLE project ADD COLUMN provider TEXT NOT NULL DEFAULT '';`,
+
+		// 17. A conversation the card was started from, by the id its agent
+		// gave it. Empty for every card that began here.
+		`
+ALTER TABLE card ADD COLUMN session TEXT NOT NULL DEFAULT '';`,
 	}
 }
