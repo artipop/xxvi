@@ -23,6 +23,9 @@ const TerminalPane = lazy(() => import("./terminal"));
 // for the viewer.
 const DiffPane = lazy(() => import("./diff"));
 
+// And for the run screen, which brings the terminal and a request form with it.
+const RunPane = lazy(() => import("./run"));
+
 // The ribbon is the card's journal of transitions made visible: one segment per
 // entry onto a stage, and the screens of that stage inside it. Nothing here
 // assembles the strip — it is read whole from the backend — so it cannot
@@ -652,7 +655,7 @@ function Pane(props: {
       </Show>
 
       <div class="screen-body">
-        <Switch fallback={<Body screen={props.screen!} cardId={props.cardId ?? ""} />}>
+        <Switch fallback={<Body screen={props.screen!} cardId={props.cardId ?? ""} current={props.segment.current} />}>
           {/* A stage removed from the flow does not take its part of the ribbon
               with it: what happened happened, and the segment says why it is
               empty. */}
@@ -693,7 +696,7 @@ function Report(props: { report: Msg }): JSX.Element {
   );
 }
 
-function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
+function Body(props: { screen: ScreenView; cardId: string; current: boolean }): JSX.Element {
   return (
     <Switch fallback={<div class="screen-note">{t("ribbon.unknownScreen", { kind: props.screen.kind })}</div>}>
       {/* The agent's own screen, and which one it is was decided when the step
@@ -719,6 +722,11 @@ function Body(props: { screen: ScreenView; cardId: string }): JSX.Element {
       <Match when={props.screen.kind === "diff"}>
         <Loading fallback={<div class="screen-note">{t("diff.reading")}</div>}>
           <DiffPane cardId={props.cardId} rev={props.screen.ref ?? ""} />
+        </Loading>
+      </Match>
+      <Match when={props.screen.kind === "run"}>
+        <Loading fallback={<div class="screen-note">{t("run.reading")}</div>}>
+          <RunPane cardId={props.cardId} screenId={props.screen.id} prefer={props.screen.ref ?? ""} current={props.current} />
         </Loading>
       </Match>
       <Match when={props.screen.kind === "terminal"}>

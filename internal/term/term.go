@@ -271,6 +271,13 @@ func transcriptPath(dir, id string) string {
 	return filepath.Join(dir, url.PathEscape(id)+".term")
 }
 
+// OnScreen finds the live terminal of one screen.
+func (m *Manager) OnScreen(screenID string) *Session {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.byScreen[screenID]
+}
+
 // Get finds a live terminal by id.
 func (m *Manager) Get(id string) *Session {
 	m.mu.Lock()

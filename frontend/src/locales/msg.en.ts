@@ -58,6 +58,7 @@ export const msgEn: Dict = {
   "msg.writes.outcome": () => `«${propName("Outcome")}» is written after every stage by itself — it does not need to be declared`,
   "msg.writes.twice": "The property «{property}» is declared twice",
   "msg.screen.unknownKind": "Unknown screen kind «{kind}»",
+  "msg.screen.unknownLaunch": (a) => `Unknown launch kind «${a.launch}»: expected ${a.allowed}`,
   "msg.screen.noRef": (a) => `The screen «${screen(a)}» does not say what to show`,
   "msg.screen.twice": (a) => `The screen «${screen(a)}» on «${a.ref}» is declared twice`,
   "msg.notes.absolute": "The notes path «{path}» has to be relative — the file is in the card's folder",

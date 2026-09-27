@@ -9,6 +9,9 @@ import * as acp$0 from "../acp/models.js";
 import * as engine$0 from "../engine/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as launch$0 from "../launch/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as model$0 from "../model/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -64,6 +67,46 @@ export interface Language {
      * webview instead.
      */
     "system": string[] | null;
+}
+
+/**
+ * LaunchPlan is what a run screen opens on.
+ */
+export interface LaunchPlan {
+    /**
+     * Profiles is what the working copy looks like it can be started as, the
+     * likeliest first and a plain command last.
+     */
+    "profiles": launch$0.Profile[] | null;
+
+    /**
+     * Chosen is what to offer: what was last started for this project if
+     * anything was — a person's choice outranks a guess — and otherwise the
+     * first profile.
+     */
+    "chosen": launch$0.Profile;
+    "remembered"?: boolean;
+
+    /**
+     * Clients are the HTTP clients installed here, for a backend.
+     */
+    "clients"?: string[] | null;
+    "docker": boolean;
+
+    /**
+     * Running is the screen's process, when one is up.
+     */
+    "running"?: LaunchRun | null;
+}
+
+/**
+ * LaunchRun is a started profile.
+ */
+export interface LaunchRun {
+    "terminal": TerminalHandle;
+    "profile": launch$0.Profile;
+    "room"?: string;
+    "app"?: string;
 }
 
 /**

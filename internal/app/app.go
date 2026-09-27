@@ -64,6 +64,13 @@ type App struct {
 	// updates is how the application replaces itself; nil where there is
 	// nothing to replace — a test, a headless run.
 	updates Updates
+	// windows moves our own window aside for an application being looked at
+	// (launch.go); nil without a window.
+	windows Windows
+
+	roomMu sync.Mutex
+	room   *room
+	runs   map[string]*runState
 }
 
 // Emitter is how events reach the UI. The Wails application implements it;
@@ -179,6 +186,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 		st.Close()
 		return nil, err
 	}
+	a.upgradeRunScreens()
 	return a, nil
 }
 

@@ -425,6 +425,7 @@ function StagePanel(props: {
     kind === "notes" ? t("flows.refNotes")
       : kind === "terminal" ? t("flows.refTerminal")
       : kind === "diff" ? t("flows.refDiff")
+      : kind === "run" ? t("flows.refRun")
       : t("flows.refBrowser");
 
   return (

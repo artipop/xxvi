@@ -334,11 +334,12 @@ func HostingFlows(crew string) []model.Flow {
 					},
 					X: 80, Y: 160,
 				},
-				// Where the branch is run and tried. A shell in the MR's own
-				// working tree: what to run is the project's, not the flow's.
+				// Where the branch is run and tried, in the MR's own working
+				// tree. What to run is the project's, not the flow's: the run
+				// screen reads it off the files and the person corrects it.
 				{
 					ID: "rmr-try", Name: "Run and check", Action: model.ActionNone,
-					Screens: []model.Screen{{Kind: model.ScreenTerminal}},
+					Screens: []model.Screen{{Kind: model.ScreenRun}},
 					X:       360, Y: 160,
 				},
 				// Two stages with one action, named after what they send, so
@@ -390,6 +391,32 @@ func mrEvents(stages ...string) []model.Edge {
 		)
 	}
 	return out
+}
+
+// upgradeRunScreens gives the «Run and check» stage of an older installation
+// the run screen in place of the bare shell it was seeded with. Only a stage
+// still exactly as seeded: one somebody edited is theirs.
+func (a *App) upgradeRunScreens() {
+	flows, err := a.Store.Flows()
+	if err != nil {
+		return
+	}
+	for _, f := range flows {
+		changed := false
+		for i, st := range f.Stages {
+			if st.ID == "rmr-try" && len(st.Screens) == 1 &&
+				st.Screens[0] == (model.Screen{Kind: model.ScreenTerminal}) {
+				f.Stages[i].Screens = []model.Screen{{Kind: model.ScreenRun}}
+				changed = true
+			}
+		}
+		if !changed {
+			continue
+		}
+		if _, err := a.Store.SaveFlow(f); err != nil {
+			a.log.Info("run screen not added", "flow", f.Name, "err", err)
+		}
+	}
 }
 
 // ensureHostingFlows adds the hosting flows an older installation never got,

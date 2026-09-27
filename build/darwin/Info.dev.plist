@@ -28,6 +28,8 @@
             <string>appicon</string>
         <key>LSMinimumSystemVersion</key>
             <string>12.0.0</string>
+        <key>NSAppleEventsUsageDescription</key>
+            <string>XXVI places the application you started for review beside its own window.</string>
         <key>NSHighResolutionCapable</key>
             <string>true</string>
         <key>NSHumanReadableCopyright</key>

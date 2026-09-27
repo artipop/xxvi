@@ -301,7 +301,7 @@ func normalizeScreens(screens []Screen) ([]Screen, error) {
 		// diff without revisions is what is not committed yet — both are the
 		// screen's useful default rather than an unfinished declaration. The
 		// rest point at something, and without it there is nothing to open.
-		if sc.Ref == "" && sc.Kind != ScreenTerminal && sc.Kind != ScreenDiff {
+		if sc.Ref == "" && sc.Kind != ScreenTerminal && sc.Kind != ScreenDiff && sc.Kind != ScreenRun {
 			return nil, msg.Err("screen.noRef", "kind", sc.Kind)
 		}
 		if sc.Kind == ScreenNotes {
@@ -313,6 +313,10 @@ func normalizeScreens(screens []Screen) ([]Screen, error) {
 			if err := checkRevisions(sc.Ref); err != nil {
 				return nil, err
 			}
+		}
+		if sc.Kind == ScreenRun && sc.Ref != "" && !IsLaunchKind(sc.Ref) {
+			return nil, msg.Err("screen.unknownLaunch",
+				"launch", sc.Ref, "allowed", strings.Join(LaunchKinds, ", "))
 		}
 		key := strings.ToLower(sc.Kind + "\x00" + sc.Ref)
 		if seen[key] {

@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/artipop/xxvi/internal/app"
 	"github.com/artipop/xxvi/internal/appmcp"
+	"github.com/artipop/xxvi/internal/launch"
 	"github.com/artipop/xxvi/internal/msg"
 )
 
@@ -131,6 +133,8 @@ func main() {
 		URL: "/",
 	})
 
+	core.SetWindows(&windows{win: win})
+
 	// The size above is a wish, not a measurement: on a display shorter than it
 	// the window opens with its bottom edge past the screen, and the ribbon —
 	// which is exactly one window tall on purpose — goes over the edge with it.
@@ -221,4 +225,68 @@ func (c chooser) Folder(title, from string) (string, error) {
 	// A dialog closed without choosing is not a failure: it is a person
 	// deciding not to, and the caller carries on with what it had.
 	return dialog.PromptForSingleSelection()
+}
+
+// windows moves the window aside for an application a run screen started, and
+// back again.
+type windows struct {
+	win *application.WebviewWindow
+
+	mu    sync.Mutex
+	saved *application.Rect
+}
+
+// roomMinWidth is how narrow the window may get while it shares the screen:
+// below minWidth the flow editor stops fitting, but a ribbon of one column is
+// still a ribbon, and the room is for looking at somebody else's window.
+const roomMinWidth = 480
+
+func (w *windows) MakeRoom(split func(work launch.Rect) (ours, theirs launch.Rect)) (launch.Rect, error) {
+	screen, err := w.win.GetScreen()
+	if err != nil {
+		return launch.Rect{}, err
+	}
+	if screen == nil || screen.WorkArea.Width == 0 {
+		return launch.Rect{}, errors.New("the window is on no screen")
+	}
+	// Device pixels, as at startup (main): brought to points before they meet
+	// a window's position.
+	scale := float64(screen.ScaleFactor)
+	if scale <= 0 {
+		scale = 1
+	}
+	pt := func(v int) int { return int(float64(v) / scale) }
+	work := launch.Rect{X: pt(screen.WorkArea.X), Y: pt(screen.WorkArea.Y),
+		W: pt(screen.WorkArea.Width), H: pt(screen.WorkArea.Height)}
+
+	w.mu.Lock()
+	if w.saved == nil {
+		if w.win.IsFullscreen() {
+			w.win.UnFullscreen()
+		}
+		if w.win.IsMaximised() {
+			w.win.UnMaximise()
+		}
+		b := w.win.Bounds()
+		w.saved = &b
+	}
+	w.mu.Unlock()
+
+	ours, theirs := split(work)
+	w.win.SetMinSize(roomMinWidth, minHeight)
+	w.win.SetBounds(application.Rect{X: ours.X, Y: ours.Y, Width: ours.W, Height: ours.H})
+	return theirs, nil
+}
+
+func (w *windows) GiveBack() {
+	w.mu.Lock()
+	saved := w.saved
+	w.saved = nil
+	w.mu.Unlock()
+	if saved == nil {
+		return
+	}
+	w.win.SetBounds(*saved)
+	w.win.SetMinSize(minWidth, minHeight)
+	w.win.Focus()
 }

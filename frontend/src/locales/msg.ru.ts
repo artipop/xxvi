@@ -57,6 +57,7 @@ export const msgRu: Dict = {
   "msg.writes.outcome": () => `«${propName("Outcome")}» пишется само после каждой стадии — объявлять его не нужно`,
   "msg.writes.twice": "Свойство «{property}» объявлено дважды",
   "msg.screen.unknownKind": "Неизвестный вид экрана «{kind}»",
+  "msg.screen.unknownLaunch": (a) => `Неизвестный вид запуска «${a.launch}»: ожидается ${a.allowed}`,
   "msg.screen.noRef": (a) => `Экран «${screen(a)}» не говорит, что показывать`,
   "msg.screen.twice": (a) => `Экран «${screen(a)}» на «${a.ref}» объявлен дважды`,
   "msg.notes.absolute": "Путь к заметкам «{path}» должен быть относительным — он лежит в папке карточки",

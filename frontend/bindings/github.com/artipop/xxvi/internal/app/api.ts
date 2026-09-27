@@ -27,6 +27,9 @@ import * as gitdiff$0 from "../gitdiff/models.js";
 import * as hosting$0 from "../hosting/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as launch$0 from "../launch/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as model$0 from "../model/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -226,6 +229,14 @@ export function Flows(): $CancellablePromise<model$0.Flow[] | null> {
 }
 
 /**
+ * GiveBackWindow puts our window back while the application keeps running:
+ * somebody who has seen enough of it, or wants to arrange the two by hand.
+ */
+export function GiveBackWindow(screenID: string): $CancellablePromise<void> {
+    return $Call.ByID(3957263001, screenID);
+}
+
+/**
  * HostingRemotes is what connecting a project offers: its repository's
  * remotes, each with the server and repository its address suggests.
  */
@@ -279,6 +290,22 @@ export function Language(): $CancellablePromise<$models.Language> {
 }
 
 /**
+ * LaunchAddress is where the screen's process said it can be reached, or
+ * nothing yet.
+ */
+export function LaunchAddress(screenID: string): $CancellablePromise<string> {
+    return $Call.ByID(3762337740, screenID);
+}
+
+/**
+ * LaunchPlan reads the card's working copy and says how it can be started.
+ * prefer is the stage's own hint (the screen's ref): which kind to put first.
+ */
+export function LaunchPlan(cardID: string, screenID: string, prefer: string): $CancellablePromise<$models.LaunchPlan> {
+    return $Call.ByID(2050705135, cardID, screenID, prefer);
+}
+
+/**
  * MarkOutcome is a person answering for a stage that runs nothing: passed or
  * failed, put on the card so the flow sees it and moves.
  * 
@@ -301,6 +328,13 @@ export function MarkOutcome(cardID: string, value: string, remarks: string): $Ca
  */
 export function MoveTo(cardID: string, stageID: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(3200309791, cardID, stageID);
+}
+
+/**
+ * OpenClient starts one of the installed HTTP clients.
+ */
+export function OpenClient(name: string): $CancellablePromise<void> {
+    return $Call.ByID(645346320, name);
 }
 
 /**
@@ -432,6 +466,13 @@ export function SaveSource(src: model$0.Source): $CancellablePromise<model$0.Sou
 }
 
 /**
+ * SendRequest makes one request to a started service on the screen's behalf.
+ */
+export function SendRequest(r: launch$0.Request): $CancellablePromise<launch$0.Response> {
+    return $Call.ByID(2625788658, r);
+}
+
+/**
  * SessionEvents is one agent run as it happened: its messages, its thoughts and
  * its tool calls, oldest first. sinceSeq is what the caller already has, so a
  * screen that is following a live session asks only for the rest of it.
@@ -549,6 +590,14 @@ export function Sources(): $CancellablePromise<model$0.Source[] | null> {
 }
 
 /**
+ * StartLaunch runs a profile on a screen, replacing whatever that screen was
+ * running: a changed command is a restart, not a second process.
+ */
+export function StartLaunch(cardID: string, screenID: string, p: launch$0.Profile): $CancellablePromise<$models.LaunchRun> {
+    return $Call.ByID(214137578, cardID, screenID, p);
+}
+
+/**
  * StartTask is a task typed straight into the ribbon: it becomes a card and is
  * taken into work in one call, with nothing in between. Made here rather than
  * as three calls from the screen, so that a refusal — no such project, no
@@ -560,6 +609,13 @@ export function Sources(): $CancellablePromise<model$0.Source[] | null> {
  */
 export function StartTask(text: string, projectID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(289388112, text, projectID, workMode, agent, flowID);
+}
+
+/**
+ * StopLaunch ends a screen's process and gives the screen back.
+ */
+export function StopLaunch(screenID: string): $CancellablePromise<void> {
+    return $Call.ByID(3418810420, screenID);
 }
 
 /**

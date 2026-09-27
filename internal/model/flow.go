@@ -98,10 +98,16 @@ const (
 	// place where the card's two buttons mean something, because what they are
 	// answering is open in front of the person pressing them.
 	ScreenDiff = "diff"
+	// ScreenRun is the project started the way it is meant to be looked at: a
+	// page in the window, a service with something to send requests from, an
+	// application or a simulator beside the window. What the project is, is
+	// read off its files when the screen opens, and the ref only says which
+	// kind to prefer (LaunchKinds) — the command is the person's to change.
+	ScreenRun = "run"
 )
 
 // ScreenKinds is every accepted screen kind, in the order the editor offers them.
-var ScreenKinds = []string{ScreenNotes, ScreenTerminal, ScreenBrowser, ScreenDiff}
+var ScreenKinds = []string{ScreenNotes, ScreenTerminal, ScreenBrowser, ScreenDiff, ScreenRun}
 
 // Edge triggers. The outcome ones are produced by the stage's own session; the
 // last one is a person setting something on the card.
