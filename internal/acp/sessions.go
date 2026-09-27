@@ -36,6 +36,12 @@ type PastSession struct {
 // picks from.
 const pastSessionsMax = 200
 
+// pastSessionPagesMax bounds the pages walked to find them. codex-acp pages
+// through every conversation on the machine and filters each page by folder
+// itself, so a page can come back empty with more to follow; without a bound, a
+// folder with nothing in it would cost a walk through the whole history.
+const pastSessionPagesMax = 50
+
 // PastSessions lists an agent's conversations held in cwd, newest first. An
 // agent that does not list its sessions says so as an error rather than as an
 // empty list: «none» and «cannot tell» are different answers.
@@ -72,7 +78,7 @@ func PastSessions(ctx context.Context, a model.Agent, cwd string) ([]PastSession
 
 	var out []PastSession
 	var cursor *string
-	for len(out) < pastSessionsMax {
+	for pages := 0; pages < pastSessionPagesMax && len(out) < pastSessionsMax; pages++ {
 		page, err := conn.ListSessions(ctx, acpsdk.ListSessionsRequest{Cwd: &cwd, Cursor: cursor})
 		if err != nil {
 			return nil, fmt.Errorf("session/list: %w", err)
@@ -87,7 +93,7 @@ func PastSessions(ctx context.Context, a model.Agent, cwd string) ([]PastSession
 			}
 			out = append(out, p)
 		}
-		if page.NextCursor == nil || *page.NextCursor == "" || len(page.Sessions) == 0 {
+		if page.NextCursor == nil || *page.NextCursor == "" {
 			break
 		}
 		cursor = page.NextCursor
