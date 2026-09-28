@@ -71,6 +71,14 @@ func closedByPerson(err error, open time.Duration) bool {
 	return errors.Is(err, errClosedWithoutReport) && open >= terminalStartWindow
 }
 
+// resumeFailed reports a CLI that closed at once on a conversation it was told
+// to continue: it did not find it — deleted, or kept by another account. That
+// is said as it is rather than as a terminal that failed, and not answered by
+// starting afresh, which would quietly drop what the stage had been told.
+func resumeFailed(resumed bool, err error, open time.Duration) bool {
+	return resumed && errors.Is(err, errClosedWithoutReport) && open < terminalStartWindow
+}
+
 // terminalGrace is how long the CLI is left alone after it reports. The report
 // is a tool call, and killing the process that made it before its result has
 // been delivered is how an agent ends its turn on a broken pipe — with the step
@@ -175,7 +183,8 @@ func (m *Manager) runTerminal(s *session) {
 	}()
 
 	open := m.opening(s, cli)
-	if open.id != "" && !open.chosen {
+	resumed := open.id != "" && !open.chosen
+	if resumed {
 		m.noteConversation(s, open.id)
 	}
 	bin, err := terminalBin(cli)
@@ -230,6 +239,10 @@ func (m *Manager) runTerminal(s *session) {
 	case s.wasCancelled():
 		m.finish(s, store.StatusCancelled, msg.New("session.stepCancelled"))
 		m.record(s, model.EntryProblem, msg.New("journal.terminalCancelled"))
+	case resumeFailed(resumed, err, time.Since(opened)):
+		why := msg.Err("terminal.resumeFailed", "id", open.id)
+		m.finish(s, store.StatusFailed, failure(why))
+		m.record(s, model.EntryProblem, msg.New("journal.terminalFailed").Because(why))
 	case closedByPerson(err, time.Since(opened)):
 		// Somebody ended the conversation. That is an intervention, not an
 		// outcome: the card stays, and where it goes next is theirs to say.
@@ -310,8 +323,12 @@ func (m *Manager) watchTerminal(
 				state = next
 				wait(waitAsking)
 			case cliTurnEnded:
+				// Not a mark: a person talking to the agent in its terminal
+				// would get one after every answer, and a list that fills
+				// with those stops being read. It still ends "working", so
+				// silence after it is not taken for a stuck turn.
 				state = next
-				wait(waitTurnEnded)
+				wait("")
 			}
 
 		case <-tick.C:

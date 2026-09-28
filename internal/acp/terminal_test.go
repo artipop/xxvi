@@ -414,3 +414,20 @@ func TestCardSessionGoesOnInTheStageThatFirstTookIt(t *testing.T) {
 		t.Fatal("чужой разговор другой агент не открывает")
 	}
 }
+
+// A conversation that is gone is a failure of its own, and only at the start: a
+// CLI closed later on a resumed conversation is somebody ending it.
+func TestAConversationThatIsGoneFailsTheStepByName(t *testing.T) {
+	if !resumeFailed(true, errClosedWithoutReport, 2*time.Second) {
+		t.Fatal("CLI, закрывшийся сразу на продолжении, — это пропавший разговор")
+	}
+	if resumeFailed(false, errClosedWithoutReport, 2*time.Second) {
+		t.Fatal("новый разговор не может пропасть")
+	}
+	if resumeFailed(true, errClosedWithoutReport, terminalStartWindow+time.Second) {
+		t.Fatal("закрытие после старта — это человек, а не пропавший разговор")
+	}
+	if resumeFailed(true, errors.New("другая ошибка"), time.Second) {
+		t.Fatal("только закрытие без отчёта говорит о пропавшем разговоре")
+	}
+}

@@ -73,7 +73,6 @@ function Ask(props: { a: Attention }) {
 function terminalWait(a: Attention): string {
   switch (a.terminal) {
     case "asking": return "attention.terminalAsking";
-    case "turnEnded": return "attention.terminalTurnEnded";
     default: return "attention.quiet";
   }
 }

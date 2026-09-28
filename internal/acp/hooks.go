@@ -27,17 +27,15 @@ const (
 	// cliAsking is the CLI stopped mid-turn on a person: a permission, a
 	// question of its own.
 	cliAsking
-	// cliTurnEnded is a turn over without finish_step. In a terminal that is
-	// the agent waiting for the next remark — the step is not done until it
-	// says so — so it is a person's turn as much as a question is.
+	// cliTurnEnded is a turn over without finish_step: the agent waiting for
+	// the next remark, since the step is not done until it says so.
 	cliTurnEnded
 )
 
 // Why a terminal's row is in the attention list. The UI words each one.
 const (
-	waitQuiet     = "quiet"
-	waitAsking    = "asking"
-	waitTurnEnded = "turnEnded"
+	waitQuiet  = "quiet"
+	waitAsking = "asking"
 )
 
 // askingTools are claude's tools whose whole purpose is a person answering:
