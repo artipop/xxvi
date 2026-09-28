@@ -72,6 +72,17 @@ func TestReportEndsTheStep(t *testing.T) {
 	}
 }
 
+// The agent asks before it closes the step, naming where the card goes.
+func TestToolAsksBeforeFinishing(t *testing.T) {
+	desc := describe(Step{Next: []string{"Ревью", "Деплой"}})
+	if !strings.Contains(desc, "move on to «Ревью» or «Деплой»?") {
+		t.Fatalf("описание не просит спросить человека: %s", desc)
+	}
+	if !strings.Contains(instructions(Step{}), "move on to the next step?") {
+		t.Fatalf("без следующей стадии вопрос должен остаться")
+	}
+}
+
 // The refusal is written to be acted on: the agent has to know what to add, and
 // the step has not ended while it is missing.
 func TestMissingValueComesBackToTheAgent(t *testing.T) {

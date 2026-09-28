@@ -48,6 +48,9 @@ type Report struct {
 type Step struct {
 	CardTitle string
 	StageName string
+	// Next names the stages a finished step leads to, so the agent can ask the
+	// person about the move in the words the board shows.
+	Next []string
 	// Writes are the properties this stage declared. They are named in the
 	// tool's own description, so an agent learns the requirement from the tool
 	// it is about to call rather than from the refusal it gets back.
@@ -223,6 +226,25 @@ func newServer(step Step) *mcp.Server {
 // taken at its word: seconds after it the terminal is closed, so a commit
 // running alongside it is cut off, and a commit that failed alongside it has
 // already been reported as done.
+// confirmFirst is said in both places for the same reason as lastCall. A person
+// is sitting in this terminal, and an agent left to judge «done» alone closed
+// the step after its first answer — before the person had read it, with the
+// terminal gone and the card already on the next stage.
+func confirmFirst(step Step) string {
+	next := "the next step"
+	if len(step.Next) > 0 {
+		quoted := make([]string, len(step.Next))
+		for i, name := range step.Next {
+			quoted[i] = "«" + name + "»"
+		}
+		next = strings.Join(quoted, " or ")
+	}
+	return fmt.Sprintf("Do not call it on your own judgement: a person is working with you in this terminal. "+
+		"When you think the work is done, say what you did and ask «I'm done — move on to %s?», then wait for the answer. "+
+		"Call finish_step only once the person agrees or asks you to finish; if they want something else, keep working. "+
+		"The same goes for giving up: say why and ask before reporting failed. ", next)
+}
+
 const lastCall = "Make it your last call, on its own: not alongside other tool calls, and only once the results of every earlier call are in — " +
 	"right after it the session is closed, and anything still running is stopped."
 
@@ -235,8 +257,9 @@ func instructions(step Step) string {
 	if step.CardTitle != "" {
 		fmt.Fprintf(&b, " for the card «%s»", step.CardTitle)
 	}
-	b.WriteString(".\n\nWhen you are done, call finish_step: until it is called, the card stands here and goes nowhere. ")
+	b.WriteString(".\n\nThe step ends with a call to finish_step: until it is called, the card stands here and goes nowhere. ")
 	b.WriteString("Leaving the terminal does not count as finishing the step. ")
+	b.WriteString(confirmFirst(step))
 	b.WriteString(lastCall)
 	return b.String()
 }
@@ -247,7 +270,8 @@ func instructions(step Step) string {
 // about too late.
 func describe(step Step) string {
 	var b strings.Builder
-	b.WriteString("Report that the step is finished, and how. Call it when the work is done or when it has become clear it cannot be done: until this call the card stays where it is. ")
+	b.WriteString("Report that the step is finished, and how: until this call the card stays where it is. ")
+	b.WriteString(confirmFirst(step))
 	b.WriteString(lastCall)
 	if len(step.Writes) == 0 {
 		return b.String()

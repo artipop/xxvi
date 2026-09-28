@@ -122,6 +122,7 @@ func (m *Manager) runTerminal(s *session) {
 	token := tools.Grant(stagemcp.Step{
 		CardTitle: s.card.Title,
 		StageName: s.stage.Name,
+		Next:      nextStages(s.flow, s.stage.ID),
 		Writes:    s.stage.Writes,
 		Report: func(r stagemcp.Report) error {
 			if missing := missingWrites(s.stage.Writes, r); missing != "" {
@@ -464,6 +465,24 @@ func deliverPrompt(m *Manager, s *session, sess *term.Session) {
 	if err := sess.Write([]byte("\x1b[200~" + s.prompt + "\x1b[201~\r")); err != nil {
 		m.log.Warn("could not type the brief into the terminal", "session", s.id, "err", err)
 	}
+}
+
+// nextStages is where a finished step can go. All the success targets rather
+// than the one the flow will pick: which one depends on what the step leaves
+// behind, and it has not left it yet.
+func nextStages(flow model.Flow, stageID string) []string {
+	var names []string
+	seen := map[string]bool{}
+	for _, e := range flow.OutgoingFrom(stageID) {
+		if e.On != model.TriggerSuccess || seen[e.To] {
+			continue
+		}
+		seen[e.To] = true
+		if stage, ok := flow.Stage(e.To); ok && stage.Name != "" {
+			names = append(names, stage.Name)
+		}
+	}
+	return names
 }
 
 // missingWrites names the required values a report came without, or nothing.
