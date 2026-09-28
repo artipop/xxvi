@@ -647,6 +647,9 @@ type session struct {
 	cancelled     bool
 	allowTools    map[string]bool
 	final         strings.Builder
+	// conversation is the vendor's id of the conversation a terminal run is
+	// holding, as last recorded.
+	conversation string
 
 	seq atomic.Int64
 }
@@ -709,6 +712,23 @@ func (s *session) wasCancelled() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.cancelled
+}
+
+// setConversation reports whether id is news.
+func (s *session) setConversation(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if id == s.conversation {
+		return false
+	}
+	s.conversation = id
+	return true
+}
+
+func (s *session) conversationID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.conversation
 }
 
 func (s *session) allowToolAlways(name string) {

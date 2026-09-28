@@ -20,7 +20,7 @@ func TestTerminalArgvPutsTheBriefLast(t *testing.T) {
 	if !ok {
 		t.Fatal("у claude должен быть интерактивный CLI")
 	}
-	argv, taken := terminalArgv(cli, "claude", nil, []string{"--mcp-config", "/tmp/mcp.json"}, "почини вход")
+	argv, taken := terminalArgv(cli, "claude", opening{}, []string{"--mcp-config", "/tmp/mcp.json"}, "почини вход")
 	if !taken {
 		t.Fatal("бриф должен уехать на командную строку")
 	}
@@ -37,12 +37,13 @@ func TestTerminalArgvPutsTheBriefLast(t *testing.T) {
 	}
 }
 
-// A second visit to a stage continues the conversation the folder already
-// holds. The brief cannot go on that command line — no vendor documents the
+// «The last conversation in this folder» is only a fallback for runs that left
+// no id, and the brief cannot go on its command line — no vendor documents the
 // combination — so it is typed in afterwards, and the caller has to be told.
-func TestTerminalArgvResumesWithoutTheBrief(t *testing.T) {
+func TestTerminalArgvResumesByFolderWithoutTheBrief(t *testing.T) {
 	cli, _ := cliFor(model.KindClaude)
-	argv, taken := terminalArgv(cli, "claude", cli.cliResumeArgs, []string{"--mcp-config", "/tmp/mcp.json"}, "продолжай")
+	open := opening{args: cli.cliResumeArgs, byFolder: true}
+	argv, taken := terminalArgv(cli, "claude", open, []string{"--mcp-config", "/tmp/mcp.json"}, "продолжай")
 	if taken {
 		t.Fatal("в продолженный разговор бриф на командной строке не уходит")
 	}
@@ -74,8 +75,8 @@ func TestCodexGetsTheToolsWithoutShowingTheGrant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("передать инструменты: %v", err)
 	}
-	if handoff.file != "" {
-		t.Fatalf("codex обходится без файла: %q", handoff.file)
+	if len(handoff.files) != 0 {
+		t.Fatalf("codex обходится без файла: %q", handoff.files)
 	}
 	line := strings.Join(handoff.args, " ")
 	if strings.Contains(line, "секрет") {
@@ -203,18 +204,179 @@ func TestClosedTerminalIsAFailureOnlyAtTheStart(t *testing.T) {
 
 // ---- a card started from a conversation somebody already had ----
 
-// The conversation is opened by its id, and the brief is typed in afterwards,
-// as it is for any conversation that already has a transcript.
+// The conversation is opened by its id, and the brief goes on the same command
+// line: both CLIs take a first message after the id, and typing it in means
+// answering whatever the CLI is showing at that moment.
 func TestTerminalArgvResumesAConversationByID(t *testing.T) {
 	for _, kind := range []string{model.KindClaude, model.KindCodex} {
 		cli, _ := cliFor(kind)
-		argv, taken := terminalArgv(cli, kind, cli.cliResumeID("abc-123"), nil, "дальше")
-		if taken {
-			t.Fatalf("%s: в продолженный разговор бриф на командной строке не уходит", kind)
+		argv, taken := terminalArgv(cli, kind, opening{args: cli.cliResumeID("abc-123"), id: "abc-123"}, nil, "дальше")
+		if !taken || argv[len(argv)-1] != "дальше" {
+			t.Fatalf("%s: бриф уходит на командную строку и в продолженный по id разговор: %v", kind, argv)
 		}
 		if !slices.Contains(argv, "abc-123") {
 			t.Fatalf("%s: разговор открывается по id: %v", kind, argv)
 		}
+	}
+}
+
+// codex drops every -c given before its `resume` once one is given after it,
+// and the MCP server and the hooks are both -c: all of them go first.
+func TestCodexFlagsGoBeforeResume(t *testing.T) {
+	cli, _ := cliFor(model.KindCodex)
+	argv, _ := terminalArgv(cli, "codex", opening{args: cli.cliResumeID("abc-123"), id: "abc-123"},
+		[]string{"-c", "mcp_servers.xxvi_step.url=\"x\""}, "дальше")
+	resume := slices.Index(argv, "resume")
+	for i, arg := range argv {
+		if arg == "-c" && i > resume {
+			t.Fatalf("-c после resume отменяет все прежние: %v", argv)
+		}
+	}
+}
+
+// ---- which conversation a run opens ----
+
+// A stage's conversation is resumed by the id its last run ended on — never by
+// «the last one in the folder», which another stage or a person may own.
+func TestReturnToAStageResumesItsOwnConversation(t *testing.T) {
+	m, st := newWorkspaceManager(t)
+	card, err := st.CreateCard(model.Card{Title: "Вернуться", State: model.StateFlow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claude := model.Agent{Name: "Claude", Kind: model.KindClaude}
+	cli, _ := cliFor(model.KindClaude)
+	past := func(id, stage, kind, conversation string) {
+		if err := st.InsertSession(store.Session{
+			ID: id, CardID: card.ID, StageID: stage, AgentName: "a", AgentKind: kind,
+			Work: model.WorkTerminal, Status: store.StatusDone, StartedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if conversation != "" {
+			if err := st.UpdateSession(id, store.SessionUpdate{ACPSessionID: &conversation}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	here := &session{id: "now", card: card, stage: model.Stage{ID: "plan"}, agent: claude, work: model.WorkTerminal}
+
+	open := m.opening(here, cli)
+	if !open.chosen || !slices.Contains(open.args, "--session-id") || !slices.Contains(open.args, open.id) {
+		t.Fatalf("первый визит начинает разговор под нашим id: %+v", open)
+	}
+
+	past("1", "plan", model.KindClaude, "")
+	if open := m.opening(here, cli); !open.byFolder {
+		t.Fatalf("прогон без id оставляет только папку: %+v", open)
+	}
+
+	past("2", "plan", model.KindClaude, "first")
+	past("3", "code", model.KindClaude, "other-stage")
+	past("4", "plan", model.KindCodex, "codex-thread")
+	open = m.opening(here, cli)
+	if open.id != "first" || !slices.Equal(open.args, []string{"--resume", "first"}) || open.chosen {
+		t.Fatalf("возврат открывает разговор своей стадии и своего вендора по id: %+v", open)
+	}
+}
+
+// ---- what the CLI's hooks say ----
+
+func TestHooksTellWorkFromWaiting(t *testing.T) {
+	cases := []struct {
+		ev   stagemcp.HookEvent
+		want cliState
+	}{
+		{stagemcp.HookEvent{Event: "UserPromptSubmit"}, cliWorking},
+		{stagemcp.HookEvent{Event: "PostToolUse", ToolName: "Bash"}, cliWorking},
+		{stagemcp.HookEvent{Event: "PermissionRequest", ToolName: "Write"}, cliAsking},
+		{stagemcp.HookEvent{Event: "PreToolUse", ToolName: "AskUserQuestion"}, cliAsking},
+		{stagemcp.HookEvent{Event: "Notification", NotificationType: "permission_prompt"}, cliAsking},
+		// The idle reminder comes after a Stop and says nothing new.
+		{stagemcp.HookEvent{Event: "Notification", NotificationType: "idle_prompt"}, cliUnknown},
+		{stagemcp.HookEvent{Event: "Stop"}, cliTurnEnded},
+		{stagemcp.HookEvent{Event: "StopFailure"}, cliTurnEnded},
+		// A subagent finishing is not the conversation's turn ending.
+		{stagemcp.HookEvent{Event: "Stop", AgentID: "sub"}, cliUnknown},
+		{stagemcp.HookEvent{Event: "SessionStart", Source: "startup"}, cliUnknown},
+	}
+	for _, c := range cases {
+		if got := stateOf(c.ev); got != c.want {
+			t.Errorf("%+v: %v, а надо %v", c.ev, got, c.want)
+		}
+	}
+	if conversationOf(stagemcp.HookEvent{Event: "Stop", SessionID: "sub-session", AgentID: "sub"}) != "" {
+		t.Fatal("разговор подагента — не разговор стадии")
+	}
+}
+
+// The id claude moves to mid-run is the one the next visit opens.
+func TestConversationFollowsTheCLI(t *testing.T) {
+	m, st := newWorkspaceManager(t)
+	card, err := st.CreateCard(model.Card{Title: "Сменить", State: model.StateFlow})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.InsertSession(store.Session{
+		ID: "run", CardID: card.ID, StageID: "plan", AgentName: "a", AgentKind: model.KindClaude,
+		Work: model.WorkTerminal, Status: store.StatusRunning, StartedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s := &session{id: "run", card: card}
+	m.noteConversation(s, "first")
+	m.noteConversation(s, "after-clear")
+	runs, _ := st.SessionsForCard(card.ID)
+	if runs[0].ACPSessionID != "after-clear" {
+		t.Fatalf("записан последний разговор, а не первый: %q", runs[0].ACPSessionID)
+	}
+}
+
+// codex runs a hook only when its trust hash matches, and skips it silently
+// otherwise, so the value is pinned: this is the hash codex 0.157–0.158
+// computed for this handler.
+func TestCodexHooksCarryTheirTrust(t *testing.T) {
+	hash, err := codexTrustHash("session_start", `"$XXVI_HOOK_EXE" hook`, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash != "sha256:b5b5a2233273a62a5b029f0b95db4fee650e9f1444dbbe18721d76d0046488e6" {
+		t.Fatalf("хеш доверия разошёлся с тем, что проверено на живом codex: %s", hash)
+	}
+	handoff, err := codexHooks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(handoff.args) != 2 || handoff.args[0] != "-c" || !strings.HasPrefix(handoff.args[1], "hooks={") {
+		t.Fatalf("хуки — одно переопределение конфигурации: %v", handoff.args)
+	}
+	for _, e := range codexHookEvents {
+		if !strings.Contains(handoff.args[1], `"/<session-flags>/config.toml:`+e.key+`:0:0"={trusted_hash="sha256:`) {
+			t.Fatalf("у %s нет доверия: %s", e.event, handoff.args[1])
+		}
+	}
+}
+
+// claude's hooks come in a file of their own, and the command names this
+// executable through the environment rather than spelling a path.
+func TestClaudeHooksAreAFileOfTheirOwn(t *testing.T) {
+	handoff, err := claudeHooks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(handoff.files[0])
+	if !slices.Equal(handoff.args, []string{"--settings", handoff.files[0]}) {
+		t.Fatalf("хуки передаются через --settings: %v", handoff.args)
+	}
+	body, _ := os.ReadFile(handoff.files[0])
+	for _, e := range claudeHookEvents {
+		if !strings.Contains(string(body), `"`+e.event+`"`) {
+			t.Fatalf("нет хука %s: %s", e.event, body)
+		}
+	}
+	if !strings.Contains(string(body), `\"$XXVI_HOOK_EXE\" hook`) {
+		t.Fatalf("команда хука — этот же исполняемый файл: %s", body)
 	}
 }
 

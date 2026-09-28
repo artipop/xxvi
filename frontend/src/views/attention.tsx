@@ -11,10 +11,12 @@ import { questionText, t } from "../i18n";
 // same question also appears on its own card — they are one question, and
 // answering either one lets the agent go on.
 //
-// A **silent terminal** is a stage being worked in one whose CLI has drawn
-// nothing for a while. It carries no question because the agent asked inside its
-// own interface, where the question was never ours to carry: the row says where
-// to look, and the answer is typed where it was asked.
+// A **waiting terminal** is a stage being worked in one whose CLI stopped for a
+// person: its hooks said it is asking or its turn ended, or — for a CLI whose
+// hooks never spoke — it has drawn nothing for a while. It carries no question
+// because the agent asked inside its own interface, where the question was
+// never ours to carry: the row says where to look, and the answer is typed
+// where it was asked.
 //
 // A **working tree** is a closed card's separate copy of its repository, still
 // on disk. Removing it is asked rather than done: somebody may still want to
@@ -48,7 +50,7 @@ function Ask(props: { a: Attention }) {
         when={props.a.questionId}
         fallback={
           <div class="question">
-            <div class="ask">{t("attention.quiet")}</div>
+            <div class="ask">{t(terminalWait(props.a))}</div>
             <span class="meta">{t("attention.quietNote")}</span>
           </div>
         }
@@ -66,6 +68,14 @@ function Ask(props: { a: Attention }) {
       </Show>
     </div>
   );
+}
+
+function terminalWait(a: Attention): string {
+  switch (a.terminal) {
+    case "asking": return "attention.terminalAsking";
+    case "turnEnded": return "attention.terminalTurnEnded";
+    default: return "attention.quiet";
+  }
 }
 
 /** WorktreeForm answers a closed card's working tree: remove it or keep it.

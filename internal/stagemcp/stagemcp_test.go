@@ -167,6 +167,39 @@ func TestFinishIsToldToBeTheLastCall(t *testing.T) {
 	}
 }
 
+// A hook reaches its step with the grant the CLI inherited, and only the
+// fields a step acts on make the trip: the prompt stays with the hook.
+func TestHookReachesItsStep(t *testing.T) {
+	s := serve(t)
+	got := make(chan HookEvent, 1)
+	token := s.Grant(Step{Report: func(Report) error { return nil }, Hook: func(ev HookEvent) { got <- ev }})
+	env := map[string]string{HookURLEnv: s.HookURL(), TokenEnv: token}
+	getenv := func(k string) string { return env[k] }
+
+	payload := `{"hook_event_name":"SessionStart","session_id":"abc","source":"clear","prompt":"секрет","transcript_path":"/x"}`
+	if err := ForwardHook(context.Background(), strings.NewReader(payload), getenv); err != nil {
+		t.Fatalf("переслать событие: %v", err)
+	}
+	ev := <-got
+	if ev.Event != "SessionStart" || ev.SessionID != "abc" || ev.Source != "clear" {
+		t.Fatalf("событие доехало не целиком: %+v", ev)
+	}
+
+	s.Revoke(token)
+	if err := ForwardHook(context.Background(), strings.NewReader(payload), getenv); err == nil {
+		t.Fatal("после конца шага события не принимаются")
+	}
+}
+
+// Started by hand, outside a stage, the hook has nowhere to go and says so
+// without trying.
+func TestHookOutsideAStep(t *testing.T) {
+	err := ForwardHook(context.Background(), strings.NewReader(`{"hook_event_name":"Stop"}`), func(string) string { return "" })
+	if err == nil {
+		t.Fatal("без шага пересылать некуда")
+	}
+}
+
 func content(res *mcp.CallToolResult) string {
 	var b strings.Builder
 	for _, c := range res.Content {

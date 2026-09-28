@@ -245,6 +245,11 @@ type Attention struct {
 	Awaiting bool      `json:"awaiting"`
 	Since    time.Time `json:"since,omitempty"`
 
+	// Terminal is set on a terminal's row: why it is waiting — its CLI asked
+	// for a permission or an answer («asking»), its turn ended without the
+	// step closing («turnEnded»), or it has only gone silent («quiet»).
+	Terminal string `json:"terminal,omitempty"`
+
 	// Worktree is set on the third kind: a closed card's separate working
 	// tree, and whether to remove it (workspace.go). Branch is what stays
 	// either way; Dirty says removing it loses uncommitted changes.
@@ -285,10 +290,10 @@ func (m *Manager) Attention() []Attention {
 	return out
 }
 
-// raiseQuiet marks a stage in a terminal as waiting for a person. The session
-// is marked too, so the card shows it the same way it shows an agent stopped on
-// a question: from outside, both are a step that has stopped moving.
-func (m *Manager) raiseQuiet(s *session) {
+// raiseQuiet marks a stage in a terminal as waiting for a person, and why. The
+// session is marked too, so the card shows it the same way it shows an agent
+// stopped on a question: from outside, both are a step that has stopped moving.
+func (m *Manager) raiseQuiet(s *session, why string) {
 	a := Attention{
 		Key:       "t:" + s.id,
 		CardID:    s.card.ID,
@@ -296,17 +301,23 @@ func (m *Manager) raiseQuiet(s *session) {
 		Agent:     s.agent.Name,
 		Awaiting:  true,
 		Since:     time.Now(),
+		Terminal:  why,
 	}
 	m.questionsMu.Lock()
+	// A wait that changes its reason is still the one wait: the row keeps
+	// its place in a list ordered by how long it has been ignored.
+	if prev, had := m.quiet[s.id]; had {
+		a.Since = prev.Since
+	}
 	m.quiet[s.id] = a
 	m.questionsMu.Unlock()
 
 	m.setStatus(s, statusAsking)
 	m.emitAttention(a)
-	m.log.Info("stage terminal is quiet", "session", s.id, "card", s.card.ID)
+	m.log.Info("stage terminal is waiting", "session", s.id, "card", s.card.ID, "why", why)
 }
 
-// clearQuiet takes the mark off — the CLI drew something, or the step ended.
+// clearQuiet takes the mark off — the CLI is back at work, or the step ended.
 func (m *Manager) clearQuiet(s *session) {
 	m.questionsMu.Lock()
 	a, had := m.quiet[s.id]

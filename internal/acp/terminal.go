@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/stagemcp"
@@ -31,8 +33,10 @@ import (
 // Two obligations come with it, and both are met here rather than left to the
 // reader. The step ends when the agent says it does, through finish_step
 // (internal/stagemcp): an interactive CLI does not exit when a turn ends, so an
-// exit cannot stand in for a report. And a stuck step is noticed by the CLI
-// drawing nothing, because a question inside a TUI is invisible from out here.
+// exit cannot stand in for a report. And a stuck step is noticed, because a
+// question inside a TUI is invisible from out here: the CLI's own hooks say
+// when it stops for a person (hooks.go), and a CLI whose hooks never spoke is
+// judged by drawing nothing.
 
 // terminalQuietFor is how long a stage's CLI must draw nothing before the card
 // says it is waiting for a person. Generous on purpose: a model thinking
@@ -119,6 +123,9 @@ func (m *Manager) runTerminal(s *session) {
 	// The report and the door it arrives through. Both die with the step: a
 	// grant outliving its run is a door onto a card nobody is working.
 	reported := make(chan stagemcp.Report, 1)
+	// Buffered generously and never blocked on: a hook holds the CLI's turn
+	// until it is answered, and the watcher is the only reader.
+	hooked := make(chan stagemcp.HookEvent, 64)
 	token := tools.Grant(stagemcp.Step{
 		CardTitle: s.card.Title,
 		StageName: s.stage.Name,
@@ -135,6 +142,13 @@ func (m *Manager) runTerminal(s *session) {
 				return errors.New("this step is already finished")
 			}
 		},
+		Hook: func(ev stagemcp.HookEvent) {
+			select {
+			case hooked <- ev:
+			default:
+				m.log.Warn("a terminal hook was dropped", "session", s.id, "event", ev.Event)
+			}
+		},
 	})
 	defer tools.Revoke(token)
 
@@ -143,27 +157,33 @@ func (m *Manager) runTerminal(s *session) {
 		m.failTerminal(s, msg.Of(err))
 		return
 	}
-	if handoff.file != "" {
-		defer os.Remove(handoff.file)
+	// Without hooks the step still works — it is watched by its silence, as
+	// it was before there were any — so a failure here is a note, not a stop.
+	if env, ok := hookEnv(tools.HookURL(), token); ok && cli.cliHooks != nil && hooksPossible() {
+		if hooks, err := cli.cliHooks(); err != nil {
+			m.log.Warn("terminal hooks not registered", "session", s.id, "err", err)
+		} else {
+			handoff.args = append(handoff.args, hooks.args...)
+			handoff.files = append(handoff.files, hooks.files...)
+			handoff.env = append(handoff.env, env...)
+		}
 	}
+	defer func() {
+		for _, f := range handoff.files {
+			_ = os.Remove(f)
+		}
+	}()
 
-	// A second visit to the same stage continues the conversation the folder
-	// already holds: the folder is the card's, so «the last conversation here»
-	// is that card's, and starting from nothing would mean asking somebody the
-	// same questions twice.
-	var resume []string
-	switch {
-	case m.continuesCardSession(s) && cli.cliResumeID != nil:
-		resume = cli.cliResumeID(s.card.Session)
-	case m.workedBefore(s):
-		resume = cli.cliResumeArgs
+	open := m.opening(s, cli)
+	if open.id != "" && !open.chosen {
+		m.noteConversation(s, open.id)
 	}
 	bin, err := terminalBin(cli)
 	if err != nil {
 		m.failTerminal(s, msg.New("terminal.binMissing", "bin", cli.cliBin))
 		return
 	}
-	argv, promptTaken := terminalArgv(cli, bin, resume, handoff.args, s.prompt)
+	argv, promptTaken := terminalArgv(cli, bin, open, handoff.args, s.prompt)
 
 	sess, err := terms.Attach(s.id, s.card.ID, s.cwd, argv, append(terminalEnv(s, cli), handoff.env...))
 	if err != nil {
@@ -184,7 +204,16 @@ func (m *Manager) runTerminal(s *session) {
 		go deliverPrompt(m, s, sess)
 	}
 
-	report, err := m.watchTerminal(ctx, s, sess, reported)
+	report, err := m.watchTerminal(ctx, s, sess, reported, hooked)
+
+	// An id we chose is only a conversation once the CLI has kept one under
+	// it. Its hooks usually say so; when they never spoke, a CLI that stayed
+	// open past its start is taken as having kept it — one that closed at
+	// «do you trust this folder?» has nothing to resume, and resuming nothing
+	// by id would fail the stage on every visit after.
+	if open.chosen && s.conversationID() == "" && time.Since(opened) >= terminalStartWindow {
+		m.noteConversation(s, open.id)
+	}
 
 	// The CLI ends with the step: this terminal belongs to the run, not to the
 	// person, and one left open on a card that has moved on is a conversation
@@ -226,19 +255,29 @@ func (m *Manager) runTerminal(s *session) {
 }
 
 // watchTerminal waits for whichever comes first: the report, the CLI ending, or
-// somebody stepping in. It also watches the silence, which is the only thing a
-// stage in a terminal says about itself without being asked.
+// somebody stepping in. On the way it keeps the card's mark — whether the CLI
+// is waiting for a person — as its hooks say, or, while they have said
+// nothing, as its silence does.
 func (m *Manager) watchTerminal(
-	ctx context.Context, s *session, sess *term.Session, reported <-chan stagemcp.Report,
+	ctx context.Context, s *session, sess *term.Session,
+	reported <-chan stagemcp.Report, hooked <-chan stagemcp.HookEvent,
 ) (stagemcp.Report, error) {
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
-	waiting := false
-	defer func() {
-		if waiting {
-			m.clearQuiet(s)
+	state := cliUnknown
+	waiting := ""
+	wait := func(why string) {
+		if why == waiting {
+			return
 		}
-	}()
+		waiting = why
+		if why == "" {
+			m.clearQuiet(s)
+		} else {
+			m.raiseQuiet(s, why)
+		}
+	}
+	defer wait("")
 
 	for {
 		select {
@@ -259,16 +298,39 @@ func (m *Manager) watchTerminal(
 		case <-ctx.Done():
 			return stagemcp.Report{}, ctx.Err()
 
+		case ev := <-hooked:
+			if id := conversationOf(ev); id != "" {
+				m.noteConversation(s, id)
+			}
+			switch next := stateOf(ev); next {
+			case cliWorking:
+				state = next
+				wait("")
+			case cliAsking:
+				state = next
+				wait(waitAsking)
+			case cliTurnEnded:
+				state = next
+				wait(waitTurnEnded)
+			}
+
 		case <-tick.C:
 			quiet := sess.Quiet() >= terminalQuietFor
-			if quiet == waiting {
-				continue
-			}
-			waiting = quiet
-			if quiet {
-				m.raiseQuiet(s)
-			} else {
-				m.clearQuiet(s)
+			switch {
+			case state == cliUnknown:
+				// No hook has spoken, so the silence is all there is — both
+				// ways: a CLI that draws again is back at work.
+				if quiet {
+					wait(waitQuiet)
+				} else {
+					wait("")
+				}
+			case state == cliWorking && quiet:
+				// Hooks lead once they have spoken, and silence only backs
+				// them up where they have a gap: a turn broken off with Esc
+				// ends with no hook at all, and would otherwise read as work
+				// forever. What clears it is the next hook.
+				wait(waitQuiet)
 			}
 		}
 	}
@@ -284,19 +346,69 @@ func (m *Manager) failTerminal(s *session, why msg.Msg) {
 	m.record(s, model.EntryProblem, notOpened)
 }
 
-// workedBefore reports whether this card has already had a run on this stage,
-// which is what makes the CLI continue rather than begin.
-func (m *Manager) workedBefore(s *session) bool {
+// opening is which conversation a run starts in.
+type opening struct {
+	args []string
+	// id is the conversation the run will hold, when that is known before
+	// the CLI starts. chosen marks one we made up for a new conversation:
+	// it is not a conversation until the CLI has kept one under it.
+	id     string
+	chosen bool
+	// byFolder is the fallback that names no conversation, and the one case
+	// where the brief cannot go on the command line.
+	byFolder bool
+}
+
+// opening decides where a run's conversation comes from. A second visit to a
+// stage continues the conversation the last one ended on, so nobody is asked
+// the same questions twice; a card started from a conversation continues that
+// one on its stage; anything else begins anew.
+func (m *Manager) opening(s *session, cli adapter) opening {
+	past, worked := m.pastConversation(s)
+	switch {
+	case past != "" && cli.cliResumeID != nil:
+		return opening{args: cli.cliResumeID(past), id: past}
+	case m.continuesCardSession(s) && cli.cliResumeID != nil:
+		return opening{args: cli.cliResumeID(s.card.Session), id: s.card.Session}
+	case worked && len(cli.cliResumeArgs) > 0:
+		return opening{args: cli.cliResumeArgs, byFolder: true}
+	case cli.cliNewSession != nil:
+		id := uuid.NewString()
+		return opening{args: cli.cliNewSession(id), id: id, chosen: true}
+	}
+	return opening{}
+}
+
+// pastConversation is the conversation the newest earlier run of this card on
+// this stage ended on, and whether there was such a run at all. Only runs of the
+// same kind count: the id is the vendor's, and claude cannot open codex's.
+func (m *Manager) pastConversation(s *session) (id string, worked bool) {
 	sessions, err := m.store.SessionsForCard(s.card.ID)
 	if err != nil {
-		return false
+		return "", false
 	}
-	for _, past := range sessions {
-		if past.ID != s.id && past.StageID == s.stage.ID && past.Work == model.WorkTerminal {
-			return true
+	for _, past := range sessions { // newest first
+		if past.ID == s.id || past.StageID != s.stage.ID || past.Work != model.WorkTerminal || past.AgentKind != s.agent.Kind {
+			continue
 		}
+		if past.ACPSessionID != "" {
+			return past.ACPSessionID, true
+		}
+		worked = true
 	}
-	return false
+	return "", worked
+}
+
+// noteConversation records the conversation the run is holding, every time it
+// changes: /clear, compaction and /resume move claude to another id in the
+// middle of a run, and the next visit has to open the one it ended on.
+func (m *Manager) noteConversation(s *session, id string) {
+	if !s.setConversation(id) {
+		return
+	}
+	if err := m.store.UpdateSession(s.id, store.SessionUpdate{ACPSessionID: &id}); err != nil {
+		m.log.Warn("could not record the terminal's conversation", "session", s.id, "err", err)
+	}
 }
 
 // continuesCardSession reports whether this run is where the conversation the
@@ -325,18 +437,20 @@ func (m *Manager) continuesCardSession(s *session) bool {
 // terminalArgv assembles the CLI's command line, and says whether the brief went
 // on it. Nothing is guessed: every flag here is a column of the adapters table,
 // filled in for a CLI somebody has actually run.
-func terminalArgv(cli adapter, bin string, resume, toolArgs []string, prompt string) ([]string, bool) {
+func terminalArgv(cli adapter, bin string, open opening, toolArgs []string, prompt string) ([]string, bool) {
 	// BinPath is deliberately not consulted: for claude and codex it names the
 	// vendor's ACP adapter, which is a different program with no terminal in
 	// it, and running that here would open a window on a process that only
 	// speaks JSON-RPC.
 	argv := []string{bin}
-	argv = append(argv, resume...)
+	argv = append(argv, cli.cliArgs...)
+	// Flags before the conversation: codex's `resume` is a subcommand, and a
+	// `-c` given after it makes codex drop every `-c` given before.
 	argv = append(argv, toolArgs...)
-	// A resumed conversation already has a transcript, and putting a task on
-	// that command line is a flag combination no vendor documents. It is typed
-	// in instead, once the CLI has settled.
-	if prompt != "" && len(resume) == 0 && cli.cliPromptArgs != nil {
+	argv = append(argv, open.args...)
+	// «The last conversation here» has no documented way to take a task on
+	// its command line, so that one is typed in, once the CLI has settled.
+	if prompt != "" && !open.byFolder && cli.cliPromptArgs != nil {
 		return append(argv, cli.cliPromptArgs(prompt)...), true
 	}
 	return argv, false
@@ -368,13 +482,13 @@ func terminalEnv(s *session, cli adapter) []string {
 	return append(env, spawnEnv(s.agent)...)
 }
 
-// toolsHandoff is our MCP server as one CLI takes it: flags for its command
-// line, variables for its environment, and the file to remove once the step is
-// over.
+// toolsHandoff is what one CLI is handed for a step — our MCP server, our
+// hooks: flags for its command line, variables for its environment, and the
+// files to remove once the step is over.
 type toolsHandoff struct {
-	args []string
-	env  []string
-	file string
+	args  []string
+	env   []string
+	files []string
 }
 
 func claudeTools(url, token string) (toolsHandoff, error) {
@@ -382,7 +496,7 @@ func claudeTools(url, token string) (toolsHandoff, error) {
 	if err != nil {
 		return toolsHandoff{}, err
 	}
-	return toolsHandoff{args: []string{"--mcp-config", path}, file: path}, nil
+	return toolsHandoff{args: []string{"--mcp-config", path}, files: []string{path}}, nil
 }
 
 // codexStepServer is not stagemcp.ServerName on purpose. codex merges `-c`
@@ -394,8 +508,9 @@ const codexStepServer = "xxvi_step"
 
 // codexTokenEnv carries the grant. codex reads a bearer token from a variable
 // it is told the name of, which keeps the grant out of the argv that ps shows
-// to every user of the machine.
-const codexTokenEnv = "XXVI_STEP_TOKEN"
+// to every user of the machine. The hooks read the grant from the same
+// variable, in the same environment.
+const codexTokenEnv = stagemcp.TokenEnv
 
 // codexTools hands the server over as `-c` overrides: codex has no flag for a
 // file of servers, and its own config.toml is the person's, not a card's to
