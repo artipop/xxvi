@@ -39,10 +39,13 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   // A branch of its own is a question about a repository; anywhere else the
   // answer is the folder as it stands, whatever was remembered.
   const isRepo = () => projects().find((p) => p.id === projectID())?.repo ?? false;
+  // The conversation to continue, once one is picked. Showing the list is not
+  // choosing: without a pick, what is typed starts an ordinary task.
+  const continuing = () => (fromSession() ? session() : undefined);
   // A conversation's unfinished work is in the project folder itself; a fresh
   // branch or tree would continue it somewhere that work is not.
   const mode = () =>
-    !fromSession() && isRepo() && workModes().some((m) => m.value === workMode()) ? workMode() : "";
+    !continuing() && isRepo() && workModes().some((m) => m.value === workMode()) ? workMode() : "";
   const agentName = () =>
     list(agents().agents).find((a) => a.name === agent())?.name ?? list(agents().agents)[0]?.name ?? "";
   const flowID = () => flows().find((f) => f.id === flow())?.id ?? flows()[0]?.id ?? "";
@@ -63,7 +66,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     );
   });
 
-  const ready = () => !busy() && !!flowID() && (fromSession() ? !!session() : !!text().trim());
+  const ready = () => !busy() && !!flowID() && (!!continuing() || !!text().trim());
 
   // Without scrolling: the stack moves by whole ribbons and only when asked,
   // and a focus that dragged it would land it between two of them.
@@ -72,7 +75,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   const start = async () => {
     if (!ready()) return;
     setBusy(true);
-    const from = fromSession() ? session() : undefined;
+    const from = continuing();
     const view = await guard(() =>
       from
         ? API.ContinueSession(from.id, from.title ?? "", text(), projectID(), mode(), agentName(), flowID())
@@ -94,7 +97,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
       <textarea
         ref={box}
         class="compose-text"
-        placeholder={t(fromSession() ? "compose.sessionPlaceholder" : "compose.placeholder")}
+        placeholder={t(continuing() ? "compose.sessionPlaceholder" : "compose.placeholder")}
         value={text()}
         onInput={(e) => setText(e.currentTarget.value)}
         onKeyDown={(e) => {
@@ -122,7 +125,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
             {(s) => (
               <button
                 class={`compose-session ${session()?.id === s.id ? "on" : ""}`}
-                onClick={() => setSession(s)}
+                onClick={() => setSession(session()?.id === s.id ? undefined : s)}
                 title={s.cwd}
               >
                 <span class="meta">{when(s.updatedAt, false)}</span>
@@ -137,7 +140,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
           <option value="">{t("common.ownFolder")}</option>
           <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
         </select>
-        <Show when={isRepo() && !fromSession()}>
+        <Show when={isRepo() && !continuing()}>
           <select value={mode()} onChange={(e) => setWorkMode(e.currentTarget.value)}
                   title={workModes().find((m) => m.value === mode())?.why}>
             <For each={workModes()}>{(m) => <option value={m.value}>{m.label}</option>}</For>
