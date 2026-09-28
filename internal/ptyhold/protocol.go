@@ -11,7 +11,7 @@ import (
 // Protocol is bumped on incompatible wire changes. An application that meets a
 // holder speaking another one shuts it down and starts its own: the sessions
 // in it are lost, which beats two programs disagreeing about the bytes.
-const Protocol = 1
+const Protocol = 2
 
 // Frame types. Control frames carry JSON, data frames raw bytes.
 const (
@@ -91,6 +91,10 @@ type Label struct {
 type Info struct {
 	Label   Label `json:"label"`
 	Running bool  `json:"running"`
+	// The size its screen is drawn for: a screen taken back has to be kept at
+	// that size, or what arrives next lands in the wrong places.
+	Cols int `json:"cols"`
+	Rows int `json:"rows"`
 }
 
 // request is the payload of a tCtrl frame. Req pairs it with its answer.

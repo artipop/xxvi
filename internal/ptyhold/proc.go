@@ -41,9 +41,9 @@ func Start(spec Spec) (*Proc, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open a terminal: %w", err)
 	}
-	if spec.Cols > 1 && spec.Rows > 1 {
-		_ = tty.Resize(spec.Cols, spec.Rows)
-	}
+	// Always given a size: the emulator reading this terminal is made at a size
+	// too, and a pty left at whatever the system defaults to would disagree.
+	_ = tty.Resize(sized(spec.Cols, spec.Rows))
 	// Resolved here rather than by go-pty: on Windows it looks a bare name up
 	// in the child's working folder instead of on PATH once Dir is set.
 	bin := spec.Argv[0]
@@ -62,6 +62,14 @@ func Start(spec Spec) (*Proc, error) {
 	// the only signal, and reaping closes the pty on output not yet read.
 	releaseSlave(tty)
 	return &Proc{tty: tty, cmd: cmd}, nil
+}
+
+// sized is the size a terminal gets when it has not been told one yet.
+func sized(cols, rows int) (int, int) {
+	if cols < 2 || rows < 2 {
+		return 80, 24
+	}
+	return cols, rows
 }
 
 // Pump hands out everything the process prints and returns once it has ended

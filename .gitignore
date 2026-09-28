@@ -17,3 +17,6 @@ updater.key
 
 # What a release is built into on the way to the bucket.
 dist
+
+# libghostty-vt and the Ghostty source it is built from (wails3 task common:ghostty:lib).
+build/ghostty

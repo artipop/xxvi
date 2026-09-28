@@ -3,11 +3,8 @@ package ptyhold
 import "unicode/utf8"
 
 // Tail is the end of what a terminal printed, capped, and ready to be fed to an
-// emulator that has seen none of the rest.
-//
-// Both ends of a terminal keep one: the holder, so an application started again
-// finds the screen that was there, and the application itself, so a window
-// opened again does. Not safe for concurrent use.
+// emulator that has seen none of the rest. It is what Screen is where there is
+// no emulator to keep one (screen_windows.go). Not safe for concurrent use.
 type Tail struct {
 	limit int
 	data  []byte

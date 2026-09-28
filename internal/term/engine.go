@@ -36,6 +36,6 @@ func (h held) Hangup() error               { return h.c.Hangup(h.id) }
 func (h held) Kill()                       { _ = h.c.Kill(h.id) }
 
 // Release forgets the session in the holder: by the time it has ended, its
-// tail is in the Session already. Waited for, so an application closing right
+// screen is in the Session already. Waited for, so an application closing right
 // after does not leave a holder keeping an ended session for nobody.
 func (h held) Release() { _ = h.c.Forget(h.id) }

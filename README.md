@@ -42,7 +42,10 @@ frontend          Solid 2 + TypeScript, биндинги генерирует wa
 
 ## Запуск
 
-Нужны Go 1.25+, Node.js и [wails3](https://v3.wails.io/).
+Нужны Go 1.26+, Node.js, [wails3](https://v3.wails.io/) и Zig 0.16 (`brew install
+zig`): им собирается libghostty-vt — эмулятор терминала, в котором держатель pty
+хранит экраны. Сборка скачивает исходники Ghostty и собирает её сама при первом
+запуске, в `build/ghostty/`; на Windows её нет и не нужно.
 
 ```sh
 wails3 dev          # разработка, с горячей перезагрузкой фронта
@@ -178,8 +181,11 @@ npm install -g @agentclientprotocol/codex-acp
 ## Тесты
 
 ```sh
-go test ./internal/...
+wails3 task test
 ```
+
+Голый `go test` тоже работает, если указать, где лежит собранная библиотека:
+`PKG_CONFIG_PATH=$PWD/build/ghostty/darwin-arm64/share/pkgconfig go test ./...`.
 
 Отдельно — проверка с живым агентом. Она запускает настоящий адаптер, поэтому
 требует установленного агента и залогиненной учётки и стоит столько же, сколько

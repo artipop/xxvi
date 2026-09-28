@@ -27,6 +27,9 @@ tasks:
     summary: Builds the application natively on macOS
     internal: true
     deps:
+      - task: common:ghostty:lib
+        vars:
+          ARCH: '{{.ARCH | default ARCH}}'
       - task: common:go:mod:tidy
       - task: common:build:frontend
         vars:
@@ -48,6 +51,7 @@ tasks:
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
     env:
+      PKG_CONFIG_PATH: "{{.ROOT_DIR}}/build/ghostty/darwin-{{.ARCH | default ARCH}}/share/pkgconfig"
       GOOS: darwin
       CGO_ENABLED: 1
       GOARCH: '{{.ARCH | default ARCH}}'

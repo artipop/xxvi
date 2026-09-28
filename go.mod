@@ -1,6 +1,6 @@
 module github.com/artipop/xxvi
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/aymanbagabas/go-pty v0.2.3
@@ -11,6 +11,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/wailsapp/wails/v3 v3.0.0-beta.5
 	github.com/zalando/go-keyring v0.2.8
+	go.mitchellh.com/libghostty v0.0.0-20260920220152-31b65cdc24cf
 	modernc.org/sqlite v1.44.3
 )
 

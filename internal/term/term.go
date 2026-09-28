@@ -39,11 +39,6 @@ const (
 	killWait   = 2 * time.Second
 )
 
-// historyCap is how much of what a terminal printed is kept for a screen that
-// is opened again. Enough to see how a build ended, not so much that a chatty
-// process becomes the application's memory profile.
-const historyCap = 256 << 10
-
 // Session is one pty and the process in it.
 type Session struct {
 	ID       string
@@ -53,16 +48,15 @@ type Session struct {
 
 	eng engine
 
-	mu      sync.Mutex
-	history *ptyhold.Tail
-	subs    map[chan []byte]struct{}
-	cols    int
-	rows    int
-	// shake says the process was drawing for a window it has not seen since:
-	// adopted from the holder after a restart (Manager.Hold). The first size a
-	// window reports is sent as a change even if it is not one, so a
-	// full-screen program redraws over the raw tail instead of leaving it.
-	shake bool
+	mu sync.Mutex
+	// screen is what a window opened now has to show. Once the process has
+	// ended it is read one last time into final and freed: it is memory
+	// outside Go's reach, and nothing will draw on it again.
+	screen *ptyhold.Screen
+	final  []byte
+	subs   map[chan []byte]struct{}
+	cols   int
+	rows   int
 	// spoke is when the process last drew anything. It is what a stage in a
 	// terminal is watched by: its CLI asks a person inside its own interface,
 	// where nothing of ours can see the question, so silence is the only signal
@@ -139,7 +133,7 @@ func (m *Manager) Open(cardID, screenID, command string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := newSession(uuid.NewString(), m.log)
+	s := newSession(uuid.NewString(), 0, 0, m.log)
 	s.CardID, s.ScreenID, s.Command = cardID, screenID, command
 	if err := m.run(s, ptyhold.KindScreen, shellSpec(dir, command)); err != nil {
 		return nil, err
@@ -184,7 +178,7 @@ func (m *Manager) Attach(id, cardID, dir string, argv, env []string) (*Session, 
 	}
 	m.mu.Unlock()
 
-	s := newSession(id, m.log)
+	s := newSession(id, 0, 0, m.log)
 	s.CardID, s.Command = cardID, strings.Join(argv, " ")
 	s.keepTail = true
 	spec := ptyhold.Spec{Argv: argv, Dir: dir, Env: append(env, "TERM=xterm-256color", "COLORTERM=truecolor")}
@@ -263,7 +257,9 @@ func (m *Manager) Hold(holder *ptyhold.Client) error {
 
 func (m *Manager) adopt(holder *ptyhold.Client, info ptyhold.Info) {
 	l := info.Label
-	s := newSession(l.ID, m.log)
+	// At the size the holder draws it at: the screen it hands over, and every
+	// byte after, is laid out for that size until a window says otherwise.
+	s := newSession(l.ID, info.Cols, info.Rows, m.log)
 	s.CardID, s.ScreenID, s.Command = l.Card, l.Screen, l.Command
 	s.keepTail = l.Kind == ptyhold.KindRun
 	s.eng = held{holder, l.ID}
@@ -274,14 +270,11 @@ func (m *Manager) adopt(holder *ptyhold.Client, info ptyhold.Info) {
 		return
 	}
 	m.register(s)
-	switch {
-	case !running:
+	if !running {
 		s.finish()
-	case l.Kind == ptyhold.KindScreen:
-		s.mu.Lock()
-		s.shake = true
-		s.mu.Unlock()
-	default:
+		return
+	}
+	if l.Kind == ptyhold.KindRun {
 		// A stage's CLI with no stage to report to: the session it worked was
 		// marked cancelled when the application opened, and a CLI left running
 		// would be spending tokens on work nobody is waiting for.
@@ -430,10 +423,12 @@ func shellSpec(dir, command string) ptyhold.Spec {
 	return ptyhold.Spec{Argv: argv, Dir: dir, Env: env}
 }
 
-func newSession(id string, log *slog.Logger) *Session {
+// newSession is a terminal whose screen starts at cols×rows; zero is the size a
+// pty gets when nobody has said one (ptyhold.Start).
+func newSession(id string, cols, rows int, log *slog.Logger) *Session {
 	return &Session{
 		ID:        id,
-		history:   ptyhold.NewTail(historyCap),
+		screen:    ptyhold.NewScreen(cols, rows),
 		subs:      map[chan []byte]struct{}{},
 		done:      make(chan struct{}),
 		forgotten: make(chan struct{}),
@@ -466,7 +461,9 @@ func (s *Session) publish(chunk []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.spoke = time.Now()
-	s.history.Write(chunk)
+	if s.screen != nil {
+		s.screen.Write(chunk)
+	}
 
 	// Sent under the lock, because the lock is what closes these channels: a
 	// viewer leaving and the process ending both close them, and a send racing
@@ -493,7 +490,7 @@ func (s *Session) publish(chunk []byte) {
 func (s *Session) Subscribe() (history []byte, updates <-chan []byte, cancel func()) {
 	ch := make(chan []byte, 64)
 	s.mu.Lock()
-	history = s.history.Bytes()
+	history = s.snapshot()
 	s.subs[ch] = struct{}{}
 	s.mu.Unlock()
 
@@ -520,7 +517,15 @@ func (s *Session) Quiet() time.Duration {
 func (s *Session) History() []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.history.Bytes()
+	return s.snapshot()
+}
+
+// snapshot is the screen as a new window must be fed it. Called with mu held.
+func (s *Session) snapshot() []byte {
+	if s.screen == nil {
+		return append([]byte(nil), s.final...)
+	}
+	return s.screen.Bytes()
 }
 
 // Write is a keystroke on its way to the process.
@@ -534,14 +539,14 @@ func (s *Session) Resize(cols, rows int) error {
 	if cols <= 0 || rows <= 0 {
 		return nil
 	}
+	// The screen first: output the process draws for the new size must find it
+	// already there.
 	s.mu.Lock()
 	s.cols, s.rows = cols, rows
-	shake := s.shake
-	s.shake = false
-	s.mu.Unlock()
-	if shake {
-		_ = s.eng.Resize(cols+1, rows)
+	if s.screen != nil {
+		s.screen.Resize(cols, rows)
 	}
+	s.mu.Unlock()
 	return s.eng.Resize(cols, rows)
 }
 
@@ -593,6 +598,9 @@ func (s *Session) finish() {
 			delete(s.subs, c)
 			close(c)
 		}
+		s.final = s.screen.Bytes()
+		s.screen.Close()
+		s.screen = nil
 		s.mu.Unlock()
 		s.eng.Release()
 	})

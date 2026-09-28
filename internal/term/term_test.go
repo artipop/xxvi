@@ -451,11 +451,11 @@ func TestCloseHangsUpBeforeKilling(t *testing.T) {
 	}
 }
 
-// The history is cut where a sequence and a character end, and handed out
-// behind the modes its cut-off start had set: a CLI that turned on bracketed
-// paste and application keys long ago still gets a paste as a paste and the
-// arrows as arrows from a window opened now.
-func TestCappedHistoryKeepsTheModes(t *testing.T) {
+// A window opened on a long-running terminal gets its screen, not its whole
+// output: the history is as deep as the window's own scrollback, and carries the
+// modes the process set long ago — a paste still arrives as a paste and the
+// arrows as arrows.
+func TestHistoryIsTheScreenWithItsModes(t *testing.T) {
 	m := manager(t)
 	script := `printf '\033[?2004h\033[?1h'; L=$(printf 'щщщ \033[1mжирный\033[0m'); yes "$L" | head -n 30000; echo КОНЕЦ`
 	s, err := m.Attach("run-long", "card-1", t.TempDir(), []string{"sh", "-c", script}, nil)
@@ -464,22 +464,19 @@ func TestCappedHistoryKeepsTheModes(t *testing.T) {
 	}
 	<-s.Done()
 
-	history := s.History()
-	if len(history) > historyCap+64 {
-		t.Fatalf("история должна быть обрезана: %d байт", len(history))
+	history := string(s.History())
+	for _, mode := range []string{"\x1b[?2004h", "\x1b[?1h"} {
+		if !strings.Contains(history, mode) {
+			t.Fatalf("в истории нет режима %q: %q", mode, history[:min(80, len(history))])
+		}
 	}
-	preamble := "\x1b[?1h\x1b[?2004h"
-	if !strings.HasPrefix(string(history), preamble) {
-		t.Fatalf("история должна начинаться с режимов отрезанного начала: %q", string(history[:40]))
+	if !utf8.ValidString(history) {
+		t.Fatal("история должна быть целым текстом")
 	}
-	rest := history[len(preamble):]
-	if !utf8.Valid(rest) {
-		t.Fatal("срез прошёл посреди символа")
+	if lines := strings.Count(history, "\n"); lines > 5000+24 {
+		t.Fatalf("история глубже прокрутки окна: %d строк", lines)
 	}
-	if c := rest[0]; c == '[' || c == 'm' || (c >= '0' && c <= '9') {
-		t.Fatalf("срез прошёл посреди последовательности: %q", string(rest[:20]))
-	}
-	if !strings.Contains(string(rest), "КОНЕЦ") {
+	if !strings.Contains(history, "КОНЕЦ") {
 		t.Fatal("конец вывода потерялся")
 	}
 }

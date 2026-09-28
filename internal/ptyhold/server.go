@@ -11,11 +11,6 @@ import (
 	"time"
 )
 
-// tailCap is how much of a session's output the holder keeps for the
-// application that attaches next — the same as the application keeps itself
-// (internal/term), so a screen after a restart is the screen before it.
-const tailCap = 256 << 10
-
 // Timing of the holder's own life. An application that starts one connects
 // within moments; one that never does left a holder with nothing to hold.
 const (
@@ -44,9 +39,10 @@ type session struct {
 	label Label
 	proc  *Proc
 
-	mu      sync.Mutex
-	tail    *Tail
-	running bool
+	mu         sync.Mutex
+	screen     *Screen
+	cols, rows int
+	running    bool
 	// to is the application watching this session's output, nil while none
 	// is: output is kept in the tail either way.
 	to *peer
@@ -144,7 +140,7 @@ func (s *Server) serve(p *peer) {
 		for _, t := range all {
 			t.mu.Lock()
 			if t.to == p {
-				t.to = nil
+				t.detachLocked()
 			}
 			t.mu.Unlock()
 		}
@@ -202,7 +198,7 @@ func (s *Server) handle(p *peer, req request) response {
 		list := make([]Info, 0, len(all))
 		for _, t := range all {
 			t.mu.Lock()
-			list = append(list, Info{Label: t.label, Running: t.running})
+			list = append(list, Info{Label: t.label, Running: t.running, Cols: t.cols, Rows: t.rows})
 			t.mu.Unlock()
 		}
 		return response{Sessions: list}
@@ -218,7 +214,7 @@ func (s *Server) handle(p *peer, req request) response {
 	case "attach":
 		return response{Running: t.attach(p)}
 	case "resize":
-		if err := t.proc.Resize(req.Cols, req.Rows); err != nil {
+		if err := t.resize(req.Cols, req.Rows); err != nil {
 			return response{Err: err.Error()}
 		}
 		return response{}
@@ -260,12 +256,14 @@ func (s *Server) start(p *peer, label Label, spec Spec) error {
 	if taken {
 		return errors.New("session " + label.ID + " already exists")
 	}
+	spec.Cols, spec.Rows = sized(spec.Cols, spec.Rows)
 	proc, err := Start(spec)
 	if err != nil {
 		return err
 	}
 	t := &session{
-		label: label, proc: proc, tail: NewTail(tailCap),
+		label: label, proc: proc, screen: NewScreen(spec.Cols, spec.Rows),
+		cols: spec.Cols, rows: spec.Rows,
 		running: true, to: p, input: make(chan []byte, 1024),
 	}
 	s.mu.Lock()
@@ -289,31 +287,70 @@ func (s *Server) start(p *peer, label Label, spec Spec) error {
 	return nil
 }
 
-// output keeps a chunk and passes it on. The tail is written whether or not
+// output keeps a chunk and passes it on. The screen is fed whether or not
 // anyone is watching: an application started again has no history of its own,
 // and the screen must show what was there before it closed.
 func (t *session) output(chunk []byte) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.tail.Write(chunk)
+	if t.closed {
+		return
+	}
+	t.screen.Write(chunk)
 	if t.to != nil && t.to.send(frame{typ: tOut, id: t.label.ID, payload: chunk}) != nil {
 		t.to.conn.Close()
-		t.to = nil
+		t.detachLocked()
 	}
 }
 
-// attach replays the tail to p and sends it everything printed after. Under the
-// session's lock, so nothing printed in between is lost or sent twice.
+// attach hands p the screen as it stands and sends it everything printed
+// after. Under the session's lock, so nothing printed in between is lost or
+// sent twice.
 func (t *session) attach(p *peer) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if replay := t.tail.Bytes(); len(replay) > 0 {
-		if p.send(frame{typ: tOut, id: t.label.ID, payload: replay}) != nil {
-			return t.running
-		}
+	if t.closed {
+		return false
+	}
+	if p.send(frame{typ: tOut, id: t.label.ID, payload: t.screen.Bytes()}) != nil {
+		return t.running
 	}
 	t.to = p
+	t.screen.Answer(nil)
 	return t.running
+}
+
+// detachLocked leaves the session with nobody watching. A program that asks its
+// terminal something — where the cursor is, what it can do — would otherwise
+// wait for an answer until it gave up; the holder's screen answers instead.
+func (t *session) detachLocked() {
+	t.to = nil
+	t.screen.Answer(func(reply []byte) {
+		// Called from inside the screen's Write, which output holds mu for.
+		if t.closed || !t.running {
+			return
+		}
+		select {
+		case t.input <- reply:
+		default:
+		}
+	})
+}
+
+func (t *session) resize(cols, rows int) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return nil
+	}
+	if err := t.proc.Resize(cols, rows); err != nil {
+		return err
+	}
+	t.screen.Resize(cols, rows)
+	if cols > 1 && rows > 1 {
+		t.cols, t.rows = cols, rows
+	}
+	return nil
 }
 
 func (t *session) write(data []byte) {
@@ -336,6 +373,7 @@ func (s *Server) forget(t *session) {
 	if !t.closed {
 		t.closed = true
 		close(t.input)
+		t.screen.Close()
 	}
 	t.mu.Unlock()
 	s.mu.Lock()
