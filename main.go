@@ -29,6 +29,7 @@ import (
 	"github.com/artipop/xxvi/internal/appmcp"
 	"github.com/artipop/xxvi/internal/launch"
 	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/xxvi/internal/stagemcp"
 )
 
 //go:embed all:frontend/dist
@@ -54,6 +55,7 @@ func main() {
 	// belongs to the JSON-RPC stream. It never returns — a window, a database
 	// and a terminal socket are exactly what must not happen here.
 	maybeRunMCP(os.Args[1:])
+	maybeRunHook(os.Args[1:])
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
@@ -201,6 +203,21 @@ func maybeRunMCP(args []string) {
 		fmt.Fprintf(os.Stderr, "mcp: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// maybeRunHook handles `xxvi hook`: the command a stage's CLI runs at the turns
+// of its conversation, which hands each one to the step it belongs to
+// (internal/stagemcp). It exits 0 whatever happened and prints nothing: the CLI
+// waits on it, some events feed stdout back to the model, and a card's mark
+// being late is no reason to break the conversation it marks.
+func maybeRunHook(args []string) {
+	if len(args) == 0 || args[0] != "hook" {
+		return
+	}
+	if err := stagemcp.ForwardHook(context.Background(), os.Stdin, os.Getenv); err != nil {
+		fmt.Fprintf(os.Stderr, "xxvi hook: %v\n", err)
+	}
+	os.Exit(0)
 }
 
 // emitter adapts the Wails event bus to what the packages expect.

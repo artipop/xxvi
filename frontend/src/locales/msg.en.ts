@@ -196,6 +196,7 @@ export const msgEn: Dict = {
   "msg.terminal.binMissing": "The program {bin} was not found — the stage cannot run in a terminal",
   "msg.terminal.noTools": "The agent's tools did not start — the agent cannot report that the step is finished",
   "msg.terminal.closedWithoutReport": "The agent's terminal closed without reporting on the step",
+  "msg.terminal.resumeFailed": "Could not continue conversation {id}: the CLI closed at once — the conversation was most likely deleted",
   "msg.diff.noRepo": "The card's working folder has no git repository",
   "msg.diff.noGit": "Git was not found on this machine: the diff does not compare files itself, it shows what git says",
   "msg.diff.baseNotRevision": "«{rev}» is not a revision: the card's base is the branch it was cut from",

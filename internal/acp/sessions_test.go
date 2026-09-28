@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/stagemcp"
 )
 
 // The test binary doubles as an agent that lists sessions, so the listing is
@@ -19,6 +20,12 @@ const fakeListerEnv = "XXVI_FAKE_SESSION_LISTER"
 func TestMain(m *testing.M) {
 	if os.Getenv(fakeListerEnv) == "1" {
 		fakeLister()
+		os.Exit(0)
+	}
+	// And as `xxvi hook`: a stage's hooks run os.Executable, which here is
+	// this binary (terminal_live_test.go).
+	if len(os.Args) > 1 && os.Args[1] == "hook" {
+		_ = stagemcp.ForwardHook(context.Background(), os.Stdin, os.Getenv)
 		os.Exit(0)
 	}
 	os.Exit(m.Run())

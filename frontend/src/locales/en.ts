@@ -163,6 +163,7 @@ export const en: Dict = {
   "attention.card": "Card",
   "attention.openCard": "Open card",
   "attention.quiet": "The agent's terminal is quiet — check whether it is waiting for an answer",
+  "attention.terminalAsking": "The agent is asking in its terminal — a permission or a question",
   "attention.quietNote": "Nothing to answer here: the agent asked in its own terminal, and that is where the answer goes.",
   "attention.worktree": "The task is closed but its working tree is still there: {path}. Remove it? The branch {branch} stays.",
   "attention.worktreeDirty": "The task is closed but its working tree is still there: {path}. It has uncommitted changes — they are lost if it is removed. The branch {branch} stays.",

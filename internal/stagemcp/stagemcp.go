@@ -59,6 +59,9 @@ type Step struct {
 	// written to be acted on: a missing required value names itself, the agent
 	// adds it and calls again, and the step has not ended.
 	Report func(Report) error
+	// Hook takes what the CLI says about itself (hook.go). Optional: a CLI
+	// without hooks is watched by its silence instead.
+	Hook func(HookEvent)
 }
 
 // Server is the loopback listener and the grants open on it.
@@ -175,6 +178,10 @@ func (s *Server) handler() http.Handler {
 	}, &mcp.StreamableHTTPOptions{Stateless: true})
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/hook" {
+			s.serveHook(w, r)
+			return
+		}
 		if _, ok := s.step(r); !ok {
 			http.Error(w, "this step is already finished", http.StatusForbidden)
 			return
