@@ -286,3 +286,24 @@ func TestFramesSurviveTheWire(t *testing.T) {
 		t.Fatalf("пустой кадр: %+v, %v", f, err)
 	}
 }
+
+// A process that has exited is not signalled again: its pid is free, and the
+// group signal would reach whatever holds the number now.
+func TestAnExitedProcessIsNotSignalled(t *testing.T) {
+	p, err := Start(sh("exit 0"))
+	if err != nil {
+		t.Fatalf("старт: %v", err)
+	}
+	p.Pump(func([]byte) {})
+	deadline := time.Now().Add(5 * time.Second)
+	for !p.reaped.Load() {
+		if time.Now().After(deadline) {
+			t.Fatal("процесс должен был быть подобран")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := p.Hangup(); err == nil {
+		t.Fatal("завершившемуся процессу не шлют hangup")
+	}
+	p.Kill() // must not signal; nothing to observe but that it returns
+}

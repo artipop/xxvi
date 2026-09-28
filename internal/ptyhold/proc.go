@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aymanbagabas/go-pty"
@@ -30,6 +31,11 @@ type Proc struct {
 	tty       pty.Pty
 	cmd       *pty.Cmd
 	closeOnce sync.Once
+	// reaped is set once the process has been waited for. Its pid is free from
+	// then on, and a finished session can sit in the holder for days before it
+	// is forgotten: a signal sent to that pid's group then would land on
+	// whatever the system has handed the number to since.
+	reaped atomic.Bool
 }
 
 // Start opens a pty and runs spec in it.
@@ -100,6 +106,7 @@ func (p *Proc) Pump(out func([]byte)) {
 	exited := make(chan struct{})
 	go func() {
 		_ = p.cmd.Wait()
+		p.reaped.Store(true)
 		close(exited)
 	}()
 
@@ -141,12 +148,15 @@ func (p *Proc) Hangup() error {
 	if p.cmd.Process == nil {
 		return errors.New("not started")
 	}
+	if p.reaped.Load() {
+		return errors.New("already exited")
+	}
 	return hangup(p.cmd.Process)
 }
 
 // Kill ends the process and everything it started in this terminal.
 func (p *Proc) Kill() {
-	if p.cmd.Process != nil {
+	if p.cmd.Process != nil && !p.reaped.Load() {
 		kill(p.cmd.Process)
 	}
 }
