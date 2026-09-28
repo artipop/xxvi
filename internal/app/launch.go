@@ -106,9 +106,7 @@ func (s *API) LaunchPlan(cardID, screenID, prefer string) (LaunchPlan, error) {
 		plan.Chosen, plan.Remembered = p, true
 	}
 	if session := s.app.Terminals.OnScreen(screenID); session != nil && session.Alive() {
-		s.app.roomMu.Lock()
-		st := s.app.runs[screenID]
-		s.app.roomMu.Unlock()
+		st := s.app.runOn(cardID, screenID, session.Command)
 		if st != nil {
 			plan.Running = &LaunchRun{
 				Terminal: s.handle(session.ID),
@@ -119,6 +117,29 @@ func (s *API) LaunchPlan(cardID, screenID, prefer string) (LaunchPlan, error) {
 		}
 	}
 	return plan, nil
+}
+
+// runOn is what the screen is running. A run started before the application
+// last closed is still going — the holder kept it (internal/ptyhold) — while
+// what this run remembered about it is gone; it is taken to be what was last
+// started for the project, when the command agrees, and a plain command when
+// it does not.
+func (a *App) runOn(cardID, screenID, command string) *runState {
+	a.roomMu.Lock()
+	defer a.roomMu.Unlock()
+	if st := a.runs[screenID]; st != nil {
+		return st
+	}
+	p := launch.Profile{Kind: model.LaunchCommand, Command: command}
+	if remembered, ok := a.rememberedLaunch(cardID); ok && remembered.Command == command {
+		p = remembered
+	}
+	if a.runs == nil {
+		a.runs = map[string]*runState{}
+	}
+	st := &runState{profile: p}
+	a.runs[screenID] = st
+	return st
 }
 
 // StartLaunch runs a profile on a screen, replacing whatever that screen was

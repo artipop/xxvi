@@ -1,6 +1,6 @@
 //go:build windows
 
-package term
+package ptyhold
 
 import (
 	"errors"
@@ -9,8 +9,8 @@ import (
 	"github.com/aymanbagabas/go-pty"
 )
 
-// Windows has no hangup to send, so Close goes straight to the kill; and a
-// ConPTY has no slave end of ours to let go of.
+// Windows has no hangup to send, so a hangup always fails and Kill is what is
+// left; and a ConPTY has no slave end of ours to let go of.
 
 func hangup(*os.Process) error { return errors.New("no hangup on windows") }
 

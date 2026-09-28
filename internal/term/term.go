@@ -17,7 +17,6 @@ package term
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
@@ -27,18 +26,17 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/artipop/xxvi/internal/msg"
-	"github.com/aymanbagabas/go-pty"
+	"github.com/artipop/xxvi/internal/ptyhold"
 	"github.com/google/uuid"
 )
 
 // closeGrace is how long a hung-up process has to leave on its own before it
-// is killed, and drainWait how long its output is read after it has gone.
+// is killed, and killWait how long a killed one has to be heard ending.
 const (
 	closeGrace = 2 * time.Second
-	drainWait  = time.Second
+	killWait   = 2 * time.Second
 )
 
 // historyCap is how much of what a terminal printed is kept for a screen that
@@ -53,17 +51,18 @@ type Session struct {
 	ScreenID string
 	Command  string
 
-	tty pty.Pty
-	cmd *pty.Cmd
+	eng engine
 
 	mu      sync.Mutex
-	history []byte
-	// cut is what the history's cap has cut off, read for the modes it set
-	// (modes.go): the history is always handed out behind them.
-	cut  modes
-	subs map[chan []byte]struct{}
-	cols int
-	rows int
+	history *ptyhold.Tail
+	subs    map[chan []byte]struct{}
+	cols    int
+	rows    int
+	// shake says the process was drawing for a window it has not seen since:
+	// adopted from the holder after a restart (Manager.Hold). The first size a
+	// window reports is sent as a change even if it is not one, so a
+	// full-screen program redraws over the raw tail instead of leaving it.
+	shake bool
 	// spoke is when the process last drew anything. It is what a stage in a
 	// terminal is watched by: its CLI asks a person inside its own interface,
 	// where nothing of ours can see the question, so silence is the only signal
@@ -77,8 +76,6 @@ type Session struct {
 	// tail, if any, is on disk — what Close waits for.
 	forgotten chan struct{}
 
-	// drained closes when everything the process printed has been read.
-	drained  chan struct{}
 	done     chan struct{}
 	closeOne sync.Once
 	log      *slog.Logger
@@ -97,6 +94,10 @@ type Manager struct {
 	// than nothing. The pty is gone; the ribbon is a journal, and a journal is
 	// not erased by a process exiting.
 	keep string
+
+	// holder runs the processes when there is one (Hold): they outlive the
+	// application then. Without it they run here and end with it.
+	holder *ptyhold.Client
 
 	// Where the sockets live: an address the operating system chose and a
 	// secret this run minted.
@@ -138,24 +139,12 @@ func (m *Manager) Open(cardID, screenID, command string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s, err := start(dir, command, m.log)
-	if err != nil {
+	s := newSession(uuid.NewString(), m.log)
+	s.CardID, s.ScreenID, s.Command = cardID, screenID, command
+	if err := m.run(s, ptyhold.KindScreen, shellSpec(dir, command)); err != nil {
 		return nil, err
 	}
-	s.CardID, s.ScreenID, s.Command = cardID, screenID, command
-
-	m.mu.Lock()
-	m.byID[s.ID] = s
-	m.byScreen[screenID] = s
-	m.mu.Unlock()
-
-	// The registry forgets a terminal when its process goes, so a screen shown
-	// again after the shell exited starts a new one rather than attaching to a
-	// corpse.
-	go func() {
-		<-s.Done()
-		m.forget(s.ID, s)
-	}()
+	m.register(s)
 	return s, nil
 }
 
@@ -195,22 +184,109 @@ func (m *Manager) Attach(id, cardID, dir string, argv, env []string) (*Session, 
 	}
 	m.mu.Unlock()
 
-	s, err := startArgv(dir, argv, env, m.log)
-	if err != nil {
+	s := newSession(id, m.log)
+	s.CardID, s.Command = cardID, strings.Join(argv, " ")
+	s.keepTail = true
+	spec := ptyhold.Spec{Argv: argv, Dir: dir, Env: append(env, "TERM=xterm-256color", "COLORTERM=truecolor")}
+	if err := m.run(s, ptyhold.KindRun, spec); err != nil {
 		return nil, err
 	}
-	s.ID, s.CardID, s.Command = id, cardID, strings.Join(argv, " ")
-	s.keepTail = true
+	m.register(s)
+	return s, nil
+}
 
+// run starts the process of s: in the holder when there is one, here when there
+// is not or it has gone.
+func (m *Manager) run(s *Session, kind string, spec ptyhold.Spec) error {
 	m.mu.Lock()
-	m.byID[id] = s
+	holder := m.holder
 	m.mu.Unlock()
+	if holder != nil {
+		s.eng = held{holder, s.ID}
+		label := ptyhold.Label{ID: s.ID, Kind: kind, Card: s.CardID, Screen: s.ScreenID, Command: s.Command}
+		err := holder.Start(label, spec, s.sink())
+		if err == nil || !errors.Is(err, ptyhold.ErrClosed) {
+			return err
+		}
+		m.log.Warn("the terminal holder is gone; terminals end with the application now", "err", err)
+		m.mu.Lock()
+		if m.holder == holder {
+			m.holder = nil
+		}
+		m.mu.Unlock()
+	}
+	proc, err := ptyhold.Start(spec)
+	if err != nil {
+		return err
+	}
+	s.eng = local{proc}
+	go func() {
+		proc.Pump(s.publish)
+		s.finish()
+	}()
+	return nil
+}
 
+// register puts a started terminal in the registry, until its process goes: a
+// screen shown again after the shell exited starts a new one rather than
+// attaching to a corpse.
+func (m *Manager) register(s *Session) {
+	m.mu.Lock()
+	m.byID[s.ID] = s
+	if s.ScreenID != "" {
+		m.byScreen[s.ScreenID] = s
+	}
+	m.mu.Unlock()
 	go func() {
 		<-s.Done()
-		m.forget(id, s)
+		m.forget(s.ID, s)
 	}()
-	return s, nil
+}
+
+// Hold hands the terminals to a holder (internal/ptyhold), so that closing the
+// application no longer closes them, and takes back what an earlier run of the
+// application left in it. Called once, at startup, after KeepIn: a stage's
+// terminal that ended while nobody watched still has its tail to write.
+func (m *Manager) Hold(holder *ptyhold.Client) error {
+	m.mu.Lock()
+	m.holder = holder
+	m.mu.Unlock()
+	left, err := holder.List()
+	if err != nil {
+		return err
+	}
+	for _, info := range left {
+		m.adopt(holder, info)
+	}
+	return nil
+}
+
+func (m *Manager) adopt(holder *ptyhold.Client, info ptyhold.Info) {
+	l := info.Label
+	s := newSession(l.ID, m.log)
+	s.CardID, s.ScreenID, s.Command = l.Card, l.Screen, l.Command
+	s.keepTail = l.Kind == ptyhold.KindRun
+	s.eng = held{holder, l.ID}
+	running, err := holder.Attach(l.ID, s.sink())
+	if err != nil {
+		m.log.Warn("could not take back a terminal", "terminal", l.ID, "err", err)
+		_ = holder.Forget(l.ID)
+		return
+	}
+	m.register(s)
+	switch {
+	case !running:
+		s.finish()
+	case l.Kind == ptyhold.KindScreen:
+		s.mu.Lock()
+		s.shake = true
+		s.mu.Unlock()
+	default:
+		// A stage's CLI with no stage to report to: the session it worked was
+		// marked cancelled when the application opened, and a CLI left running
+		// would be spending tokens on work nobody is waiting for.
+		go s.Close()
+	}
 }
 
 // forget takes a dead terminal out of the registry.
@@ -299,17 +375,25 @@ func (m *Manager) CloseCard(cardID string) {
 	closeAll(doomed)
 }
 
-// Close ends everything. Called when the application does.
+// Close is the application closing. What a holder runs for a screen is left to
+// it — that is what the holder is for — and everything else ends: a stage's CLI
+// has nobody to report to once the application is gone.
 func (m *Manager) Close() {
 	m.mu.Lock()
 	doomed := make([]*Session, 0, len(m.byID))
 	for _, s := range m.byID {
-		doomed = append(doomed, s)
+		if !s.outlivesUs() {
+			doomed = append(doomed, s)
+		}
 	}
+	holder := m.holder
 	m.mu.Unlock()
 	closeAll(doomed)
 	for _, s := range doomed {
 		s.waitBrief()
+	}
+	if holder != nil {
+		holder.Close()
 	}
 }
 
@@ -328,92 +412,39 @@ func closeAll(doomed []*Session) {
 	wg.Wait()
 }
 
-// start opens a pty and runs a shell in it.
+// shellSpec runs a command through a login shell, or just the shell.
 //
 // A command is run through the shell rather than executed directly, and with a
 // login shell at that: what a person types into a terminal is shell syntax —
 // pipes, globs, their own aliases and PATH — and a terminal that only ran argv
 // would be a terminal in name.
-func start(dir, command string, log *slog.Logger) (*Session, error) {
-	tty, err := pty.New()
-	if err != nil {
-		return nil, fmt.Errorf("open a terminal: %w", err)
-	}
-
-	shell := loginShell()
-	var args []string
+func shellSpec(dir, command string) ptyhold.Spec {
+	argv := []string{loginShell(), "-l"}
 	if command != "" {
-		args = []string{"-l", "-c", command}
-	} else {
-		args = []string{"-l"}
+		argv = append(argv, "-c", command)
 	}
-
-	cmd := tty.Command(shell, args...)
-	cmd.Dir = dir
 	// TERM is what makes a CLI draw at all; without it everything falls back to
 	// dumb output and the colours and the cursor moves arrive as escape codes
 	// printed literally.
-	cmd.Env = append(os.Environ(),
-		"TERM=xterm-256color",
-		"COLORTERM=truecolor",
-	)
-	if err := cmd.Start(); err != nil {
-		tty.Close()
-		return nil, fmt.Errorf("start %s: %w", shell, err)
-	}
-
-	return newSession(tty, cmd, log), nil
+	env := append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	return ptyhold.Spec{Argv: argv, Dir: dir, Env: env}
 }
 
-// newSession wires a started process to its readers. Both doors end here: the
-// pumping, the scrollback and the reaping are the same whatever was started.
-func newSession(tty pty.Pty, cmd *pty.Cmd, log *slog.Logger) *Session {
-	s := &Session{
-		ID:        uuid.NewString(),
-		tty:       tty,
-		cmd:       cmd,
+func newSession(id string, log *slog.Logger) *Session {
+	return &Session{
+		ID:        id,
+		history:   ptyhold.NewTail(historyCap),
 		subs:      map[chan []byte]struct{}{},
 		done:      make(chan struct{}),
-		drained:   make(chan struct{}),
 		forgotten: make(chan struct{}),
 		log:       log,
 		spoke:     time.Now(),
 	}
-	// Our copy of the slave end would keep the pty open after the process is
-	// gone, and then the reader never hears the end: it is what made reaping
-	// the only signal, and reaping closes the pty on output not yet read.
-	releaseSlave(tty)
-	go s.pump()
-	go func() {
-		_ = cmd.Wait()
-		// Whatever it printed last is still in the pty. A child it left behind
-		// can hold the pty open forever, so the wait for it is bounded.
-		select {
-		case <-s.drained:
-		case <-time.After(drainWait):
-		}
-		s.finish()
-	}()
-	return s
 }
 
-// startArgv opens a pty and runs one argv in it, with the environment the
-// caller assembled: a stage's CLI is told which folder, which tools and which
-// variables it must not inherit, and none of that survives a trip through a
-// shell's own startup files.
-func startArgv(dir string, argv, env []string, log *slog.Logger) (*Session, error) {
-	tty, err := pty.New()
-	if err != nil {
-		return nil, fmt.Errorf("open a terminal: %w", err)
-	}
-	cmd := tty.Command(argv[0], argv[1:]...)
-	cmd.Dir = dir
-	cmd.Env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor")
-	if err := cmd.Start(); err != nil {
-		tty.Close()
-		return nil, fmt.Errorf("start %s: %w", argv[0], err)
-	}
-	return newSession(tty, cmd, log), nil
+// sink is where the holder sends what this terminal prints, and its end.
+func (s *Session) sink() ptyhold.Sink {
+	return ptyhold.Sink{Out: s.publish, Exited: s.finish}
 }
 
 func loginShell() string {
@@ -429,41 +460,13 @@ func loginShell() string {
 	return "/bin/sh"
 }
 
-// pump reads the pty until it ends, keeping the tail for whoever opens the
-// screen next and handing every chunk to whoever is watching now.
-func (s *Session) pump() {
-	defer close(s.drained)
-	buf := make([]byte, 32<<10)
-	for {
-		n, err := s.tty.Read(buf)
-		if n > 0 {
-			chunk := make([]byte, n)
-			copy(chunk, buf[:n])
-			s.publish(chunk)
-		}
-		if err != nil {
-			s.finish()
-			return
-		}
-	}
-}
-
+// publish keeps a chunk for whoever opens the screen next and hands it to
+// whoever is watching now.
 func (s *Session) publish(chunk []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.spoke = time.Now()
-	s.history = append(s.history, chunk...)
-	if len(s.history) > historyCap {
-		drop := len(s.history) - historyCap
-		s.cut.feed(s.history[:drop])
-		// The cut moves on to where a sequence or a character ends: a history
-		// starting halfway through one begins with garbage printed as text.
-		for drop < len(s.history) && (!s.cut.settled() || !utf8.RuneStart(s.history[drop])) {
-			s.cut.step(s.history[drop])
-			drop++
-		}
-		s.history = append([]byte(nil), s.history[drop:]...)
-	}
+	s.history.Write(chunk)
 
 	// Sent under the lock, because the lock is what closes these channels: a
 	// viewer leaving and the process ending both close them, and a send racing
@@ -490,7 +493,7 @@ func (s *Session) publish(chunk []byte) {
 func (s *Session) Subscribe() (history []byte, updates <-chan []byte, cancel func()) {
 	ch := make(chan []byte, 64)
 	s.mu.Lock()
-	history = s.snapshot()
+	history = s.history.Bytes()
 	s.subs[ch] = struct{}{}
 	s.mu.Unlock()
 
@@ -517,21 +520,11 @@ func (s *Session) Quiet() time.Duration {
 func (s *Session) History() []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.snapshot()
-}
-
-// snapshot is the history as a new emulator must be fed it. Called with mu held.
-func (s *Session) snapshot() []byte {
-	preamble := s.cut.preamble()
-	out := make([]byte, 0, len(preamble)+len(s.history))
-	return append(append(out, preamble...), s.history...)
+	return s.history.Bytes()
 }
 
 // Write is a keystroke on its way to the process.
-func (s *Session) Write(data []byte) error {
-	_, err := s.tty.Write(data)
-	return err
-}
+func (s *Session) Write(data []byte) error { return s.eng.Write(data) }
 
 // Resize tells the process how wide the window is. This is the whole of why a
 // terminal wraps where it should: a shell breaks its lines at the column count
@@ -543,8 +536,13 @@ func (s *Session) Resize(cols, rows int) error {
 	}
 	s.mu.Lock()
 	s.cols, s.rows = cols, rows
+	shake := s.shake
+	s.shake = false
 	s.mu.Unlock()
-	return s.tty.Resize(cols, rows)
+	if shake {
+		_ = s.eng.Resize(cols+1, rows)
+	}
+	return s.eng.Resize(cols, rows)
 }
 
 // Alive reports a terminal whose process has not ended.
@@ -569,26 +567,26 @@ func (s *Session) Close() {
 	if !s.Alive() {
 		return
 	}
-	if s.cmd != nil && s.cmd.Process != nil && hangup(s.cmd.Process) == nil {
+	if s.eng.Hangup() == nil {
 		select {
 		case <-s.done:
 			return
 		case <-time.After(closeGrace):
 		}
 	}
-	if s.cmd != nil && s.cmd.Process != nil {
-		kill(s.cmd.Process)
+	s.eng.Kill()
+	select {
+	case <-s.done:
+	case <-time.After(killWait):
+		s.finish()
 	}
-	_ = s.tty.Close()
-	s.finish()
 }
 
-// finish is idempotent: the reader ending and the process exiting are two
-// events for one fact, and they race.
+// finish is idempotent: the output ending, the process exiting and a Close
+// that stopped waiting for either are three events for one fact, and they race.
 func (s *Session) finish() {
 	s.closeOne.Do(func() {
 		close(s.done)
-		_ = s.tty.Close()
 
 		s.mu.Lock()
 		for c := range s.subs {
@@ -596,7 +594,15 @@ func (s *Session) finish() {
 			close(c)
 		}
 		s.mu.Unlock()
+		s.eng.Release()
 	})
+}
+
+// outlivesUs reports a terminal that goes on after the application closes: a
+// screen's, run by a holder.
+func (s *Session) outlivesUs() bool {
+	_, ok := s.eng.(held)
+	return ok && s.ScreenID != ""
 }
 
 // waitBrief gives a closing process a moment to be reaped and its tail written

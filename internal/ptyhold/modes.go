@@ -1,4 +1,4 @@
-package term
+package ptyhold
 
 import (
 	"slices"
@@ -10,12 +10,12 @@ import (
 // switches a process flips once, at the start, and then relies on. Bracketed
 // paste, application cursor keys, mouse reporting, the alternate screen.
 //
-// It exists for the history a terminal keeps. The history is capped, and the
+// It exists for the tail a terminal keeps (Tail). The tail is capped, and the
 // cap cuts off the start — exactly where those switches were flipped. An
 // emulator fed only the tail draws the same characters but sends the wrong
 // bytes back: a pasted brief arrives as lines typed and submitted one by one,
 // the arrows move nothing. So what was cut off is read through this, and the
-// history is handed out behind a preamble that flips the switches back.
+// tail is handed out behind a preamble that flips the switches back.
 //
 // Only switches are followed. Colours and the cursor are redrawn by the tail
 // itself soon enough; a mode is set once and never said again.
@@ -177,8 +177,3 @@ func (m *modes) preamble() []byte {
 	}
 	return []byte(b.String())
 }
-
-// releaseInput turns off what makes a finished terminal still act like a live
-// one under the mouse: with reporting on, a click is a report for a process
-// that is gone, and the text cannot be selected.
-const releaseInput = "\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1015l"

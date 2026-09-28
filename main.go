@@ -16,6 +16,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -29,6 +30,7 @@ import (
 	"github.com/artipop/xxvi/internal/appmcp"
 	"github.com/artipop/xxvi/internal/launch"
 	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/xxvi/internal/ptyhold"
 	"github.com/artipop/xxvi/internal/stagemcp"
 )
 
@@ -56,6 +58,16 @@ func main() {
 	// and a terminal socket are exactly what must not happen here.
 	maybeRunMCP(os.Args[1:])
 	maybeRunHook(os.Args[1:])
+	// And the process that keeps terminals alive between runs (internal/ptyhold),
+	// for the same reasons: nothing of the application is to be opened in it.
+	maybeHoldTerminals(os.Args[1:])
+	app.HoldTerminals = func(socket string) *exec.Cmd {
+		self, err := os.Executable()
+		if err != nil {
+			self = os.Args[0]
+		}
+		return exec.Command(self, "pty-hold", socket)
+	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
@@ -216,6 +228,18 @@ func maybeRunHook(args []string) {
 	}
 	if err := stagemcp.ForwardHook(context.Background(), os.Stdin, os.Getenv); err != nil {
 		fmt.Fprintf(os.Stderr, "xxvi hook: %v\n", err)
+	}
+	os.Exit(0)
+}
+
+// maybeHoldTerminals handles `xxvi pty-hold <socket>`: the holder the
+// application starts for its terminals, and which outlives it.
+func maybeHoldTerminals(args []string) {
+	if len(args) != 2 || args[0] != "pty-hold" {
+		return
+	}
+	if err := ptyhold.Serve(args[1]); err != nil {
+		os.Exit(1)
 	}
 	os.Exit(0)
 }

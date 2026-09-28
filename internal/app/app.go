@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/artipop/xxvi/internal/engine"
 	"github.com/artipop/xxvi/internal/hosting"
 	"github.com/artipop/xxvi/internal/inbox"
+	"github.com/artipop/xxvi/internal/ptyhold"
 	"github.com/artipop/xxvi/internal/stagemcp"
 	"github.com/artipop/xxvi/internal/store"
 	"github.com/artipop/xxvi/internal/term"
@@ -94,6 +96,13 @@ type Menu interface {
 	SetWords(words map[string]string)
 }
 
+// HoldTerminals is how to start the process that keeps terminals running while
+// the application is closed (internal/ptyhold). Package main sets it, being the
+// executable that doubles as that process; left nil — as in tests, where the
+// executable is a test binary — terminals run in the application and end with
+// it.
+var HoldTerminals func(socket string) *exec.Cmd
+
 // Open builds the application over a data directory, creating and seeding the
 // database if this is a first run.
 func Open(dataDir string, log *slog.Logger) (*App, error) {
@@ -140,6 +149,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	// in the folder an agent worked in: a file of ours inside somebody's
 	// repository is ours to clean up and theirs to find in `git status`.
 	a.Terminals.KeepIn(filepath.Join(dataDir, "terminals"))
+	a.holdTerminals()
 	if err := a.Terminals.Listen(); err != nil {
 		// A terminal that cannot be opened is a screen that says so. Everything
 		// else in the application works without one, and refusing to start over
@@ -188,6 +198,25 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	}
 	a.upgradeRunScreens()
 	return a, nil
+}
+
+// holdTerminals hands the terminals to the holder, starting it if an earlier
+// run has not. A holder that cannot be had costs only the terminals' surviving
+// a restart, and that is said in the log rather than refused.
+func (a *App) holdTerminals() {
+	if HoldTerminals == nil {
+		return
+	}
+	socket, err := ptyhold.SocketPath(a.DataDir)
+	if err == nil {
+		var holder *ptyhold.Client
+		if holder, err = ptyhold.Connect(socket, func() *exec.Cmd { return HoldTerminals(socket) }); err == nil {
+			err = a.Terminals.Hold(holder)
+		}
+	}
+	if err != nil {
+		a.log.Warn("terminals will end with the application", "why", err)
+	}
 }
 
 // Start begins the background work: reading sources and asking the hosting,
