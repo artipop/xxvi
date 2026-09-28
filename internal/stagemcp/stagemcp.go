@@ -222,15 +222,14 @@ func newServer(step Step) *mcp.Server {
 	return srv
 }
 
-// lastCall is said in both the instructions and the tool, because the call is
-// taken at its word: seconds after it the terminal is closed, so a commit
-// running alongside it is cut off, and a commit that failed alongside it has
-// already been reported as done.
-// confirmFirst is said in both places for the same reason as lastCall. A person
-// is sitting in this terminal, and an agent left to judge «done» alone closed
-// the step after its first answer — before the person had read it, with the
-// terminal gone and the card already on the next stage.
-func confirmFirst(step Step) string {
+// whenToFinish is said in both places for the same reason as lastCall. Left to
+// judge «done» by feel, an agent closed the step after its first answer —
+// often a question or a plan — before the person had read it, with the
+// terminal gone and the card already on the next stage. Asking every time is
+// the opposite failure: a person sitting through questions whose answer is
+// obvious. So «done» is a list the agent can check, and doubt goes to the
+// person.
+func whenToFinish(step Step) string {
 	next := "the next step"
 	if len(step.Next) > 0 {
 		quoted := make([]string, len(step.Next))
@@ -239,12 +238,21 @@ func confirmFirst(step Step) string {
 		}
 		next = strings.Join(quoted, " or ")
 	}
-	return fmt.Sprintf("Do not call it on your own judgement: a person is working with you in this terminal. "+
-		"When you think the work is done, say what you did and ask «I'm done — move on to %s?», then wait for the answer. "+
-		"Call finish_step only once the person agrees or asks you to finish; if they want something else, keep working. "+
-		"The same goes for giving up: say why and ask before reporting failed. ", next)
+	return fmt.Sprintf("A person is working with you in this terminal. Call finish_step with done on your own only when all of these hold: "+
+		"everything the task and this stage ask for is actually done, not planned or proposed; "+
+		"you have checked the result (built it, ran the tests, or looked at what it produces); "+
+		"your changes are committed if you are on a branch; "+
+		"you have every value this step has to leave on the card; "+
+		"and nothing is waiting on the person — you have not just asked them a question, offered options or shown a plan to approve. "+
+		"If any of these is in doubt, do not call it: say what you did and what is left open, ask «I'm done — move on to %s?», and wait. "+
+		"Call it once the person agrees or asks you to finish; if they want something else, keep working. "+
+		"Failed is the same: say why and ask before reporting it. ", next)
 }
 
+// lastCall is said in both the instructions and the tool, because the call is
+// taken at its word: seconds after it the terminal is closed, so a commit
+// running alongside it is cut off, and a commit that failed alongside it has
+// already been reported as done.
 const lastCall = "Make it your last call, on its own: not alongside other tool calls, and only once the results of every earlier call are in — " +
 	"right after it the session is closed, and anything still running is stopped."
 
@@ -259,7 +267,7 @@ func instructions(step Step) string {
 	}
 	b.WriteString(".\n\nThe step ends with a call to finish_step: until it is called, the card stands here and goes nowhere. ")
 	b.WriteString("Leaving the terminal does not count as finishing the step. ")
-	b.WriteString(confirmFirst(step))
+	b.WriteString(whenToFinish(step))
 	b.WriteString(lastCall)
 	return b.String()
 }
@@ -271,7 +279,7 @@ func instructions(step Step) string {
 func describe(step Step) string {
 	var b strings.Builder
 	b.WriteString("Report that the step is finished, and how: until this call the card stays where it is. ")
-	b.WriteString(confirmFirst(step))
+	b.WriteString(whenToFinish(step))
 	b.WriteString(lastCall)
 	if len(step.Writes) == 0 {
 		return b.String()
