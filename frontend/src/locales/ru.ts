@@ -281,13 +281,14 @@ export const ru: Dict = {
   "updates.skipped": "Версия {version} пропущена и больше не предлагается. Отменить это можно в {path}.",
 
   // ---- a task typed into the ribbon ----
-  "compose.placeholder": "Что сделать? Первая строка — заголовок, весь текст уйдёт агенту.",
+  "compose.placeholder": "Что сделать? Первая строка — заголовок, весь текст уйдёт агенту. Можно не писать и сказать всё агенту в терминале.",
+  "compose.untitled": "Задача без описания",
   "compose.who": "Кто делает",
   "compose.flow": "По какому флоу",
   "compose.start": "Начать ↵",
+  "compose.modeNew": "Новая",
   "compose.fromSession": "Из сессии",
   "compose.fromSessionWhy": "Продолжить разговор, который уже был с этим агентом в папке проекта",
-  "compose.sessionPlaceholder": "Что сказать агенту дальше? Можно не писать: он получит бриф стадии.",
   "compose.sessionsNeedProject": "Выберите проект: сессии ищутся в его папке.",
   "compose.sessionsLoading": "Спрашиваю агента…",
   "compose.sessionsNone": "В папке проекта у этого агента сессий нет.",

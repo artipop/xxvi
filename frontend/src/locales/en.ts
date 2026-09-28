@@ -280,13 +280,14 @@ export const en: Dict = {
   "updates.skipped": "Version {version} is skipped and no longer offered. This can be undone in {path}.",
 
   // ---- a task typed into the ribbon ----
-  "compose.placeholder": "What should be done? The first line is the title; the whole text goes to the agent.",
+  "compose.placeholder": "What should be done? The first line is the title; the whole text goes to the agent. Leave it empty to tell the agent in the terminal instead.",
+  "compose.untitled": "Untitled task",
   "compose.who": "Who does it",
   "compose.flow": "Which flow",
   "compose.start": "Start ↵",
+  "compose.modeNew": "New",
   "compose.fromSession": "From a session",
   "compose.fromSessionWhy": "Continue a conversation this agent already had in the project folder",
-  "compose.sessionPlaceholder": "What to tell the agent next? Optional: it gets the stage brief anyway.",
   "compose.sessionsNeedProject": "Choose a project: sessions are looked up in its folder.",
   "compose.sessionsLoading": "Asking the agent…",
   "compose.sessionsNone": "This agent has no sessions in the project folder.",

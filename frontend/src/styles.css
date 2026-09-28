@@ -513,11 +513,11 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .compose-text:focus { outline: none; }
 .compose > .row { padding: 8px 12px; border-top: 1px solid var(--line); }
 .compose select { width: auto; }
-/* The conversations to continue sit between the text and the choices, and
-   take no more than they need: the text stays the thing typed into. */
+/* The conversations to continue take the text's place: a continued task has
+   nothing to type. */
 .compose-sessions {
-  flex: 0 1 auto; max-height: 45%; overflow-y: auto;
-  border-top: 1px solid var(--line); padding: 4px 0;
+  flex: 1; min-height: 0; overflow-y: auto;
+  background: var(--bg); padding: 8px 0;
 }
 .compose-sessions .empty { padding: 8px 18px; margin: 0; }
 .compose-session {
@@ -530,7 +530,15 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .compose-session.on { background: var(--panel-2); border-left-color: var(--accent); }
 .compose-session .meta { flex: none; font-variant-numeric: tabular-nums; }
 .compose-session-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.compose .btn.on { color: var(--accent); }
+/* Two ways to begin, one of which is always chosen. */
+.compose-mode { display: flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.compose-mode button {
+  background: none; border: 0; border-radius: 0; padding: 4px 12px;
+  color: var(--dim); cursor: pointer;
+}
+.compose-mode button + button { border-left: 1px solid var(--line); }
+.compose-mode button:hover { color: var(--text); }
+.compose-mode button.on { background: var(--panel-2); color: var(--accent); }
 
 /* The stack does not scroll under the hand: a plain wheel belongs to whatever
    is under the pointer, and taking it here is how a ribbon starts fighting the
