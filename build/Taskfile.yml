@@ -196,12 +196,19 @@ tasks:
     dir: build
     sources:
       - "appicon.png"
-      - "appicon.icon"
+      - "appicon.icon/**/*"
+      - "appicon-dev.png"
+      - "appicon-dev.icon/**/*"
     generates:
       - "darwin/icons.icns"
+      - "darwin/dev/icons.icns"
       - "windows/icon.ico"
     cmds:
       - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico -iconcomposerinput appicon.icon -macassetdir darwin
+      # The dev icon only ever goes into the macOS dev bundle (darwin:run); the
+      # .ico the command insists on writing has nowhere to go.
+      - cmd: wails3 generate icons -input appicon-dev.png -macfilename darwin/dev/icons.icns -windowsfilename /dev/null -iconcomposerinput appicon-dev.icon -macassetdir darwin/dev
+        platforms: [darwin]
 
   dev:frontend:
     summary: Runs the frontend in development mode

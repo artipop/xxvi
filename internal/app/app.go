@@ -263,5 +263,5 @@ func DefaultDataDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not find the settings folder: %w", err)
 	}
-	return filepath.Join(base, "XXVI"), nil
+	return filepath.Join(base, dataDirName), nil
 }
