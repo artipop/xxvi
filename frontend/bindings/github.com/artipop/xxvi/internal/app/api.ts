@@ -85,7 +85,8 @@ export function Answer(questionID: string, answer: acp$0.Answer): $CancellablePr
 
 /**
  * Attention is everything waiting for a person, oldest first: an agent's
- * question, a silent terminal, a closed card's working tree.
+ * question, a silent terminal, a closed card's working tree, a card standing
+ * where the next move is the person's.
  */
 export function Attention(): $CancellablePromise<acp$0.Attention[] | null> {
     return $Call.ByID(978520023);

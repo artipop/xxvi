@@ -70,6 +70,8 @@ type App struct {
 	// (launch.go); nil without a window.
 	windows Windows
 
+	remind reminders
+
 	roomMu sync.Mutex
 	room   *room
 	runs   map[string]*runState
@@ -223,11 +225,13 @@ func (a *App) holdTerminals() {
 func (a *App) Start() {
 	a.Poller.Start()
 	a.Hosting.Start()
+	a.startReminders()
 }
 
 // Close stops everything, agents first: a session still writing while the
 // database closes under it is the one ordering mistake worth spelling out.
 func (a *App) Close() error {
+	a.stopReminders()
 	a.Poller.Stop()
 	a.Hosting.Stop()
 	a.Agents.Close()

@@ -2,8 +2,8 @@ import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Attention } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
 import type { CardView } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
-import { attention, guard, loadAttention, openCardByID } from "../state";
-import { questionText, t } from "../i18n";
+import { attention, guard, loadAttention, openCardByID, showRibbon } from "../state";
+import { questionText, say, t } from "../i18n";
 
 // Everything waiting for a person, oldest first, and it is two things.
 //
@@ -21,6 +21,11 @@ import { questionText, t } from "../i18n";
 // A **working tree** is a closed card's separate copy of its repository, still
 // on disk. Removing it is asked rather than done: somebody may still want to
 // look in it, and it may hold what nobody committed.
+//
+// A **standing task** is a card in work that no agent is waiting on and still
+// does not move: a review waiting for its verdict, a step that stopped with
+// nowhere to go. It is answered on the task's own strip, where the diff and the
+// buttons are, so that is where the row leads.
 
 export default function AttentionView() {
   return (
@@ -43,8 +48,18 @@ function Ask(props: { a: Attention }) {
         <Show when={props.a.agent}>
           <span class="tag warn"><span class="dot" />{props.a.agent}</span>
         </Show>
-        <button class="btn quiet" onClick={() => openCardByID(props.a.cardId!)}>{t("attention.openCard")}</button>
+        <Show when={props.a.standing}
+              fallback={<button class="btn quiet" onClick={() => openCardByID(props.a.cardId!)}>{t("attention.openCard")}</button>}>
+          <button class="btn" onClick={() => showRibbon(props.a.cardId!)}>{t("attention.openTask")}</button>
+        </Show>
       </div>
+      <Show when={props.a.standing}>
+        <div class="question">
+          <div class="ask">{t(props.a.standing === "answer" ? "attention.standAnswer" : "attention.standStopped", { stage: props.a.stage ?? "" })}</div>
+          <Show when={props.a.problem}><span class="meta">{say(props.a.problem)}</span></Show>
+        </div>
+      </Show>
+      <Show when={!props.a.standing}>
       <Show when={!props.a.worktree} fallback={<WorktreeForm a={props.a} />}>
       <Show
         when={props.a.questionId}
@@ -64,6 +79,7 @@ function Ask(props: { a: Attention }) {
           freeText={props.a.freeText ?? false}
           onAnswered={loadAttention}
         />
+      </Show>
       </Show>
       </Show>
     </div>

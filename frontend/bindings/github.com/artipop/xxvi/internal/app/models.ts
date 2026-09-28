@@ -141,6 +141,16 @@ export interface NotificationWords {
      */
     "reviewAsked": string;
     "mrUpdated": string;
+
+    /**
+     * RemindAnswer, RemindStopped and RemindAgent say again that a task waits:
+     * on a person's answer at «{stage}», stopped at «{stage}», or on an agent
+     * that asked. RemindMany is several at once, «{n}» of them.
+     */
+    "remindAnswer": string;
+    "remindStopped": string;
+    "remindAgent": string;
+    "remindMany": string;
 }
 
 /**
