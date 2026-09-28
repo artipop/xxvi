@@ -81,6 +81,14 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # libghostty-vt, the terminal emulator the pty holder keeps screens in, is
+      # built from Ghostty's source with Zig by the build itself
+      # (common:ghostty:lib). Windows is built without it (ptyhold/screen_windows.go).
+      - uses: mlugg/setup-zig@v2
+        if: matrix.target.platform != 'windows'
+        with:
+          version: 0.16.0
+
       - name: Install the Wails CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
 

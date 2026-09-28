@@ -32,6 +32,15 @@ tasks:
     cmds:
       - task: "{{.GOOS}}:run"
 
+  test:
+    summary: Runs the Go tests, with the libghostty-vt they link against
+    deps:
+      - task: common:ghostty:lib
+    cmds:
+      - go test ./... {{.CLI_ARGS}}
+    env:
+      PKG_CONFIG_PATH: '{{.ROOT_DIR}}/build/ghostty/{{OS}}-{{ARCH}}/share/pkgconfig'
+
   dev:
     summary: Runs the application in development mode
     cmds:

@@ -5,17 +5,88 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
+	"github.com/artipop/xxvi/internal/ptyhold"
 	"github.com/coder/websocket"
 )
 
-func manager(t *testing.T) *Manager {
+// holderEnv makes this test binary a holder, the way `xxvi pty-hold` makes the
+// application one.
+const holderEnv = "XXVI_TEST_PTYHOLD"
+
+func TestMain(m *testing.M) {
+	if socket := os.Getenv(holderEnv); socket != "" {
+		if err := ptyhold.Serve(socket); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
+// holderSocket is a fresh socket path, under /tmp: a test's own temporary
+// folder on macOS is longer than a socket path may be.
+func holderSocket(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "term")
+	if err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(dir, "h.sock")
+	t.Cleanup(func() {
+		// What the holder was left holding goes with the test.
+		if c, err := ptyhold.Dial(socket); err == nil {
+			_ = c.Shutdown()
+			c.Close()
+		}
+		os.RemoveAll(dir)
+	})
+	return socket
+}
+
+// bare is a registry with no holder: processes run in the test itself.
+func bare(t *testing.T) *Manager {
 	t.Helper()
 	dir := t.TempDir()
-	m := NewManager(func(string) (string, error) { return dir, nil }, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return NewManager(func(string) (string, error) { return dir, nil }, slog.New(slog.NewTextHandler(io.Discard, nil)))
+}
+
+// holding hands a registry to the holder on socket, starting one if none is there.
+func holding(t *testing.T, m *Manager, socket string) {
+	t.Helper()
+	c, err := ptyhold.Connect(socket, func() *exec.Cmd {
+		cmd := exec.Command(os.Args[0])
+		cmd.Env = append(os.Environ(), holderEnv+"="+socket)
+		return cmd
+	})
+	if err != nil {
+		t.Fatalf("держатель: %v", err)
+	}
+	if err := m.Hold(c); err != nil {
+		t.Fatalf("передать терминалы держателю: %v", err)
+	}
+}
+
+// manager is a registry as the application has it: its terminals in a holder.
+func manager(t *testing.T) *Manager {
+	t.Helper()
+	m := bare(t)
+	holding(t, m, holderSocket(t))
+	t.Cleanup(m.Close)
+	return m
+}
+
+// unheld is a registry whose holder could not be started.
+func unheld(t *testing.T) *Manager {
+	t.Helper()
+	m := bare(t)
 	t.Cleanup(m.Close)
 	return m
 }
@@ -377,5 +448,181 @@ func TestCloseHangsUpBeforeKilling(t *testing.T) {
 	}
 	if !strings.Contains(string(s.History()), "прощай") {
 		t.Fatalf("процесс должен был успеть ответить на hangup: %q", tail(s.History()))
+	}
+}
+
+// A window opened on a long-running terminal gets its screen, not its whole
+// output: the history is as deep as the window's own scrollback, and carries the
+// modes the process set long ago — a paste still arrives as a paste and the
+// arrows as arrows.
+func TestHistoryIsTheScreenWithItsModes(t *testing.T) {
+	m := manager(t)
+	script := `printf '\033[?2004h\033[?1h'; L=$(printf 'щщщ \033[1mжирный\033[0m'); yes "$L" | head -n 30000; echo КОНЕЦ`
+	s, err := m.Attach("run-long", "card-1", t.TempDir(), []string{"sh", "-c", script}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	<-s.Done()
+
+	history := string(s.History())
+	for _, mode := range []string{"\x1b[?2004h", "\x1b[?1h"} {
+		if !strings.Contains(history, mode) {
+			t.Fatalf("в истории нет режима %q: %q", mode, history[:min(80, len(history))])
+		}
+	}
+	if !utf8.ValidString(history) {
+		t.Fatal("история должна быть целым текстом")
+	}
+	if lines := strings.Count(history, "\n"); lines > 5000+24 {
+		t.Fatalf("история глубже прокрутки окна: %d строк", lines)
+	}
+	if !strings.Contains(history, "КОНЕЦ") {
+		t.Fatal("конец вывода потерялся")
+	}
+}
+
+// ---- the holder ----
+
+// The point of the holder: the application closes, the shell of a screen does
+// not, and the next start finds it with what it printed — and what it printed
+// meanwhile.
+func TestAScreenOutlivesTheApplication(t *testing.T) {
+	socket := holderSocket(t)
+	first := bare(t)
+	holding(t, first, socket)
+	s, err := first.Open("card", "screen", "")
+	if err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	history, updates, cancel := s.Subscribe()
+	_ = s.Write([]byte("echo до-$((40+2)); sleep 1; echo после-$((40+3))\n"))
+	read(t, updates, history, "до-42")
+	cancel()
+	first.Close()
+	if !s.Alive() {
+		t.Fatal("закрытие приложения не закрывает шелл экрана")
+	}
+
+	second := bare(t)
+	holding(t, second, socket)
+	t.Cleanup(second.Close)
+	again := second.OnScreen("screen")
+	if again == nil || again.ID != s.ID || again.CardID != "card" {
+		t.Fatalf("экран должен найти свой шелл: %+v", again)
+	}
+	if opened, err := second.Open("card", "screen", ""); err != nil || opened != again {
+		t.Fatalf("Open должен вернуть тот же шелл, а не начать новый: %v", err)
+	}
+	history, updates, cancel = again.Subscribe()
+	defer cancel()
+	seen := read(t, updates, history, "после-43")
+	if !strings.Contains(seen, "до-42") {
+		t.Fatalf("напечатанное до перезапуска должно остаться: %q", seen)
+	}
+	if err := again.Resize(100, 30); err != nil {
+		t.Fatalf("размер: %v", err)
+	}
+	_ = again.Write([]byte("stty size\n"))
+	read(t, updates, history, "30 100")
+}
+
+// A stage's CLI does not outlive the application: nothing would be there to
+// take its report. Its tail is kept as it would be for any ended step.
+func TestARunEndsWithTheApplication(t *testing.T) {
+	socket := holderSocket(t)
+	m := bare(t)
+	m.KeepIn(t.TempDir())
+	holding(t, m, socket)
+	s, err := m.Attach("run-q", "card", t.TempDir(), []string{"sh", "-c", "echo работаю; sleep 30"}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	history, updates, cancel := s.Subscribe()
+	read(t, updates, history, "работаю")
+	cancel()
+	m.Close()
+	if s.Alive() {
+		t.Fatal("терминал шага должен закрыться вместе с приложением")
+	}
+	if tail := m.transcript("run-q"); !strings.Contains(string(tail), "работаю") {
+		t.Fatalf("хвост шага должен остаться: %q", tail)
+	}
+	c, err := ptyhold.Dial(socket)
+	if err != nil {
+		return // the holder had nothing left and went: that is fine too
+	}
+	defer c.Close()
+	if list, _ := c.List(); len(list) != 0 {
+		t.Fatalf("в держателе не должно остаться сессий: %+v", list)
+	}
+}
+
+// An application that did not close properly leaves a stage's CLI running in
+// the holder. The next start ends it — its stage was marked cancelled — and
+// keeps its tail.
+func TestARunLeftBehindIsEndedAndItsTailKept(t *testing.T) {
+	socket := holderSocket(t)
+	keep := t.TempDir()
+	first := bare(t)
+	first.KeepIn(keep)
+	holding(t, first, socket)
+	s, err := first.Attach("run-crash", "card", t.TempDir(),
+		[]string{"sh", "-c", `trap 'echo сохраняю; exit 0' HUP; echo работаю; while :; do sleep 0.1; done`}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	history, updates, cancel := s.Subscribe()
+	read(t, updates, history, "работаю")
+	cancel()
+	first.holder.Close() // the application gone without its Close
+
+	second := bare(t)
+	second.KeepIn(keep)
+	holding(t, second, socket)
+	t.Cleanup(second.Close)
+	adopted := second.Get("run-crash")
+	if adopted == nil {
+		t.Fatal("оставленный шаг должен найтись")
+	}
+	select {
+	case <-adopted.forgotten:
+	case <-time.After(10 * time.Second):
+		t.Fatal("оставленный шаг должен быть закрыт")
+	}
+	if tail := second.transcript("run-crash"); !strings.Contains(string(tail), "сохраняю") {
+		t.Fatalf("CLI должен был услышать hangup, а хвост — остаться: %q", tail)
+	}
+}
+
+// With no holder the terminals still work — they just end with the application.
+func TestWithoutAHolderTerminalsRunHere(t *testing.T) {
+	m := unheld(t)
+	s, err := m.Open("card", "screen", "")
+	if err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	history, updates, cancel := s.Subscribe()
+	defer cancel()
+	if err := s.Resize(77, 21); err != nil {
+		t.Fatalf("размер: %v", err)
+	}
+	_ = s.Write([]byte("stty size\n"))
+	read(t, updates, history, "21 77")
+	m.Close()
+	if s.Alive() {
+		t.Fatal("без держателя шелл закрывается вместе с приложением")
+	}
+}
+
+func TestWithoutAHolderTheLastOutputOutlivesTheProcess(t *testing.T) {
+	m := unheld(t)
+	s, err := m.Attach("run-local", "card-1", t.TempDir(),
+		[]string{"sh", "-c", `i=0; while [ $i -lt 3000 ]; do echo "строка $i"; i=$((i+1)); done; echo КОНЕЦ`}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	<-s.Done()
+	if !strings.Contains(string(s.History()), "КОНЕЦ") {
+		t.Fatalf("последняя строка потерялась: %q", tail(s.History()))
 	}
 }
