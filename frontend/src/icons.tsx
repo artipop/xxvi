@@ -30,6 +30,7 @@ const PATHS = {
   ],
   expand: ["m11 17-5-5 5-5", "m18 17-5-5 5-5"],
   collapse: ["m6 17 5-5-5-5", "m13 17 5-5-5-5"],
+  chevron: ["m6 9 6 6 6-6"],
 } as const;
 
 export type IconName = keyof typeof PATHS;

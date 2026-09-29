@@ -3,7 +3,7 @@ import { Browser, Events } from "@wailsio/runtime";
 import * as API from "../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { AgentsView, CardView, StageCard, UpdateState, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp/models";
-import type { Flow, InboxGroup, Project, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { Card, Flow, InboxGroup, Project, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { CardSummary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
 import { applyLanguage, choose, type Choice, errorText, label, lang, langInEnglish, t } from "./i18n";
@@ -14,6 +14,7 @@ import { applyLanguage, choose, type Choice, errorText, label, lang, langInEngli
 
 export const [inbox, setInbox] = createSignal<InboxGroup[]>([]);
 export const [inWork, setInWork] = createSignal<CardSummary[]>([]);
+export const [done, setDone] = createSignal<Card[]>([]);
 export const [flows, setFlows] = createSignal<Flow[]>([]);
 export const [sources, setSources] = createSignal<Source[]>([]);
 export const [agents, setAgents] = createSignal<AgentsView>({ agents: [], adapters: [] });
@@ -133,6 +134,9 @@ export async function loadInbox() {
 export async function loadInWork() {
   try { setInWork(list(await API.InWork())); } catch (e) { report(e); }
 }
+export async function loadDone() {
+  try { setDone(list(await API.Done())); } catch (e) { report(e); }
+}
 export async function loadFlows() {
   try { setFlows(list(await API.Flows())); } catch (e) { report(e); }
 }
@@ -146,7 +150,11 @@ export async function loadAttention() {
   try { setAttention(list(await API.Attention())); } catch (e) { report(e); }
 }
 export async function loadProjects() {
-  try { setProjects(list(await API.Projects())); } catch (e) { report(e); }
+  try {
+    const all = list(await API.Projects());
+    setProjects(all);
+    if (!all.some((p) => p.id === workspace())) setWorkspace("");
+  } catch (e) { report(e); }
 }
 export async function loadUpdateState() {
   try { setUpdateState(await API.UpdateState()); } catch (e) { report(e); }
@@ -163,7 +171,7 @@ export function updateWaiting(): boolean {
 /** loadAll re-reads everything. Cheap enough locally, and it cannot go stale. */
 export async function loadAll() {
   await Promise.all([
-    loadInbox(), loadInWork(), loadFlows(), loadSources(), loadAgents(), loadAttention(),
+    loadInbox(), loadInWork(), loadDone(), loadFlows(), loadSources(), loadAgents(), loadAttention(),
     loadProjects(), loadRibbons(), loadUpdateState(),
   ]);
   try { setVocabulary(await API.Vocabulary()); } catch (e) { report(e); }
@@ -186,6 +194,7 @@ export function applyCard(view: CardView | undefined) {
   setOpenCard(view);
   void loadInbox();
   void loadInWork();
+  void loadDone();
 }
 
 /**
@@ -204,7 +213,7 @@ export function subscribe() {
   const refreshRibbon = () => { void loadRibbons(); };
   // A card that closed may leave a working tree to ask about.
   Events.On("card", () => {
-    void loadInbox(); void loadInWork(); void refreshCard(); refreshRibbon();
+    void loadInbox(); void loadInWork(); void loadDone(); void refreshCard(); refreshRibbon();
     void loadAttention();
   });
   Events.On("inbox", () => { void loadInbox(); });
@@ -255,6 +264,31 @@ export const [openRibbon, setOpenRibbon] = createSignal<string>("");
 // It is also how a strip does not vanish from under the person watching it: a
 // card that finishes while it is open becomes this rather than disappearing.
 export const [closedRibbon, setClosedRibbon] = createSignal<string>("");
+
+// The project whose ribbons are shown; "" is the cards without one. A task
+// begun here goes into it, so the project is chosen once by where you stand
+// rather than again on every task. Remembered so the next start opens where
+// the last one left off; the first time, it is the project the last task was
+// typed for.
+const WORKSPACE_KEY = "xxvi.workspace";
+
+function rememberedWorkspace(): string {
+  try {
+    return localStorage.getItem(WORKSPACE_KEY) ?? JSON.parse(localStorage.getItem("xxvi.compose") ?? "{}").project ?? "";
+  } catch {
+    return "";
+  }
+}
+
+const [workspaceSignal, setWorkspaceSignal] = createSignal(rememberedWorkspace());
+export const workspace = workspaceSignal;
+export function setWorkspace(id: string) {
+  setWorkspaceSignal(id);
+  try { localStorage.setItem(WORKSPACE_KEY, id); } catch { /* lasts this run */ }
+}
+
+/** inWorkspace is the part of the stack that belongs to the workspace. */
+export const inWorkspace = () => ribbons.filter((r) => (r.project ?? "") === workspace());
 
 /** workRibbons is the stack minus a closed card being visited — what counts. */
 export const workRibbons = () => ribbons.filter((r) => r.id !== closedRibbon());
@@ -312,7 +346,14 @@ export function showRibbon(cardID: string) {
   }
   setTab("ribbon");
   setOpenRibbon(cardID);
-  void loadRibbons();
+  // Opened from elsewhere — attention, the card, «Do it» — the strip may be in
+  // another project, and standing in the wrong workspace would hide it.
+  const follow = () => {
+    const view = ribbons.find((r) => r.id === cardID);
+    if (view) setWorkspace(view.project ?? "");
+  };
+  follow();
+  void loadRibbons().then(follow);
 }
 
 // Which screen is open. A signal rather than a local of the shell, because

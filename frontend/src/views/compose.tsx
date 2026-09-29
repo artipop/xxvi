@@ -2,7 +2,7 @@ import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { PastSession } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
-import { agents, applyCard, flows, guard, list, projects, showRibbon, workModes } from "../state";
+import { agents, applyCard, flows, guard, list, projects, showRibbon, workModes, workspace } from "../state";
 import { errorText, t, when } from "../i18n";
 
 // A task typed where the work is watched, not filed first and fetched back from
@@ -20,14 +20,13 @@ import { errorText, t, when } from "../i18n";
 
 const KEY = "xxvi.compose";
 
-function remembered(): { project?: string; workMode?: string; agent?: string; flow?: string } {
+function remembered(): { workMode?: string; agent?: string; flow?: string } {
   try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; }
 }
 
 export function Compose(props: { onStarted?: () => void; onCancel?: () => void }): JSX.Element {
   const was = remembered();
   const [text, setText] = createSignal("");
-  const [project, setProject] = createSignal(was.project ?? "");
   const [workMode, setWorkMode] = createSignal(was.workMode ?? "");
   const [agent, setAgent] = createSignal(was.agent ?? "");
   const [flow, setFlow] = createSignal(was.flow ?? "");
@@ -38,8 +37,9 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   const [session, setSession] = createSignal<PastSession | undefined>();
   let box: HTMLTextAreaElement | undefined;
 
-  // A remembered choice that is no longer in the registry is not a choice.
-  const projectID = () => (projects().some((p) => p.id === project()) ? project() : "");
+  // The project is where the task is typed, not a question: the workspace
+  // standing open is the answer.
+  const projectID = () => (projects().some((p) => p.id === workspace()) ? workspace() : "");
   // A branch of its own is a question about a repository; anywhere else the
   // answer is the folder as it stands, whatever was remembered. A continued
   // conversation's unfinished work is in the folder itself, so it never gets
@@ -87,7 +87,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     setBusy(false);
     if (!view) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ project: projectID(), workMode: workMode(), agent: agentName(), flow: flowID() }));
+      localStorage.setItem(KEY, JSON.stringify({ workMode: workMode(), agent: agentName(), flow: flowID() }));
     } catch { /* a convenience, not a record */ }
     setText("");
     setFromSession(false);
@@ -157,10 +157,6 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
             {t("compose.fromSession")}
           </button>
         </div>
-        <select value={projectID()} onChange={(e) => setProject(e.currentTarget.value)} title={t("inbox.where")}>
-          <option value="">{t("common.ownFolder")}</option>
-          <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
-        </select>
         <Show when={isRepo() && !fromSession()}>
           <select value={mode()} onChange={(e) => setWorkMode(e.currentTarget.value)}
                   title={workModes().find((m) => m.value === mode())?.why}>

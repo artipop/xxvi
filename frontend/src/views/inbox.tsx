@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Card, InboxGroup } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import { applyCard, flows, guard, inbox, list, loadInbox, openCardByID, projects, setInbox, showRibbon, sources, openOutside } from "../state";
+import { applyCard, flows, guard, inbox, workspace, list, loadInbox, openCardByID, projects, setInbox, showRibbon, sources, openOutside } from "../state";
 import { propName, propValue, t } from "../i18n";
 
 // The inbox: what the sources brought, grouped by what brought it. A card here
@@ -153,7 +153,7 @@ function AddItem(props: { source: string; onDone: () => void }) {
 function InboxCard(props: { card: Card }) {
   const suggested = () => props.card.props?.[SUGGESTED] ?? "";
   const [flowID, setFlowID] = createSignal("");
-  const [projectID, setProjectID] = createSignal("");
+  const [projectID, setProjectID] = createSignal(workspace());
 
   const chosen = () => {
     if (flowID()) return flowID();

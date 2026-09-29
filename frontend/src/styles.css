@@ -487,9 +487,13 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px; }
 .ribbon-stage { color: var(--faint); opacity: .7; }
 
-.card-menu { position: relative; }
+.card-menu { position: relative; display: flex; }
 .card-menu .menu { left: auto; right: 0; }
 .menu button.danger { color: var(--warn); }
+.card-menu.workspaces .menu { left: 0; right: auto; }
+.workspaces > .btn { display: inline-flex; align-items: center; gap: 3px; }
+.workspaces .icon { width: 12px; height: 12px; opacity: .6; }
+.menu-title { min-width: 0; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Over the strip rather than beside it: the strip is the whole window, and
    the journal is looked at and put away, not worked next to. */

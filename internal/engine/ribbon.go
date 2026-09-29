@@ -105,6 +105,8 @@ type RibbonView struct {
 	Title    string `json:"title"`
 	FlowID   string `json:"flowId"`
 	FlowName string `json:"flowName"`
+	// Project is the card's project, the workspace the ribbon is shown in.
+	Project string `json:"project,omitempty"`
 	// StageName and Running are what a ribbon says about itself from outside —
 	// enough for the indicator without reading the strip.
 	StageName string    `json:"stageName,omitempty"`
@@ -152,7 +154,7 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 	if err != nil {
 		return RibbonView{}, err
 	}
-	view := RibbonView{ID: card.ID, CardID: card.ID, Title: card.Title}
+	view := RibbonView{ID: card.ID, CardID: card.ID, Title: card.Title, Project: card.Project}
 	if flow, err := e.CardFlowFor(cardID); err == nil && flow != nil {
 		view.Running = flow.Running
 		for _, s := range flow.Stages {
