@@ -39,11 +39,8 @@ export default function SettingsView() {
               </For>
             </select>
           </div>
-        </div>
-        <p class="settings-note">{t("settings.languageHint")}</p>
-        {/* Only where there is a choice: Ghostty's native library is on macOS. */}
-        <Show when={native()}>
-          <div class="settings-group">
+          {/* Only where there is a choice: Ghostty's native library is on macOS. */}
+          <Show when={native()}>
             <div class="setting-row">
               <span class="setting-title">{t("settings.terminal")}</span>
               <select value={engine()} onChange={(e) => chooseEngine(e.currentTarget.value)}>
@@ -51,7 +48,10 @@ export default function SettingsView() {
                 <option value="web">{t("settings.terminalWeb")}</option>
               </select>
             </div>
-          </div>
+          </Show>
+        </div>
+        <p class="settings-note">{t("settings.languageHint")}</p>
+        <Show when={native()}>
           <p class="settings-note">{t("settings.terminalHint")}</p>
         </Show>
       </section>
