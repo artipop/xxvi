@@ -83,6 +83,10 @@ export const ru: Dict = {
   "settings.lede": "Как приложение ведёт себя на этой машине.",
   "settings.interface": "Интерфейс",
   "settings.language": "Язык",
+  "settings.terminal": "Терминал",
+  "settings.terminalNative": "Ghostty",
+  "settings.terminalWeb": "xterm.js в странице",
+  "settings.terminalHint": "Ghostty рисует терминал нативно, с вашим шрифтом и темой из его настроек. xterm.js — то, что рисует терминал на Windows и Linux; здесь он, чтобы это можно было посмотреть на Mac. Смена действует на терминалы, открытые после неё.",
   "settings.languageHint": "Слова на экране и в уведомлениях. «Как в системе» следует за языком, выбранным в настройках системы.",
   "lang.system": "Как в системе — {name}",
 

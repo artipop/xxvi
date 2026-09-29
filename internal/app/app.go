@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"unsafe"
 
 	"github.com/artipop/xxvi/internal/acp"
 	"github.com/artipop/xxvi/internal/appmcp"
@@ -63,6 +64,8 @@ type App struct {
 	chooser Chooser
 	// menu is the window's application menu, worded by the UI.
 	menu Menu
+	// nativeWin is the platform window, for native views laid over the page.
+	nativeWin func() unsafe.Pointer
 	// updates is how the application replaces itself; nil where there is
 	// nothing to replace — a test, a headless run.
 	updates Updates
@@ -242,6 +245,24 @@ func (a *App) Close() error {
 		appmcp.RemoveHandoff(a.DataDir)
 	}
 	return a.Store.Close()
+}
+
+// SetNativeWindow supplies the platform window (NSWindow on macOS) native
+// views are laid over. An experiment (internal/nativeterm).
+func (a *App) SetNativeWindow(get func() unsafe.Pointer) {
+	a.uiMu.Lock()
+	defer a.uiMu.Unlock()
+	a.nativeWin = get
+}
+
+func (a *App) nativeWindow() unsafe.Pointer {
+	a.uiMu.Lock()
+	get := a.nativeWin
+	a.uiMu.Unlock()
+	if get == nil {
+		return nil
+	}
+	return get()
 }
 
 // SetMenu supplies the window's application menu once the window exists.

@@ -126,6 +126,13 @@ export function CheckForUpdate(): $CancellablePromise<void> {
 }
 
 /**
+ * CloseNativeTerminal ends the view and its bridge; the terminal goes on.
+ */
+export function CloseNativeTerminal(id: string): $CancellablePromise<void> {
+    return $Call.ByID(3447029870, id);
+}
+
+/**
  * CloseTerminal ends one shell. A person closing a terminal means the process
  * in it, not just the window onto it — the ribbon has no windows to close.
  */
@@ -258,11 +265,26 @@ export function Flows(): $CancellablePromise<model$0.Flow[] | null> {
 }
 
 /**
+ * FocusNativeTerminal gives the terminal's view the keyboard, as soon as it is
+ * on screen; "" gives it back to the page. The ribbon calls it as it moves.
+ */
+export function FocusNativeTerminal(id: string): $CancellablePromise<void> {
+    return $Call.ByID(1303741490, id);
+}
+
+/**
  * GiveBackWindow puts our window back while the application keeps running:
  * somebody who has seen enough of it, or wants to arrange the two by hand.
  */
 export function GiveBackWindow(screenID: string): $CancellablePromise<void> {
     return $Call.ByID(3957263001, screenID);
+}
+
+/**
+ * HideNativeTerminal takes the view off screen, keeping it.
+ */
+export function HideNativeTerminal(id: string): $CancellablePromise<void> {
+    return $Call.ByID(2877064744, id);
 }
 
 /**
@@ -360,6 +382,14 @@ export function MoveTo(cardID: string, stageID: string): $CancellablePromise<$mo
 }
 
 /**
+ * NativeTerminals says terminals can be shown here: Ghostty draws them in native
+ * views over the page (internal/nativeterm), and its library is macOS's.
+ */
+export function NativeTerminals(): $CancellablePromise<boolean> {
+    return $Call.ByID(2597766577);
+}
+
+/**
  * OpenClient starts one of the installed HTTP clients.
  */
 export function OpenClient(name: string): $CancellablePromise<void> {
@@ -444,6 +474,15 @@ export function RemoveCardWorktree(cardID: string, discard: boolean): $Cancellab
  */
 export function RemoveFromFlow(cardID: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(361858351, cardID);
+}
+
+/**
+ * ResetNativeTerminals closes every native terminal view. The page calls it as
+ * it starts: views a page before it laid out — reloaded since — would
+ * otherwise stay over the new one.
+ */
+export function ResetNativeTerminals(): $CancellablePromise<void> {
+    return $Call.ByID(4086894574);
 }
 
 /**
@@ -610,6 +649,16 @@ export function SetReviewInbox(projectID: string, on: boolean): $CancellableProm
  */
 export function SetUpdatesEnabled(enabled: boolean): $CancellablePromise<$models.UpdateState> {
     return $Call.ByID(2468448178, enabled);
+}
+
+/**
+ * ShowNativeTerminal lays the terminal behind url over the page at the pane's
+ * rectangle (CSS pixels, at the page's device pixel ratio dpr), in the page's
+ * terminal font size, starting it the first time: Ghostty runs this executable as `term-attach url`, a bridge from
+ * its pty to the terminal's socket.
+ */
+export function ShowNativeTerminal(id: string, url: string, x: number, y: number, w: number, h: number, dpr: number, fontSize: number): $CancellablePromise<void> {
+    return $Call.ByID(3350580757, id, url, x, y, w, h, dpr, fontSize);
 }
 
 /**

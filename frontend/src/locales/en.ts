@@ -84,6 +84,10 @@ export const en: Dict = {
   "settings.lede": "How this application behaves on this machine.",
   "settings.interface": "Interface",
   "settings.language": "Language",
+  "settings.terminal": "Terminal",
+  "settings.terminalNative": "Ghostty",
+  "settings.terminalWeb": "xterm.js in the page",
+  "settings.terminalHint": "Ghostty draws the terminal natively, with your font and theme from its settings. xterm.js is what draws terminals on Windows and Linux; it is here so that can be seen on a Mac. A change applies to terminals opened after it.",
   "settings.languageHint": "The words on the screen and in notifications. «As in the system» follows the language chosen in the system settings.",
   "lang.system": "As in the system — {name}",
 

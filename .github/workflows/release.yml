@@ -83,11 +83,17 @@ jobs:
 
       # libghostty-vt, the terminal emulator the pty holder keeps screens in, is
       # built from Ghostty's source with Zig by the build itself
-      # (common:ghostty:lib). Windows is built without it (ptyhold/screen_windows.go).
+      # (common:ghostty:lib). On Windows Zig is the C compiler for cgo as well.
       - uses: mlugg/setup-zig@v2
-        if: matrix.target.platform != 'windows'
         with:
           version: 0.16.0
+
+      # The native terminal (internal/nativeterm) is Ghostty's own macOS
+      # library, whose renderer is compiled with Xcode's Metal toolchain — a
+      # component recent Xcodes download on demand.
+      - name: Make sure the Metal toolchain is present
+        if: matrix.target.platform == 'darwin'
+        run: xcrun --find metal || xcodebuild -downloadComponent MetalToolchain
 
       - name: Install the Wails CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
@@ -99,6 +105,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+
+      # cgo finds libghostty-vt through pkg-config, which the Windows runner
+      # image does not promise.
+      - name: Make sure pkg-config is present
+        if: matrix.target.platform == 'windows'
+        shell: bash
+        run: command -v pkg-config || choco install pkgconfiglite -y --no-progress
 
       # The runner image ships NSIS, but a runner image is not a contract.
       - name: Make sure NSIS is present

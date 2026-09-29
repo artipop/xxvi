@@ -16,9 +16,10 @@
   --radius: 8px;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 
-  /* The sixteen colours a terminal program asks for by number. xterm's own are
-     made for a black screen and an unknown one: its blue is unreadable on
-     --bg, and its black is --bg. */
+  /* The sixteen colours a terminal program asks for by number, for xterm.js
+     where it draws the terminal (views/xterm.ts). xterm's own are made for a
+     black screen and an unknown one: its blue is unreadable on --bg, and its
+     black is --bg. */
   --ansi-black: #4b5161;
   --ansi-red: #e06c75;
   --ansi-green: #7bc47f;
@@ -35,6 +36,7 @@
   --ansi-bright-magenta: #d9aef2;
   --ansi-bright-cyan: #74d3c9;
   --ansi-bright-white: #f4f5f8;
+
 }
 
 * { box-sizing: border-box; }
@@ -730,10 +732,11 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .notes-text:focus { outline: none; }
 .notes .meta { padding: 6px 12px; border-top: 1px solid var(--line); }
 
-/* xterm sizes itself to this box and then tells the process the column count
-   it settled on, so the box has to have a size of its own before it is asked.
-   A terminal in a box that grows to its content would agree with itself and
-   with nothing else. */
+/* Ghostty's view is laid over this box, or xterm sizes itself to it, and the
+   process is told the columns that fit, so the box has to have a size of its
+   own. A terminal in
+   a box that grows to its content would agree with itself and with nothing
+   else. */
 .terminal { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
 .terminal-host { flex: 1; min-height: 0; padding: 6px 8px; }
 .terminal-host .xterm { height: 100%; }

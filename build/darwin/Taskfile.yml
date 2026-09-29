@@ -30,6 +30,7 @@ tasks:
       - task: common:ghostty:lib
         vars:
           ARCH: '{{.ARCH | default ARCH}}'
+      - task: common:ghostty:native
       - task: common:go:mod:tidy
       - task: common:build:frontend
         vars:
@@ -55,9 +56,9 @@ tasks:
       GOOS: darwin
       CGO_ENABLED: 1
       GOARCH: '{{.ARCH | default ARCH}}'
-      CGO_CFLAGS: "-mmacosx-version-min=12.0"
-      CGO_LDFLAGS: "-mmacosx-version-min=12.0"
-      MACOSX_DEPLOYMENT_TARGET: "12.0"
+      CGO_CFLAGS: "-mmacosx-version-min=13.0"
+      CGO_LDFLAGS: "-mmacosx-version-min=13.0"
+      MACOSX_DEPLOYMENT_TARGET: "13.0"
 
   build:docker:
     summary: Cross-compiles for macOS using Docker (for Linux/Windows hosts)
@@ -171,8 +172,21 @@ tasks:
           cp build/darwin/Assets.car "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources"
         fi
       - cp "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS"
+      - task: bundle:native
+        vars:
+          APP: '{{.BIN_DIR}}/{{.APP_NAME}}.app'
       - cp build/darwin/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents"
       - task: '{{if eq OS "darwin"}}codesign:adhoc{{else}}codesign:skip{{end}}'
+
+  bundle:native:
+    summary: Puts the native terminal's library in the bundle, where the application looks for it
+    internal: true
+    cmds:
+      - |
+        if [ -f build/nativeterm/libxxvinative.dylib ]; then
+          mkdir -p "{{.APP}}/Contents/Frameworks"
+          cp build/nativeterm/libxxvinative.dylib "{{.APP}}/Contents/Frameworks/"
+        fi
 
   codesign:adhoc:
     summary: Ad-hoc signs the app bundle (macOS only)
@@ -192,6 +206,9 @@ tasks:
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Resources"
       - cp build/darwin/dev/icons.icns build/darwin/dev/Assets.car "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Resources"
       - cp "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/MacOS"
+      - task: bundle:native
+        vars:
+          APP: '{{.BIN_DIR}}/{{.APP_NAME}}.dev.app'
       - cp "build/darwin/Info.dev.plist" "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Info.plist"
       - codesign --force --deep --sign - "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app"
       - '"{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/MacOS/{{.APP_NAME}}"'

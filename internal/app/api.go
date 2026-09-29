@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/artipop/xxvi/internal/inbox"
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/xxvi/internal/nativeterm"
 	"github.com/artipop/xxvi/internal/store"
 )
 
@@ -428,6 +430,45 @@ func (s *API) StopBackgroundTerminals() error {
 	s.app.Terminals.StopLeftOver()
 	return nil
 }
+
+// NativeTerminals says terminals can be shown here: Ghostty draws them in native
+// views over the page (internal/nativeterm), and its library is macOS's.
+func (s *API) NativeTerminals() bool {
+	return nativeterm.Available() && s.app.nativeWindow() != nil
+}
+
+// ShowNativeTerminal lays the terminal behind url over the page at the pane's
+// rectangle (CSS pixels, at the page's device pixel ratio dpr), in the page's
+// terminal font size, starting it the first time: Ghostty runs this executable as `term-attach url`, a bridge from
+// its pty to the terminal's socket.
+func (s *API) ShowNativeTerminal(id, url string, x, y, w, h, dpr, fontSize float64) error {
+	win := s.app.nativeWindow()
+	if !nativeterm.Available() || win == nil {
+		return errors.New("native terminals are not available")
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	command := strconv.Quote(self) + " term-attach " + strconv.Quote(url)
+	nativeterm.Show(win, id, command, x, y, w, h, dpr, fontSize)
+	return nil
+}
+
+// FocusNativeTerminal gives the terminal's view the keyboard, as soon as it is
+// on screen; "" gives it back to the page. The ribbon calls it as it moves.
+func (s *API) FocusNativeTerminal(id string) { nativeterm.Focus(id) }
+
+// HideNativeTerminal takes the view off screen, keeping it.
+func (s *API) HideNativeTerminal(id string) { nativeterm.Hide(id) }
+
+// CloseNativeTerminal ends the view and its bridge; the terminal goes on.
+func (s *API) CloseNativeTerminal(id string) { nativeterm.Close(id) }
+
+// ResetNativeTerminals closes every native terminal view. The page calls it as
+// it starts: views a page before it laid out — reloaded since — would
+// otherwise stay over the new one.
+func (s *API) ResetNativeTerminals() { nativeterm.CloseAll() }
 
 // CloseTerminal ends one shell. A person closing a terminal means the process
 // in it, not just the window onto it — the ribbon has no windows to close.

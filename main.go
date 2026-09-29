@@ -30,6 +30,7 @@ import (
 	"github.com/artipop/xxvi/internal/appmcp"
 	"github.com/artipop/xxvi/internal/launch"
 	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/xxvi/internal/nativeterm"
 	"github.com/artipop/xxvi/internal/ptyhold"
 	"github.com/artipop/xxvi/internal/stagemcp"
 )
@@ -61,6 +62,12 @@ func main() {
 	// And the process that keeps terminals alive between runs (internal/ptyhold),
 	// for the same reasons: nothing of the application is to be opened in it.
 	maybeHoldTerminals(os.Args[1:])
+	// And the bridge a native terminal view runs (internal/nativeterm).
+	maybeAttachTerminal(os.Args[1:])
+	// Ghostty is set up here and nowhere later: on the main thread, before the
+	// first process is started — its setup and a fork running at once deadlock
+	// the whole application (internal/nativeterm).
+	nativeterm.Init()
 	app.HoldTerminals = func(socket string) *exec.Cmd {
 		self, err := os.Executable()
 		if err != nil {
@@ -148,6 +155,7 @@ func main() {
 	})
 
 	core.SetWindows(&windows{win: win})
+	core.SetNativeWindow(win.NativeWindow)
 
 	// The size above is a wish, not a measurement: on a display shorter than it
 	// the window opens with its bottom edge past the screen, and the ribbon —
@@ -239,6 +247,19 @@ func maybeHoldTerminals(args []string) {
 		return
 	}
 	if err := ptyhold.Serve(args[1]); err != nil {
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
+// maybeAttachTerminal handles `xxvi term-attach <url>`: what a native terminal
+// view runs in its pty — a bridge to the terminal's socket.
+func maybeAttachTerminal(args []string) {
+	if len(args) != 2 || args[0] != "term-attach" {
+		return
+	}
+	if err := nativeterm.Attach(args[1]); err != nil {
+		fmt.Fprintf(os.Stderr, "term-attach: %v\n", err)
 		os.Exit(1)
 	}
 	os.Exit(0)

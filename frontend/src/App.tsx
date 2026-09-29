@@ -1,6 +1,7 @@
 import { lazy, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { BackgroundNotice } from "./views/background";
+import { resetNative } from "./views/native";
 import { error, loadAll, loadLanguage, setError, subscribe } from "./state";
 import InboxView from "./views/inbox";
 import WorkView from "./views/work";
@@ -18,6 +19,7 @@ const RibbonView = lazy(() => import("./views/ribbon"));
 
 export default function App(): JSX.Element {
   onSettled(() => {
+    resetNative();
     void loadAll();
     subscribe();
     void loadLanguage();
