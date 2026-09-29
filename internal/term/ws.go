@@ -134,6 +134,8 @@ func (m *Manager) pipe(conn *websocket.Conn, s *Session) {
 
 	history, updates, unsubscribe := s.Subscribe()
 	defer func() { unsubscribe() }()
+	view := s.View()
+	defer view.Close()
 
 	// Keystrokes in, and the one thing that is not a keystroke: how big the
 	// window is. Without it the process keeps the default eighty columns while
@@ -157,7 +159,7 @@ func (m *Manager) pipe(conn *websocket.Conn, s *Session) {
 					continue
 				}
 				if msg.Type == "resize" {
-					if err := s.Resize(msg.Cols, msg.Rows); err != nil {
+					if err := view.Resize(msg.Cols, msg.Rows); err != nil {
 						m.log.Warn("could not resize the terminal", "terminal", s.ID, "err", err)
 					}
 				}

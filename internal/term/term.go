@@ -57,6 +57,10 @@ type Session struct {
 	subs   map[chan []byte]struct{}
 	cols   int
 	rows   int
+	// views are the windows open on the terminal, by the size each has room
+	// for (View).
+	views    map[int][2]int
+	nextView int
 	// spoke is when the process last drew anything. It is what a stage in a
 	// terminal is watched by: its CLI asks a person inside its own interface,
 	// where nothing of ours can see the question, so silence is the only signal
@@ -640,12 +644,74 @@ func (s *Session) Resize(cols, rows int) error {
 	// The screen first: output the process draws for the new size must find it
 	// already there.
 	s.mu.Lock()
+	if cols == s.cols && rows == s.rows {
+		s.mu.Unlock()
+		return nil
+	}
 	s.cols, s.rows = cols, rows
 	if s.screen != nil {
 		s.screen.Resize(cols, rows)
 	}
 	s.mu.Unlock()
 	return s.eng.Resize(cols, rows)
+}
+
+// View is one window open on the terminal. A terminal has one size and may be
+// shown in several places at once, so each window's size is a vote and the
+// smallest wins, as in tmux: a larger window shows the picture with room to
+// spare, where a smaller one given the larger size would show it cut and
+// wrapped wrong.
+type View struct {
+	s  *Session
+	id int
+}
+
+// View opens a window on the terminal. Close it when the window goes.
+func (s *Session) View() *View {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.views == nil {
+		s.views = map[int][2]int{}
+	}
+	s.nextView++
+	return &View{s: s, id: s.nextView}
+}
+
+// Resize says how much room this window has.
+func (v *View) Resize(cols, rows int) error {
+	if cols <= 0 || rows <= 0 {
+		return nil
+	}
+	v.s.mu.Lock()
+	v.s.views[v.id] = [2]int{cols, rows}
+	cols, rows = v.s.smallestLocked()
+	v.s.mu.Unlock()
+	return v.s.Resize(cols, rows)
+}
+
+// Close takes the window's vote back: the terminal grows to what the windows
+// still open have room for.
+func (v *View) Close() {
+	v.s.mu.Lock()
+	delete(v.s.views, v.id)
+	cols, rows := v.s.smallestLocked()
+	v.s.mu.Unlock()
+	if cols > 0 {
+		_ = v.s.Resize(cols, rows)
+	}
+}
+
+// smallestLocked is the size every open window has room for, zero with none.
+func (s *Session) smallestLocked() (cols, rows int) {
+	for _, size := range s.views {
+		if cols == 0 || size[0] < cols {
+			cols = size[0]
+		}
+		if rows == 0 || size[1] < rows {
+			rows = size[1]
+		}
+	}
+	return cols, rows
 }
 
 // Alive reports a terminal whose process has not ended.

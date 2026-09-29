@@ -694,3 +694,25 @@ func TestAHolderThatDiesIsReplaced(t *testing.T) {
 		t.Fatal("новый терминал должен жить в новом держателе, а не в приложении")
 	}
 }
+
+// A terminal shown in two windows takes the size both have room for, and grows
+// back when the smaller one closes.
+func TestTwoWindowsAgreeOnTheSmallerSize(t *testing.T) {
+	m := manager(t)
+	s, err := m.Open("card", "screen", "")
+	if err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	history, updates, cancel := s.Subscribe()
+	defer cancel()
+	big, small := s.View(), s.View()
+	_ = big.Resize(120, 40)
+	_ = small.Resize(90, 50)
+	_ = s.Write([]byte("stty size\n"))
+	read(t, updates, history, "40 90")
+
+	small.Close()
+	_ = s.Write([]byte("stty size\n"))
+	read(t, updates, history, "40 120")
+	big.Close()
+}

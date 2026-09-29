@@ -50,6 +50,10 @@ type session struct {
 	// its terminal must not stall every other session's keystrokes with it.
 	input  chan []byte
 	closed bool
+	// dropped counts input thrown away since the process last took any, so
+	// the log says it once per stretch rather than once per keystroke.
+	dropped int
+	log     *slog.Logger
 }
 
 // peer is one connected application.
@@ -266,6 +270,7 @@ func (s *Server) start(p *peer, label Label, spec Spec) error {
 		label: label, proc: proc, screen: NewScreen(spec.Cols, spec.Rows),
 		cols: spec.Cols, rows: spec.Rows,
 		running: true, to: p, input: make(chan []byte, 1024),
+		log: s.log.With("session", label.ID),
 	}
 	s.mu.Lock()
 	s.sessions[label.ID] = t
@@ -362,8 +367,17 @@ func (t *session) write(data []byte) {
 	}
 	select {
 	case t.input <- data:
+		if t.dropped > 0 {
+			t.log.Warn("the process is reading its input again", "dropped", t.dropped)
+			t.dropped = 0
+		}
 	default:
-		// A process this far behind on reading its input is not reading it.
+		// A process this far behind on reading its input is not reading it,
+		// and holding more of it would only grow the holder.
+		if t.dropped == 0 {
+			t.log.Warn("the process is not reading its input; dropping keystrokes")
+		}
+		t.dropped++
 	}
 }
 
