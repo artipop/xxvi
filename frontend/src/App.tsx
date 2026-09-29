@@ -4,7 +4,6 @@ import { BackgroundNotice } from "./views/background";
 import { resetNative } from "./views/native";
 import { error, loadAll, loadLanguage, setError, subscribe } from "./state";
 import InboxView from "./views/inbox";
-import WorkView from "./views/work";
 import AgentsView from "./views/agents";
 import SourcesView from "./views/sources";
 import ProjectsView from "./views/projects";
@@ -56,7 +55,6 @@ export default function App(): JSX.Element {
             <BackgroundNotice />
 
             <Show when={tab() === "inbox"}><InboxView /></Show>
-            <Show when={tab() === "work"}><WorkView /></Show>
             <Show when={tab() === "attention"}><AttentionView /></Show>
             <Show when={tab() === "flows"}><FlowsView /></Show>
             <Show when={tab() === "projects"}><ProjectsView /></Show>

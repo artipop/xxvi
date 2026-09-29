@@ -14,7 +14,6 @@ export default function SourcesView() {
   return (
     <>
       <h1>{t("sources.title")}</h1>
-      <p class="lede">{t("sources.lede")}</p>
 
       <div class="row toolbar">
         <div class="spacer" />

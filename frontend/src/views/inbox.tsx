@@ -28,7 +28,6 @@ export default function InboxView() {
           {own() ? t("common.cancel") : t("inbox.own")}
         </button>
       </div>
-      <p class="lede">{t("inbox.lede")}</p>
 
       <Show when={own()}>
         <AddOwn onDone={() => setOwn(false)} />
@@ -104,7 +103,6 @@ function AddOwn(props: { onDone: () => void }) {
         <textarea value={body()} onInput={(e) => setBody(e.currentTarget.value)} />
       </label>
       <div class="row">
-        <span class="meta">{t("inbox.ownNote")}</span>
         <div class="spacer" />
         <button class="btn primary" onClick={submit}>{t("inbox.create")}</button>
       </div>

@@ -141,10 +141,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .main { min-height: 0; isolation: isolate; overflow: auto; overscroll-behavior: contain; padding: 44px 24px 40px; }
 .main.with-panel { display: grid; grid-template-columns: 1fr minmax(360px, 460px); gap: 20px; align-items: start; }
 
-h1 { font-size: 19px; margin: 0 0 4px; font-weight: 600; }
+h1 { font-size: 19px; margin: 0 0 16px; font-weight: 600; }
 h2 { font-size: 15px; margin: 22px 0 8px; font-weight: 600; }
 h3 { font-size: 13px; margin: 0 0 6px; font-weight: 600; color: var(--dim); }
-.lede { color: var(--dim); margin: 0 0 20px; }
+.row:has(> h1) { margin-bottom: 16px; }
+.row > h1 { margin: 0; }
 
 /* ---- pieces ---- */
 
@@ -412,6 +413,7 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 
 .list-head { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 8px; }
 .list-head h2 { margin: 0; }
+h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 
 .mono { font-family: var(--mono); font-size: 12px; }
 

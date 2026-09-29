@@ -18,7 +18,6 @@ export default function SettingsView() {
   return (
     <div class="settings">
       <div class="row"><h1>{t("settings.title")}</h1></div>
-      <p class="lede">{t("settings.lede")}</p>
 
       <section>
         <h2>{t("settings.interface")}</h2>
@@ -50,7 +49,6 @@ export default function SettingsView() {
             </div>
           </Show>
         </div>
-        <p class="settings-note">{t("settings.languageHint")}</p>
         <Show when={native()}>
           <p class="settings-note">{t("settings.terminalHint")}</p>
         </Show>

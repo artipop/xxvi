@@ -17,7 +17,6 @@ export default function AgentsView() {
   return (
     <>
       <h1>{t("agents.title")}</h1>
-      <p class="lede">{t("agents.lede")}</p>
 
       <h2>{t("agents.installed")}</h2>
       <For each={agents().adapters}>

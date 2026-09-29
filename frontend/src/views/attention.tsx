@@ -31,7 +31,6 @@ export default function AttentionView() {
   return (
     <>
       <h1>{t("attention.title")}</h1>
-      <p class="lede">{t("attention.lede")}</p>
       <Show when={attention().length > 0} fallback={<div class="empty">{t("attention.empty")}</div>}>
         <For each={attention()}>{(a) => <Ask a={a} />}</For>
       </Show>
@@ -66,7 +65,6 @@ function Ask(props: { a: Attention }) {
         fallback={
           <div class="question">
             <div class="ask">{t(terminalWait(props.a))}</div>
-            <span class="meta">{t("attention.quietNote")}</span>
           </div>
         }
       >
@@ -192,7 +190,6 @@ export function QuestionForm(props: {
         </div>
       </Show>
       <div class="row actions">
-        <span class="meta">{t("question.declineNote")}</span>
         <div class="spacer" />
         <button class="btn quiet" disabled={busy()} onClick={decline}>{t("question.decline")}</button>
       </div>

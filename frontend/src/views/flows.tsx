@@ -35,9 +35,6 @@ export default function FlowsView() {
   return (
     <>
       <h1>{t("flows.title")}</h1>
-      <p class="lede">
-        {t("flows.lede")}
-      </p>
 
       <div class="row wrap toolbar">
         <For each={flows()}>

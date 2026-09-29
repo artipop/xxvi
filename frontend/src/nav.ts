@@ -1,6 +1,6 @@
 import { t } from "./i18n";
 import type { IconName } from "./icons";
-import { attention, inbox, inWork, list, updateWaiting, workRibbons, type Tab } from "./state";
+import { attention, inbox, list, updateWaiting, workRibbons, type Tab } from "./state";
 
 // The sections, named once, for the sidebar on the right of every screen.
 //
@@ -27,7 +27,6 @@ export type NavItem = {
 export const NAV: NavItem[] = [
   { tab: "inbox", icon: "inbox", label: () => t("nav.inbox"), count: () => inbox().reduce((n, g) => n + list(g.cards).length, 0) },
   { tab: "ribbon", icon: "ribbon", label: () => t("nav.ribbon"), count: () => workRibbons().length },
-  { tab: "work", icon: "work", label: () => t("nav.work"), count: () => inWork().length },
   { tab: "attention", icon: "attention", label: () => t("nav.attention"), count: () => attention().length, alert: true },
   { tab: "projects", icon: "projects", label: () => t("nav.projects"), apart: true },
   { tab: "agents", icon: "agents", label: () => t("nav.agents") },

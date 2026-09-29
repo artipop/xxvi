@@ -3,7 +3,7 @@ import { Browser, Events } from "@wailsio/runtime";
 import * as API from "../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { AgentsView, CardView, StageCard, UpdateState, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp/models";
-import type { Card, Flow, InboxGroup, Project, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { Flow, InboxGroup, Project, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { CardSummary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
 import { applyLanguage, choose, type Choice, errorText, label, lang, langInEnglish, t } from "./i18n";
@@ -14,7 +14,6 @@ import { applyLanguage, choose, type Choice, errorText, label, lang, langInEngli
 
 export const [inbox, setInbox] = createSignal<InboxGroup[]>([]);
 export const [inWork, setInWork] = createSignal<CardSummary[]>([]);
-export const [done, setDone] = createSignal<Card[]>([]);
 export const [flows, setFlows] = createSignal<Flow[]>([]);
 export const [sources, setSources] = createSignal<Source[]>([]);
 export const [agents, setAgents] = createSignal<AgentsView>({ agents: [], adapters: [] });
@@ -134,9 +133,6 @@ export async function loadInbox() {
 export async function loadInWork() {
   try { setInWork(list(await API.InWork())); } catch (e) { report(e); }
 }
-export async function loadDone() {
-  try { setDone(list(await API.Done())); } catch (e) { report(e); }
-}
 export async function loadFlows() {
   try { setFlows(list(await API.Flows())); } catch (e) { report(e); }
 }
@@ -167,7 +163,7 @@ export function updateWaiting(): boolean {
 /** loadAll re-reads everything. Cheap enough locally, and it cannot go stale. */
 export async function loadAll() {
   await Promise.all([
-    loadInbox(), loadInWork(), loadDone(), loadFlows(), loadSources(), loadAgents(), loadAttention(),
+    loadInbox(), loadInWork(), loadFlows(), loadSources(), loadAgents(), loadAttention(),
     loadProjects(), loadRibbons(), loadUpdateState(),
   ]);
   try { setVocabulary(await API.Vocabulary()); } catch (e) { report(e); }
@@ -190,7 +186,6 @@ export function applyCard(view: CardView | undefined) {
   setOpenCard(view);
   void loadInbox();
   void loadInWork();
-  void loadDone();
 }
 
 /**
@@ -209,7 +204,7 @@ export function subscribe() {
   const refreshRibbon = () => { void loadRibbons(); };
   // A card that closed may leave a working tree to ask about.
   Events.On("card", () => {
-    void loadInbox(); void loadInWork(); void loadDone(); void refreshCard(); refreshRibbon();
+    void loadInbox(); void loadInWork(); void refreshCard(); refreshRibbon();
     void loadAttention();
   });
   Events.On("inbox", () => { void loadInbox(); });
@@ -316,7 +311,7 @@ export function showRibbon(cardID: string) {
 // Which screen is open. A signal rather than a local of the shell, because
 // «Do it» is one gesture that ends on another screen: taking a card into work
 // and watching it start are the same moment.
-export type Tab = "inbox" | "ribbon" | "work" | "attention" | "flows" | "projects" | "sources" | "agents" | "settings";
+export type Tab = "inbox" | "ribbon" | "attention" | "flows" | "projects" | "sources" | "agents" | "settings";
 export const [tab, setTab] = createSignal<Tab>("inbox");
 
 /** openOutside opens an address in the system browser. A link inside the

@@ -23,7 +23,6 @@ export default function ProjectsView() {
         <div class="spacer" />
         <button class="btn" onClick={() => setEditing(blank())}>{t("projects.new")}</button>
       </div>
-      <p class="lede">{t("projects.lede")}</p>
 
       <Show when={editing()}>
         <ProjectForm
@@ -151,7 +150,6 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
       </Show>
 
       <div class="row">
-        <span class="meta">{t("projects.note")}</span>
         <div class="spacer" />
         <Show when={draft.id}>
           <Show when={confirming()} fallback={
