@@ -278,6 +278,16 @@ export default function Ribbon(): JSX.Element {
     setCaptured("");
   };
 
+  // The keyboard follows the ribbon: standing on a terminal's pane is being in
+  // that terminal, as a person sees a CLI waiting in it and just types.
+  // Anywhere else the keys are the page's again. The terminal is a native view
+  // over the page, so this is said to it rather than done with DOM focus.
+  const keyboardTo = (id: string) => {
+    const term = paneEl(id)?.querySelector<HTMLElement>(".terminal-host[data-term]")?.dataset.term ?? "";
+    void API.FocusNativeTerminal(term);
+  };
+  createEffect(focus, (id) => { queueMicrotask(() => keyboardTo(id)); });
+
   const widthOf = (id: string) => widths()[id] ?? DEFAULT_WIDTH;
 
   const resize = (to: (at: number) => number) => {
@@ -344,6 +354,9 @@ export default function Ribbon(): JSX.Element {
         else setTab("inbox");
         break;
     }
+    // A ⌘ key comes here from a terminal that had the keyboard, and one that
+    // did not move the ribbon has to give it back.
+    if (mod) keyboardTo(focus());
   };
 
   onSettled(() => {

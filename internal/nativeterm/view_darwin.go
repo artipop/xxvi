@@ -136,7 +136,8 @@ func CloseAll() {
 	C.nt_call_close_all()
 }
 
-// Focus gives the view the keyboard.
+// Focus gives the view the keyboard, now or as it appears; "" gives it back to
+// the page.
 func Focus(id string) {
 	if !Available() {
 		return

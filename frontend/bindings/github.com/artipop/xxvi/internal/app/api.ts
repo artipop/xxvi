@@ -265,8 +265,8 @@ export function Flows(): $CancellablePromise<model$0.Flow[] | null> {
 }
 
 /**
- * FocusNativeTerminal gives the terminal's view the keyboard: a click on its
- * pane that landed on the page rather than on the view still means it.
+ * FocusNativeTerminal gives the terminal's view the keyboard, as soon as it is
+ * on screen; "" gives it back to the page. The ribbon calls it as it moves.
  */
 export function FocusNativeTerminal(id: string): $CancellablePromise<void> {
     return $Call.ByID(1303741490, id);

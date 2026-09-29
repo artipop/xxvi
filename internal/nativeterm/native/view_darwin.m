@@ -10,6 +10,42 @@
 
 static ghostty_app_t app;
 static NSMutableDictionary<NSString *, NSView *> *views;
+// The terminal the page wants the keyboard in. The page may ask before the view
+// is there or while it is off screen; it gets the keyboard as it appears.
+static NSString *wanted;
+
+// The page's own view: the keyboard goes back there, not to the window, which
+// would hear keys and pass them to nobody.
+static NSView *pageIn(NSView *v) {
+  if ([v isKindOfClass:NSClassFromString(@"WKWebView")]) return v;
+  for (NSView *s in v.subviews) {
+    NSView *p = pageIn(s);
+    if (p) return p;
+  }
+  return nil;
+}
+
+static void toPage(NSWindow *win) {
+  if (![win.firstResponder isKindOfClass:NSClassFromString(@"NTView")]) return;
+  [win makeFirstResponder:pageIn(win.contentView)];
+}
+
+// A key the menu has a command for.
+static BOOL inMenu(NSMenu *menu, NSEvent *e) {
+  NSEventModifierFlags want = e.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagShift |
+                                                 NSEventModifierFlagOption | NSEventModifierFlagControl);
+  NSString *key = e.charactersIgnoringModifiers.lowercaseString;
+  for (NSMenuItem *item in menu.itemArray) {
+    if (item.hasSubmenu && inMenu(item.submenu, e)) return YES;
+    if (item.keyEquivalent.length == 0) continue;
+    NSEventModifierFlags mods = item.keyEquivalentModifierMask;
+    NSString *k = item.keyEquivalent;
+    // An upper-case equivalent carries its shift in the letter.
+    if (![k isEqualToString:k.lowercaseString]) mods |= NSEventModifierFlagShift;
+    if ([k.lowercaseString isEqualToString:key] && mods == want) return YES;
+  }
+  return NO;
+}
 
 static ghostty_input_mods_e modsOf(NSEventModifierFlags f) {
   int m = 0;
@@ -246,13 +282,17 @@ static bool ensureApp(void) {
   // A key on its way to a focused terminal goes straight to it. AppKit first
   // offers every key to every view in the window as a key equivalent, and the
   // web view takes Esc there — a terminal never saw it, and Esc is how a CLI's
-  // turn is broken off. Keys with ⌘ still go the usual way: they are the
-  // menu's (copy, paste, quit).
+  // turn is broken off. Keys with ⌘ are the menu's (copy, paste, quit) or else
+  // the page's: ⌘ with an arrow moves along the ribbon, and the page gives the
+  // keyboard back to whichever terminal it lands on.
   [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown | NSEventMaskKeyUp
                                         handler:^NSEvent *(NSEvent *e) {
     NSResponder *r = e.window.firstResponder;
     if (![r isKindOfClass:[NTView class]]) return e;
-    if (e.modifierFlags & NSEventModifierFlagCommand) return e;
+    if (e.modifierFlags & NSEventModifierFlagCommand) {
+      if (e.type == NSEventTypeKeyDown && !inMenu(NSApp.mainMenu, e)) toPage(e.window);
+      return e;
+    }
     NTView *v = (NTView *)r;
     if (e.type == NSEventTypeKeyDown) [v keyDown:e]; else [v keyUp:e];
     return nil;
@@ -278,6 +318,7 @@ void nt_show(void *nswindow, const char *cid, const char *ccommand, double x, do
     // The page measures from the top, the content view from the bottom.
     NSRect frame = NSMakeRect(px, content.bounds.size.height - py - ph, pw, ph);
     NTView *v = (NTView *)views[ident];
+    BOOL appears = !v || v.hidden;
     if (!v) {
       v = [[NTView alloc] initWithFrame:frame];
       v.ident = ident;
@@ -302,6 +343,7 @@ void nt_show(void *nswindow, const char *cid, const char *ccommand, double x, do
     v.hidden = NO;
     [v setFrame:frame];
     [v setFrameSize:frame.size];
+    if (appears && [wanted isEqualToString:ident]) [win makeFirstResponder:v];
   });
 }
 
@@ -313,7 +355,7 @@ void nt_hide(const char *cid) {
     if (!v || v.hidden) return;
     // A hidden first responder still gets the keys: they would go on into a
     // terminal nobody can see.
-    if (v.window.firstResponder == v) [v.window makeFirstResponder:nil];
+    toPage(v.window);
     v.hidden = YES;
   });
 }
@@ -325,7 +367,7 @@ void nt_close(const char *cid) {
     NTView *v = (NTView *)views[ident];
     if (!v) return;
     [views removeObjectForKey:ident];
-    if (v.window.firstResponder == v) [v.window makeFirstResponder:nil];
+    if (v.window.firstResponder == v) toPage(v.window);
     ghostty_surface_t s = v.surface;
     v.surface = NULL;
     [v removeFromSuperview];
@@ -343,12 +385,16 @@ void nt_close_all(void) {
   });
 }
 
-// A click on the pane that fell to the page — the view was catching up with a
-// moving ribbon, or hidden for a moment — still means «type here».
+// nt_focus gives the keyboard to a terminal, or back to the page for "".
 __attribute__((visibility("default")))
 void nt_focus(const char *cid) {
   NSString *ident = [NSString stringWithUTF8String:cid];
   onMain(^{
+    wanted = ident.length ? ident : nil;
+    if (!wanted) {
+      for (NSWindow *w in NSApp.windows) toPage(w);
+      return;
+    }
     NTView *v = (NTView *)views[ident];
     if (!v || v.hidden) return;
     [v.window makeFirstResponder:v];

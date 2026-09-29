@@ -56,8 +56,13 @@ export default function Terminal(props: {
       }
       if (disposed) return;
       termId = handle.id;
+      // The ribbon hands the keyboard to the terminal of the pane it stands on
+      // and finds it by this; a pane focused before the terminal was up asks
+      // for it here.
+      if (host) host.dataset.term = handle.id;
       stop = followNatively(handle, () => host, () => disposed);
       setStatus("live");
+      if (host?.closest(".screen.on")) void API.FocusNativeTerminal(handle.id);
       // Only to hear the end, and say it under the view: Ghostty draws, and its
       // bridge has a socket of its own. The view stays — it shows how the
       // terminal ended.

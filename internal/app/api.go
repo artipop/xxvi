@@ -455,8 +455,8 @@ func (s *API) ShowNativeTerminal(id, url string, x, y, w, h, dpr, fontSize float
 	return nil
 }
 
-// FocusNativeTerminal gives the terminal's view the keyboard: a click on its
-// pane that landed on the page rather than on the view still means it.
+// FocusNativeTerminal gives the terminal's view the keyboard, as soon as it is
+// on screen; "" gives it back to the page. The ribbon calls it as it moves.
 func (s *API) FocusNativeTerminal(id string) { nativeterm.Focus(id) }
 
 // HideNativeTerminal takes the view off screen, keeping it.
