@@ -265,6 +265,14 @@ export function Flows(): $CancellablePromise<model$0.Flow[] | null> {
 }
 
 /**
+ * FocusNativeTerminal gives the terminal's view the keyboard: a click on its
+ * pane that landed on the page rather than on the view still means it.
+ */
+export function FocusNativeTerminal(id: string): $CancellablePromise<void> {
+    return $Call.ByID(1303741490, id);
+}
+
+/**
  * GiveBackWindow puts our window back while the application keeps running:
  * somebody who has seen enough of it, or wants to arrange the two by hand.
  */

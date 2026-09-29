@@ -337,3 +337,15 @@ void nt_close_all(void) {
     for (NSString *ident in views.allKeys) nt_close(ident.UTF8String);
   });
 }
+
+// A click on the pane that fell to the page — the view was catching up with a
+// moving ribbon, or hidden for a moment — still means «type here».
+__attribute__((visibility("default")))
+void nt_focus(const char *cid) {
+  NSString *ident = [NSString stringWithUTF8String:cid];
+  onMain(^{
+    NTView *v = (NTView *)views[ident];
+    if (!v || v.hidden) return;
+    [v.window makeFirstResponder:v];
+  });
+}

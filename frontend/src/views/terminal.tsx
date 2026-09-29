@@ -37,6 +37,7 @@ export default function Terminal(props: {
   const [status, setStatus] = createSignal<"opening" | "live" | "closed" | "unavailable">("opening");
   const [error, setError] = createSignal("");
   let host: HTMLDivElement | undefined;
+  let termId = "";
 
   // Setup and teardown in one block, which is what onSettled is for: the
   // cleanup is returned rather than registered, and an `async` callback cannot
@@ -54,6 +55,7 @@ export default function Terminal(props: {
         return;
       }
       if (disposed) return;
+      termId = handle.id;
       stop = followNatively(handle, () => host, () => disposed);
       setStatus("live");
       // Only to hear the end, and say it under the view: Ghostty draws, and its
@@ -85,33 +87,14 @@ export default function Terminal(props: {
       <Show when={status() === "unavailable"}>
         <div class="screen-note">{t("terminal.unavailable")}</div>
       </Show>
-      <div class="terminal-host" ref={host} />
+      {/* A click that reaches the pane rather than the view over it — the view
+          was catching up with a sliding ribbon — still means «type here». */}
+      <div class="terminal-host" ref={host} onMouseDown={() => { if (termId) void API.FocusNativeTerminal(termId); }} />
       <Show when={status() === "closed"}>
         <div class="meta">{props.ended ?? t("terminal.shellEnded")}</div>
       </Show>
     </div>
   );
-}
-
-// covered says something of the page lies over the pane — a menu, a panel, a
-// floating notice. The native view is above the whole page, so it would hide
-// that thing rather than be hidden by it; it steps aside instead.
-//
-// Looked for on a grid over the whole pane rather than at its corners: a menu
-// or a notice is often smaller than the pane and would slip between them. A
-// hit test is cheap enough to do this every frame.
-function covered(el: HTMLElement, r: DOMRect): boolean {
-  const step = 80, inset = 3;
-  const cols = Math.max(2, Math.ceil(r.width / step)), rows = Math.max(2, Math.ceil(r.height / step));
-  for (let i = 0; i <= cols; i++) {
-    for (let j = 0; j <= rows; j++) {
-      const x = r.left + inset + (r.width - 2 * inset) * (i / cols);
-      const y = r.top + inset + (r.height - 2 * inset) * (j / rows);
-      const hit = document.elementFromPoint(x, y);
-      if (hit !== null && hit !== el && !el.contains(hit)) return true;
-    }
-  }
-  return false;
 }
 
 function followNatively(handle: { id: string; url: string }, host: () => HTMLElement | undefined, gone: () => boolean): () => void {
@@ -124,7 +107,10 @@ function followNatively(handle: { id: string; url: string }, host: () => HTMLEle
       const r = el.getBoundingClientRect();
       const onScreen = r.width > 8 && r.height > 8 && r.right > 0 && r.bottom > 0
         && r.left < window.innerWidth && r.top < window.innerHeight;
-      const visible = onScreen && !covered(el, r);
+      // Nothing of the page is checked for lying over the pane: the view is
+      // above the whole page, and a menu opened over a terminal goes under
+      // it. Accepted for now.
+      const visible = onScreen;
       const dpr = window.devicePixelRatio || 1;
       const key = visible ? `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)},${dpr}` : "hidden";
       if (key !== last) {

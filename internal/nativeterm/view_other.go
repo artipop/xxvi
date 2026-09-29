@@ -11,3 +11,4 @@ func Show(unsafe.Pointer, string, string, float64, float64, float64, float64, fl
 func Hide(string)                                                                               {}
 func Close(string)                                                                              {}
 func CloseAll()                                                                                 {}
+func Focus(string)                                                                              {}

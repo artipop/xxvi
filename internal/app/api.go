@@ -455,6 +455,10 @@ func (s *API) ShowNativeTerminal(id, url string, x, y, w, h, dpr, fontSize float
 	return nil
 }
 
+// FocusNativeTerminal gives the terminal's view the keyboard: a click on its
+// pane that landed on the page rather than on the view still means it.
+func (s *API) FocusNativeTerminal(id string) { nativeterm.Focus(id) }
+
 // HideNativeTerminal takes the view off screen, keeping it.
 func (s *API) HideNativeTerminal(id string) { nativeterm.Hide(id) }
 

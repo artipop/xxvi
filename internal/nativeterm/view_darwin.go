@@ -16,7 +16,7 @@ typedef void (*nt_show_fn)(void *, const char *, const char *, double, double, d
 typedef void (*nt_id_fn)(const char *);
 typedef void (*nt_void_fn)(void);
 static nt_show_fn p_show;
-static nt_id_fn p_hide, p_close;
+static nt_id_fn p_hide, p_close, p_focus;
 static nt_void_fn p_close_all;
 
 static int nt_load(const char *path) {
@@ -26,12 +26,14 @@ static int nt_load(const char *path) {
 	p_hide = (nt_id_fn)dlsym(h, "nt_hide");
 	p_close = (nt_id_fn)dlsym(h, "nt_close");
 	p_close_all = (nt_void_fn)dlsym(h, "nt_close_all");
-	return p_show && p_hide && p_close && p_close_all;
+	p_focus = (nt_id_fn)dlsym(h, "nt_focus");
+	return p_show && p_hide && p_close && p_close_all && p_focus;
 }
 static void nt_call_show(void *w, const char *id, const char *cmd, double x, double y, double wd, double ht, double dpr, double font) { p_show(w, id, cmd, x, y, wd, ht, dpr, font); }
 static void nt_call_hide(const char *id) { p_hide(id); }
 static void nt_call_close(const char *id) { p_close(id); }
 static void nt_call_close_all(void) { p_close_all(); }
+static void nt_call_focus(const char *id) { p_focus(id); }
 */
 import "C"
 
@@ -115,4 +117,14 @@ func CloseAll() {
 		return
 	}
 	C.nt_call_close_all()
+}
+
+// Focus gives the view the keyboard.
+func Focus(id string) {
+	if !Available() {
+		return
+	}
+	cid := C.CString(id)
+	defer C.free(unsafe.Pointer(cid))
+	C.nt_call_focus(cid)
 }
