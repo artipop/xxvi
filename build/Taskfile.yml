@@ -13,7 +13,7 @@ tasks:
       TARGET_ARCH: '{{.ARCH | default ARCH}}'
       SRC: '{{.ROOT_DIR}}/build/ghostty/src'
       PREFIX: '{{.ROOT_DIR}}/build/ghostty/{{.TARGET_OS}}-{{.TARGET_ARCH}}'
-      ZIG_TARGET: '{{if eq .TARGET_ARCH "amd64"}}x86_64{{else}}aarch64{{end}}-{{if eq .TARGET_OS "darwin"}}macos{{else}}linux-gnu{{end}}'
+      ZIG_TARGET: '{{if eq .TARGET_ARCH "amd64"}}x86_64{{else}}aarch64{{end}}-{{if eq .TARGET_OS "darwin"}}macos{{else if eq .TARGET_OS "windows"}}windows-gnu{{else}}linux-gnu{{end}}'
     status:
       - test -f "{{.PREFIX}}/share/pkgconfig/libghostty-vt-static.pc"
     preconditions:

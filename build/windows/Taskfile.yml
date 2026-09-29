@@ -11,29 +11,30 @@ vars:
   #
   # Password is stored securely in system keychain. Run: wails3 setup signing
 
-  # Docker image for cross-compilation with CGO (used when CGO_ENABLED=1 on non-Windows)
+  # Docker image for cross-compilation with CGO (build:docker, unused: Zig
+  # cross-compiles without it)
   CROSS_IMAGE: wails-cross
 
 tasks:
   build:
     summary: Builds the application for Windows
     cmds:
-      # Auto-detect CGO: if CGO_ENABLED=1, use Docker; otherwise use native Go cross-compile
-      - task: '{{if and (ne OS "windows") (eq .CGO_ENABLED "1")}}build:docker{{else}}build:native{{end}}'
+      - task: build:native
         vars:
           ARCH: '{{.ARCH}}'
           DEV: '{{.DEV}}'
           EXTRA_TAGS: '{{.EXTRA_TAGS}}'
           OBFUSCATED: '{{.OBFUSCATED}}'
           GARBLE_ARGS: '{{.GARBLE_ARGS}}'
-    vars:
-      # Default to CGO_ENABLED=0 if not explicitly set
-      CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
 
   build:native:
-    summary: Builds the application using native Go cross-compilation
+    summary: Builds the application, on Windows or from anywhere, with Zig as the C compiler
     internal: true
     deps:
+      - task: common:ghostty:lib
+        vars:
+          TARGET_OS: windows
+          ARCH: '{{.ARCH | default ARCH}}'
       - task: common:go:mod:tidy
       - task: common:build:frontend
         vars:
@@ -58,10 +59,18 @@ tasks:
         platforms: [linux, darwin]
     vars:
       BUILD_FLAGS: '{{if eq .DEV "true"}}{{if or .EXTRA_TAGS (eq .OBFUSCATED "true")}}-tags {{if eq .OBFUSCATED "true"}}wails_obfuscated{{if .EXTRA_TAGS}},{{end}}{{end}}{{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui"{{end}}'
+    # cgo for libghostty-vt, the holder's emulator. Zig is the C compiler because
+    # it built the library and because it cross-compiles to Windows from any
+    # system. The library comes out as a .lib, a name cgo does not take in
+    # linker flags unless told to.
     env:
       GOOS: windows
-      CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
+      CGO_ENABLED: 1
       GOARCH: '{{.ARCH | default ARCH}}'
+      CC: 'zig cc -target {{if eq (.ARCH | default ARCH) "arm64"}}aarch64{{else}}x86_64{{end}}-windows-gnu'
+      CXX: 'zig c++ -target {{if eq (.ARCH | default ARCH) "arm64"}}aarch64{{else}}x86_64{{end}}-windows-gnu'
+      CGO_LDFLAGS_ALLOW: '.*\.lib'
+      PKG_CONFIG_PATH: "{{.ROOT_DIR}}/build/ghostty/windows-{{.ARCH | default ARCH}}/share/pkgconfig"
 
   build:docker:
     summary: Cross-compiles for Windows using Docker with Zig (for CGO builds on non-Windows)
