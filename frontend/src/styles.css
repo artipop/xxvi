@@ -16,6 +16,27 @@
   --radius: 8px;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 
+  /* The sixteen colours a terminal program asks for by number, for xterm.js
+     where it draws the terminal (views/xterm.ts). xterm's own are made for a
+     black screen and an unknown one: its blue is unreadable on --bg, and its
+     black is --bg. */
+  --ansi-black: #4b5161;
+  --ansi-red: #e06c75;
+  --ansi-green: #7bc47f;
+  --ansi-yellow: #e0a458;
+  --ansi-blue: #6aa2e8;
+  --ansi-magenta: #c38ee0;
+  --ansi-cyan: #4fb8ad;
+  --ansi-white: #c9cdd6;
+  --ansi-bright-black: #7a8092;
+  --ansi-bright-red: #f08c94;
+  --ansi-bright-green: #9ad89d;
+  --ansi-bright-yellow: #f0c27e;
+  --ansi-bright-blue: #8fbcf5;
+  --ansi-bright-magenta: #d9aef2;
+  --ansi-bright-cyan: #74d3c9;
+  --ansi-bright-white: #f4f5f8;
+
 }
 
 * { box-sizing: border-box; }
@@ -414,7 +435,8 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
    It is a band, not a page — a band whose bottom edge you have to go looking
    for is a page pretending to be one. */
 
-/* Isolated, like .main, so nothing inside can climb over the sidebar's pills. */
+/* Isolated, like .main, so nothing inside — xterm's own layers go up to z-index
+   7 — can climb over the sidebar's pills. */
 .full { position: relative; isolation: isolate; min-width: 0; height: 100dvh; overflow: hidden; }
 
 .ribbon {
@@ -710,12 +732,14 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .notes-text:focus { outline: none; }
 .notes .meta { padding: 6px 12px; border-top: 1px solid var(--line); }
 
-/* Ghostty's view is laid over this box and sized to it, and the process is told
-   the columns that fit, so the box has to have a size of its own. A terminal in
+/* Ghostty's view is laid over this box, or xterm sizes itself to it, and the
+   process is told the columns that fit, so the box has to have a size of its
+   own. A terminal in
    a box that grows to its content would agree with itself and with nothing
    else. */
 .terminal { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
 .terminal-host { flex: 1; min-height: 0; padding: 6px 8px; }
+.terminal-host .xterm { height: 100%; }
 .terminal .meta { padding: 4px 10px; border-top: 1px solid var(--line); }
 
 .browser { flex: 1; min-height: 0; display: flex; flex-direction: column; }

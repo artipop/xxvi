@@ -3,11 +3,13 @@ import type { JSX } from "@solidjs/web";
 import { report } from "../state";
 import { errorText, t } from "../i18n";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import { nativeAvailable } from "./native";
+import { nativeWanted } from "./native";
+import { drawInPage } from "./xterm";
 
 // A terminal screen: a real pty on the other end of a socket, drawn by Ghostty —
 // the same emulator the holder keeps terminal screens in — in a native view
-// laid over this pane (internal/nativeterm). Two kinds of terminal arrive here
+// laid over this pane (internal/nativeterm), or by xterm.js in the pane itself
+// where Ghostty cannot draw (./xterm.ts). Two kinds of terminal arrive here
 // and the pane does not tell them apart — a shell somebody opened on a screen,
 // and the CLI a stage is being worked in — because from this side they are the
 // same thing: bytes out, keystrokes in, and a size to say.
@@ -17,14 +19,14 @@ import { nativeAvailable } from "./native";
 // connected to, and a caller that could start one would be a second way of
 // working a step.
 //
-// The pane stays in the page as a placeholder that keeps the layout. The view
-// over it is moved to wherever the pane is drawn on every frame — the ribbon
+// With Ghostty, the pane stays in the page as a placeholder that keeps the
+// layout. The view over it is moved to wherever the pane is drawn on every frame — the ribbon
 // slides, and a view that followed only resizes would stay behind — and its
 // size is what the process is told: Ghostty's bridge says it the way a terminal
 // window does, from its own pty.
 
 // FONT_SIZE is the terminal's size in points, and so how many columns a pane
-// holds.
+// holds — the same for both engines.
 const FONT_SIZE = 12;
 
 export default function Terminal(props: {
@@ -34,7 +36,7 @@ export default function Terminal(props: {
   // that exited and a step that is over are not the same news.
   ended?: string;
 }): JSX.Element {
-  const [status, setStatus] = createSignal<"opening" | "live" | "closed" | "unavailable">("opening");
+  const [status, setStatus] = createSignal<"opening" | "live" | "reconnecting" | "closed">("opening");
   const [error, setError] = createSignal("");
   let host: HTMLDivElement | undefined;
   let termId = "";
@@ -50,8 +52,15 @@ export default function Terminal(props: {
     const start = async () => {
       const handle = await props.open();
       if (disposed) return;
-      if (!(await nativeAvailable())) {
-        setStatus("unavailable");
+      if (!(await nativeWanted())) {
+        if (disposed || !host) return;
+        const stopPage = await drawInPage(handle.url, host, FONT_SIZE, props.ended ?? t("terminal.shellEnded"), setStatus);
+        if (disposed) {
+          stopPage();
+          return;
+        }
+        stop = stopPage;
+        if (host.closest(".screen.on")) host.querySelector<HTMLElement>("textarea")?.focus({ preventScroll: true });
         return;
       }
       if (disposed) return;
@@ -89,12 +98,12 @@ export default function Terminal(props: {
       <Show when={error()}>
         <div class="screen-note">{error()}</div>
       </Show>
-      <Show when={status() === "unavailable"}>
-        <div class="screen-note">{t("terminal.unavailable")}</div>
-      </Show>
       {/* A click that reaches the pane rather than the view over it — the view
           was catching up with a sliding ribbon — still means «type here». */}
       <div class="terminal-host" ref={host} onMouseDown={() => { if (termId) void API.FocusNativeTerminal(termId); }} />
+      <Show when={status() === "reconnecting"}>
+        <div class="meta">{t("terminal.reconnecting")}</div>
+      </Show>
       <Show when={status() === "closed"}>
         <div class="meta">{props.ended ?? t("terminal.shellEnded")}</div>
       </Show>

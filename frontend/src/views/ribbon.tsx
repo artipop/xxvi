@@ -282,9 +282,17 @@ export default function Ribbon(): JSX.Element {
   // that terminal, as a person sees a CLI waiting in it and just types.
   // Anywhere else the keys are the page's again. The terminal is a native view
   // over the page, so this is said to it rather than done with DOM focus.
+  // xterm.js, where it draws instead, is focused like any element of the page.
   const keyboardTo = (id: string) => {
-    const term = paneEl(id)?.querySelector<HTMLElement>(".terminal-host[data-term]")?.dataset.term ?? "";
+    const host = paneEl(id)?.querySelector<HTMLElement>(".terminal-host");
+    const term = host?.dataset.term ?? "";
     void API.FocusNativeTerminal(term);
+    if (host && !term) {
+      host.querySelector<HTMLElement>("textarea")?.focus({ preventScroll: true });
+      return;
+    }
+    const held = document.activeElement as HTMLElement | null;
+    if (held?.closest(".terminal")) held.blur();
   };
   createEffect(focus, (id) => { queueMicrotask(() => keyboardTo(id)); });
 
@@ -318,6 +326,11 @@ export default function Ribbon(): JSX.Element {
       if (e.key === "Escape" && !terminal) target.blur();
       return;
     }
+    // From inside a terminal only with shift as well: ⌘← and ⌘→ are the ends of
+    // the line there, and on Windows, where the modifier is Ctrl, Ctrl+R, Ctrl+J
+    // and Ctrl+← are the shell's. Ghostty's view hands the same keys over
+    // (internal/nativeterm).
+    if (terminal && !e.shiftKey) return;
     if (e.altKey) return;
 
     switch (e.key) {
