@@ -518,7 +518,7 @@ void nt_hide(const char *cid) {
     if (!v || v.hidden) return;
     // A hidden first responder still gets the keys: they would go on into a
     // terminal nobody can see.
-    toPage(v.window);
+    if (v.window.firstResponder == v) toPage(v.window);
     v.hidden = YES;
   });
 }
