@@ -1,12 +1,12 @@
 import {
-  createEffect, createMemo, createSignal, For, lazy, Loading, Match, onSettled, Show, Switch,
+  createEffect, createMemo, createSignal, For, lazy, Loading, Match, onCleanup, onSettled, Show, Switch,
 } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { Events } from "@wailsio/runtime";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
 import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
-import { attention, closedRibbon, guard, list, loadAttention, loadRibbons, openRibbon, report, ribbons, setOpenRibbon, setTab, openOutside } from "../state";
+import { attention, closedRibbon, guard, leaveRibbons, list, loadAttention, loadRibbons, openRibbon, report, ribbons, setOpenRibbon, setTab, openOutside } from "../state";
 import { QuestionForm } from "./attention";
 import { JournalOf } from "./journal";
 import { Compose } from "./compose";
@@ -92,6 +92,7 @@ export default function Ribbon(): JSX.Element {
   // finishing on a strip somebody is not watching is worth a mark, not a jump.
   const [moved, setMoved] = createSignal<Record<string, boolean>>({});
   const [widths, setWidths] = createSignal<Record<string, number>>({});
+  onCleanup(leaveRibbons);
 
   const [journal, setJournal] = createSignal(false);
   // A new task is a ribbon of its own, not a dialog over somebody else's: it

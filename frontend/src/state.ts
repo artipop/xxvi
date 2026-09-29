@@ -291,6 +291,15 @@ export async function loadRibbons() {
   }
 }
 
+/** leaveRibbons lets go of a visited closed card once the person leaves the
+ *  stack. loadRibbons would do it too, but only on the next backend event, and
+ *  with nothing left in work there may be none before they come back. */
+export function leaveRibbons() {
+  if (!closedRibbon()) return;
+  setClosedRibbon("");
+  void loadRibbons();
+}
+
 /** showRibbon opens one card's strip, which is what «Do it» ends in. */
 export function showRibbon(cardID: string) {
   if (!ribbons.some((r) => r.id === cardID) || cardID === closedRibbon()) {
