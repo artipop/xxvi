@@ -264,7 +264,10 @@ export async function loadRibbons() {
     const next = list(await API.Ribbons());
     const looking = tab() === "ribbon";
     const watching = openRibbon();
-    if (looking && watching && !next.some((r) => r.id === watching) && ribbons.some((r) => r.id === watching)) {
+    // A strip already visited as closed was opened on purpose, and stays
+    // whatever became of its card.
+    if (looking && watching && watching !== closedRibbon()
+        && !next.some((r) => r.id === watching) && ribbons.some((r) => r.id === watching)) {
       // Only a card that finished is kept to look at. One that was dropped —
       // by hand, or by its agent's terminal closing without a report — is
       // gone, and keeping it showed a dead terminal on an empty stack.
