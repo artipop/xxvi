@@ -100,3 +100,24 @@ func TestTheHolderAnswersWhileNobodyWatches(t *testing.T) {
 	}
 	again.wait(t, "ответ:[")
 }
+
+// Text is the visible screen only: a question answered and scrolled away is no
+// longer on it.
+func TestTextIsTheVisibleScreenOnly(t *testing.T) {
+	s := NewScreen(20, 3)
+	defer s.Close()
+	s.Write([]byte("давний вопрос\r\nа\r\nб\r\nв\r\nг"))
+	got := s.Text()
+	if strings.Contains(got, "давний") {
+		t.Fatalf("ушедшее в прокрутку не на экране: %q", got)
+	}
+	if !strings.Contains(got, "в") || !strings.Contains(got, "г") {
+		t.Fatalf("видимые строки должны быть: %q", got)
+	}
+	blank := NewScreen(20, 3)
+	defer blank.Close()
+	blank.Write([]byte("одна\r\n"))
+	if got := blank.Text(); !strings.Contains(got, "одна") {
+		t.Fatalf("строка над пустыми внизу на экране: %q", got)
+	}
+}

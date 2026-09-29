@@ -299,3 +299,27 @@ func TestLiveTerminalPauseClaude(t *testing.T) {
 		t.Fatalf("the continued conversation does not remember the paused one: %s", done)
 	}
 }
+
+// In a folder the CLI has never been trusted in, it asks before any hook can
+// fire; the card says so as soon as the question is on the screen. Costs
+// nothing: the model is never reached.
+func TestLiveTerminalTrustQuestionClaude(t *testing.T) {
+	t.Setenv("XXVI_LIVE_DIR", t.TempDir())
+	l := newLiveStage(t, model.KindClaude, "haiku")
+	run := l.start("Reply with just OK.")
+	opened := time.Now()
+	for {
+		select {
+		case a := <-l.ui.waits:
+			if a.Awaiting && a.Terminal == waitAsking {
+				t.Logf("asking after %v", time.Since(opened).Round(time.Second))
+				if time.Since(opened) >= terminalQuietFor {
+					t.Fatal("the question should be seen on the screen, not waited out")
+				}
+				return
+			}
+		case <-time.After(terminalQuietFor):
+			t.Fatalf("the trust question was not seen; screen:\n%s", l.screen(run))
+		}
+	}
+}

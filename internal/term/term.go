@@ -57,6 +57,10 @@ type Session struct {
 	subs   map[chan []byte]struct{}
 	cols   int
 	rows   int
+	// interrupts is told of a person stopping the process from the keyboard —
+	// Esc or Ctrl+C on their own — which some CLIs answer with no word of
+	// their own (Interrupts).
+	interrupts chan struct{}
 	// views are the windows open on the terminal, by the size each has room
 	// for (View).
 	views    map[int][2]int
@@ -506,13 +510,14 @@ func shellSpec(dir, command string) ptyhold.Spec {
 // pty gets when nobody has said one (ptyhold.Start).
 func newSession(id string, cols, rows int, log *slog.Logger) *Session {
 	return &Session{
-		ID:        id,
-		screen:    ptyhold.NewScreen(cols, rows),
-		subs:      map[chan []byte]struct{}{},
-		done:      make(chan struct{}),
-		forgotten: make(chan struct{}),
-		log:       log,
-		spoke:     time.Now(),
+		ID:         id,
+		screen:     ptyhold.NewScreen(cols, rows),
+		interrupts: make(chan struct{}, 1),
+		subs:       map[chan []byte]struct{}{},
+		done:       make(chan struct{}),
+		forgotten:  make(chan struct{}),
+		log:        log,
+		spoke:      time.Now(),
 	}
 }
 
@@ -631,7 +636,32 @@ func (s *Session) snapshot() []byte {
 }
 
 // Write is a keystroke on its way to the process.
-func (s *Session) Write(data []byte) error { return s.eng.Write(data) }
+func (s *Session) Write(data []byte) error {
+	// A key on its own, not the start of an escape sequence: an arrow is
+	// ESC [ A, and arrives in one piece.
+	if len(data) == 1 && (data[0] == 0x1b || data[0] == 0x03) {
+		select {
+		case s.interrupts <- struct{}{}:
+		default:
+		}
+	}
+	return s.eng.Write(data)
+}
+
+// Interrupts tells of a person pressing Esc or Ctrl+C in the terminal. claude
+// breaks off a turn on Esc and fires no hook for it, so this is the only way to
+// know the turn is over.
+func (s *Session) Interrupts() <-chan struct{} { return s.interrupts }
+
+// Text is what the terminal shows now, as plain text, without the scrollback.
+func (s *Session) Text() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.screen == nil {
+		return ""
+	}
+	return s.screen.Text()
+}
 
 // Resize tells the process how wide the window is. This is the whole of why a
 // terminal wraps where it should: a shell breaks its lines at the column count

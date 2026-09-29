@@ -431,3 +431,18 @@ func TestAConversationThatIsGoneFailsTheStepByName(t *testing.T) {
 		t.Fatal("только закрытие без отчёта говорит о пропавшем разговоре")
 	}
 }
+
+// Both vendors' trust question is seen on the screen, whatever the case.
+func TestTheTrustQuestionIsSeenOnScreen(t *testing.T) {
+	for _, screen := range []string{
+		"  ❯ No, exit\n    Yes, I trust this folder\n  Enter to confirm", // claude
+		"  Folder access\n  Trust this folder? Codex can read, edit…",      // codex
+	} {
+		if !trustAsked(screen) {
+			t.Errorf("вопрос о доверии не узнан: %q", screen)
+		}
+	}
+	if trustAsked("❯ Try \"refactor <filepath>\"") {
+		t.Error("обычный экран — не вопрос о доверии")
+	}
+}

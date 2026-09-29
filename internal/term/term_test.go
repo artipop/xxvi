@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -671,7 +670,11 @@ func TestAHolderThatDiesIsReplaced(t *testing.T) {
 		t.Fatalf("открыть терминал: %v", err)
 	}
 	old := m.client()
-	if err := syscall.Kill(old.Pid(), syscall.SIGKILL); err != nil {
+	proc, err := os.FindProcess(old.Pid())
+	if err != nil {
+		t.Fatalf("найти держателя: %v", err)
+	}
+	if err := proc.Kill(); err != nil {
 		t.Fatalf("убить держателя: %v", err)
 	}
 	select {
@@ -715,4 +718,26 @@ func TestTwoWindowsAgreeOnTheSmallerSize(t *testing.T) {
 	_ = s.Write([]byte("stty size\n"))
 	read(t, updates, history, "40 120")
 	big.Close()
+}
+
+// Esc or Ctrl+C on their own are a person stopping the process; an arrow,
+// which starts with the same byte, is not.
+func TestInterruptsAreTheKeysOnTheirOwn(t *testing.T) {
+	m := unheld(t)
+	s, err := m.Open("card", "screen", "cat")
+	if err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	_ = s.Write([]byte("\x1b[A"))
+	select {
+	case <-s.Interrupts():
+		t.Fatal("стрелка — не прерывание")
+	case <-time.After(100 * time.Millisecond):
+	}
+	_ = s.Write([]byte("\x1b"))
+	select {
+	case <-s.Interrupts():
+	case <-time.After(time.Second):
+		t.Fatal("Esc должен быть замечен")
+	}
 }

@@ -38,10 +38,20 @@ import (
 // when it stops for a person (hooks.go), and a CLI whose hooks never spoke is
 // judged by drawing nothing.
 
-// terminalQuietFor is how long a stage's CLI must draw nothing before the card
-// says it is waiting for a person. Generous on purpose: a model thinking
-// between tool calls is silent for a while, and a card that cries out early is
-// a card nobody believes.
+// trustPrompt is on the screen while a CLI asks whether to trust the folder:
+// claude's «Yes, I trust this folder», codex's «Trust this folder?». No hook
+// fires for it — it comes before the conversation does.
+const trustPrompt = "trust this folder"
+
+func trustAsked(screen string) bool {
+	return strings.Contains(strings.ToLower(screen), trustPrompt)
+}
+
+// terminalQuietFor is how long a stage's CLI whose hooks have said nothing —
+// none for its kind, none on Windows — must draw nothing before the card says
+// it is waiting for a person. Generous on purpose: a model thinking between
+// tool calls is silent for a while, and a card that cries out early is a card
+// nobody believes.
 const terminalQuietFor = 45 * time.Second
 
 // promptSettle is how quiet the CLI must be before a brief is typed into it,
@@ -281,7 +291,7 @@ func (m *Manager) watchTerminal(
 	ctx context.Context, s *session, sess *term.Session,
 	reported <-chan stagemcp.Report, hooked <-chan stagemcp.HookEvent,
 ) (stagemcp.Report, error) {
-	tick := time.NewTicker(5 * time.Second)
+	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
 	state := cliUnknown
 	waiting := ""
@@ -337,23 +347,30 @@ func (m *Manager) watchTerminal(
 				wait("")
 			}
 
+		case <-sess.Interrupts():
+			// Esc breaks a claude turn off with no hook at all, and the next
+			// one that comes is the person's next prompt. Until then the turn
+			// is over, the same as after Stop.
+			if state == cliWorking || state == cliAsking {
+				state = cliTurnEnded
+				wait("")
+			}
+
 		case <-tick.C:
-			quiet := sess.Quiet() >= terminalQuietFor
+			if state != cliUnknown {
+				continue // hooks lead once they have spoken
+			}
+			// Before the first hook the CLI may be asking something that no
+			// hook reports — «do you trust this folder?» comes before any —
+			// and the screen says so plainly. Silence is left for a CLI whose
+			// hooks never speak at all.
 			switch {
-			case state == cliUnknown:
-				// No hook has spoken, so the silence is all there is — both
-				// ways: a CLI that draws again is back at work.
-				if quiet {
-					wait(waitQuiet)
-				} else {
-					wait("")
-				}
-			case state == cliWorking && quiet:
-				// Hooks lead once they have spoken, and silence only backs
-				// them up where they have a gap: a turn broken off with Esc
-				// ends with no hook at all, and would otherwise read as work
-				// forever. What clears it is the next hook.
+			case trustAsked(sess.Text()):
+				wait(waitAsking)
+			case sess.Quiet() >= terminalQuietFor:
 				wait(waitQuiet)
+			default:
+				wait("")
 			}
 		}
 	}

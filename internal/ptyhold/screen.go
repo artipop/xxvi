@@ -69,6 +69,37 @@ func (s *Screen) Answer(reply func([]byte)) {
 	})
 }
 
+// Text is what the screen shows now, as plain text: the visible rows only,
+// none of the scrollback. What a person reading it would take it to say — a
+// question on screen is one whether or not any hook said so.
+func (s *Screen) Text() string {
+	f, err := lg.NewFormatter(s.t, lg.WithFormatterFormat(lg.FormatterFormatPlain), lg.WithFormatterTrim(true))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	all, err := f.FormatString()
+	if err != nil {
+		return ""
+	}
+	total, err1 := s.t.TotalRows()
+	rows, err2 := s.t.Rows()
+	if err1 != nil || err2 != nil {
+		return all
+	}
+	// One line per physical row, the blank ones at the bottom left out: the
+	// visible rows are the last rows of total, whichever of them were written.
+	lines := strings.Split(all, "\n")
+	first := int(total) - int(rows)
+	if first < 0 {
+		first = 0
+	}
+	if first >= len(lines) {
+		return ""
+	}
+	return strings.Join(lines[first:], "\n")
+}
+
 // Close frees the emulator.
 func (s *Screen) Close() { s.t.Close() }
 
