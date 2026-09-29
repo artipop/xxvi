@@ -396,7 +396,6 @@ export default function Ribbon(): JSX.Element {
           job in front of you, and the one offer the ribbon ever makes. */}
       <header class="ribbon-bar">
         <span class="ribbon-where">
-          <Show when={openRibbon() === DRAFT || inWorkspace().length === 0}>{t("ribbon.newTask")}</Show>
           {current()?.title}
           <Show when={current()?.stageName}>
             <span class="ribbon-stage"> · {current()!.stageName}</span>
