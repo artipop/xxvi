@@ -12,3 +12,4 @@ func Hide(string)                                                               
 func Close(string)                                                                              {}
 func CloseAll()                                                                                 {}
 func Focus(string)                                                                              {}
+func Init()                                                                                     {}

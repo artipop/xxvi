@@ -210,8 +210,13 @@ static void closeSurface(void *ud, bool alive) {
   dispatch_async(dispatch_get_main_queue(), ^{ nt_close(ident.UTF8String); });
 }
 
+// onMain runs b on the main thread without waiting for it. Never
+// dispatch_sync: a Go thread blocked on the main one while another Go thread
+// forks a process deadlocks the whole application — fork takes malloc's lock
+// and waits for libdispatch's, the main thread holds libdispatch's and waits
+// for malloc's. Nothing here needs an answer back, so nothing has to wait.
 static void onMain(dispatch_block_t b) {
-  if ([NSThread isMainThread]) b(); else dispatch_sync(dispatch_get_main_queue(), b);
+  if ([NSThread isMainThread]) b(); else dispatch_async(dispatch_get_main_queue(), b);
 }
 
 static bool ensureApp(void) {
@@ -349,3 +354,12 @@ void nt_focus(const char *cid) {
     [v.window makeFirstResponder:v];
   });
 }
+
+// nt_init sets Ghostty up, on the main thread, before the application runs
+// anything else (nativeterm.Init). Ghostty's setup calls setlocale, and
+// setlocale racing a fork deadlocks the process inside libc: fork takes
+// malloc's lock and waits for the locale's, setlocale holds the locale's and
+// waits for malloc's. An application that starts processes all the time cannot
+// call it at any other moment.
+__attribute__((visibility("default")))
+void nt_init(void) { ensureApp(); }

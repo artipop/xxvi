@@ -64,6 +64,10 @@ func main() {
 	maybeHoldTerminals(os.Args[1:])
 	// And the bridge a native terminal view runs (internal/nativeterm).
 	maybeAttachTerminal(os.Args[1:])
+	// Ghostty is set up here and nowhere later: on the main thread, before the
+	// first process is started — its setup and a fork running at once deadlock
+	// the whole application (internal/nativeterm).
+	nativeterm.Init()
 	app.HoldTerminals = func(socket string) *exec.Cmd {
 		self, err := os.Executable()
 		if err != nil {

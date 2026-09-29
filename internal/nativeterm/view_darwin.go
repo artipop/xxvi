@@ -17,7 +17,7 @@ typedef void (*nt_id_fn)(const char *);
 typedef void (*nt_void_fn)(void);
 static nt_show_fn p_show;
 static nt_id_fn p_hide, p_close, p_focus;
-static nt_void_fn p_close_all;
+static nt_void_fn p_close_all, p_init;
 
 static int nt_load(const char *path) {
 	void *h = dlopen(path, RTLD_NOW | RTLD_LOCAL);
@@ -27,13 +27,15 @@ static int nt_load(const char *path) {
 	p_close = (nt_id_fn)dlsym(h, "nt_close");
 	p_close_all = (nt_void_fn)dlsym(h, "nt_close_all");
 	p_focus = (nt_id_fn)dlsym(h, "nt_focus");
-	return p_show && p_hide && p_close && p_close_all && p_focus;
+	p_init = (nt_void_fn)dlsym(h, "nt_init");
+	return p_show && p_hide && p_close && p_close_all && p_focus && p_init;
 }
 static void nt_call_show(void *w, const char *id, const char *cmd, double x, double y, double wd, double ht, double dpr, double font) { p_show(w, id, cmd, x, y, wd, ht, dpr, font); }
 static void nt_call_hide(const char *id) { p_hide(id); }
 static void nt_call_close(const char *id) { p_close(id); }
 static void nt_call_close_all(void) { p_close_all(); }
 static void nt_call_focus(const char *id) { p_focus(id); }
+static void nt_call_init(void) { p_init(); }
 */
 import "C"
 
@@ -41,6 +43,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"unsafe"
 )
 
@@ -76,6 +79,20 @@ func Available() bool {
 		}
 	})
 	return loaded
+}
+
+// Init sets Ghostty up. It has to be called from main, on the main thread,
+// before the application starts any process: Ghostty's setup calls
+// setlocale, which deadlocks against a fork happening at the same moment
+// (native/view_darwin.m). Go's fork lock is held throughout, in case anything
+// is already starting one.
+func Init() {
+	if !Available() {
+		return
+	}
+	syscall.ForkLock.Lock()
+	defer syscall.ForkLock.Unlock()
+	C.nt_call_init()
 }
 
 // Show puts the terminal id in a native view over the window at the page's
