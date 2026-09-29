@@ -69,8 +69,8 @@ export interface Answer {
 }
 
 /**
- * Attention is one thing waiting for a person. There are two kinds of it, and
- * which one a row is, is said by whether it carries a question.
+ * Attention is one thing waiting for a person. Which kind a row is, is said by
+ * which of its fields are set.
  * 
  * A **question** is the protocol asking: an ACP session sent a permission
  * request or an elicitation, and the agent is waiting on the answer with its
@@ -124,6 +124,17 @@ export interface Attention {
     "worktree"?: string;
     "branch"?: string;
     "dirty"?: boolean;
+
+    /**
+     * Standing is set on the fourth kind: a card in work that stands where the
+     * next move is a person's — why (engine.StandAnswer, engine.StandStopped, engine.StandPaused),
+     * on which stage, and what stopped it, if something did. No agent is
+     * waiting on it; the flow is. The engine says it, not this package: it is
+     * about where the card is, not about a run (app.Attention joins the two).
+     */
+    "standing"?: string;
+    "stage"?: string;
+    "problem"?: msg$0.Msg | null;
 }
 
 /**

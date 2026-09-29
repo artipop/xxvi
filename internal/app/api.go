@@ -1010,8 +1010,9 @@ func (s *API) DeleteAgent(name string) error {
 // ---- what is waiting for a person ----
 
 // Attention is everything waiting for a person, oldest first: an agent's
-// question, a silent terminal, a closed card's working tree.
-func (s *API) Attention() []acp.Attention { return s.app.Agents.Attention() }
+// question, a silent terminal, a closed card's working tree, a card standing
+// where the next move is the person's.
+func (s *API) Attention() []acp.Attention { return s.app.Attention() }
 
 // SetNotificationWords hands over what a system notification says around an
 // agent's question, in the language the UI is showing. Called by the UI when it

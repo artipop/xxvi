@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -52,6 +53,14 @@ type NotificationWords struct {
 	// is the MR's number.
 	ReviewAsked string `json:"reviewAsked"`
 	MRUpdated   string `json:"mrUpdated"`
+	// RemindAnswer, RemindStopped, RemindPaused and RemindAgent say again that
+	// a task waits: on a person's answer at «{stage}», stopped or paused at
+	// «{stage}», or on an agent that asked. RemindMany is several at once, «{n}» of them.
+	RemindAnswer  string `json:"remindAnswer"`
+	RemindStopped string `json:"remindStopped"`
+	RemindPaused  string `json:"remindPaused"`
+	RemindAgent   string `json:"remindAgent"`
+	RemindMany    string `json:"remindMany"`
 }
 
 func (w NotificationWords) ready() bool { return w.Asks != "" && w.Permission != "" }
@@ -191,6 +200,10 @@ func (n *Notifier) onResponse(result notifications.NotificationResult) {
 		n.app.log.Debug("could not read a notification response", "err", result.Error)
 		return
 	}
+	if card, _ := result.Response.UserInfo["open"].(string); card != "" {
+		n.app.Emit(EventOpenRibbon, map[string]any{"cardId": card})
+		return
+	}
 	id := result.Response.ID
 	if id == "" {
 		id, _ = result.Response.UserInfo["questionId"].(string)
@@ -218,6 +231,55 @@ func (n *Notifier) answer(questionID string, ans acp.Answer) {
 	if err := n.app.Agents.Answer(questionID, ans); err != nil {
 		n.app.log.Info("answer from a notification not taken", "err", err)
 	}
+}
+
+// EventOpenRibbon asks the UI to show one card's strip: a reminder was clicked,
+// and what it reminded of is the task, not the list it sits in.
+const EventOpenRibbon = "open-ribbon"
+
+// Remind says again that tasks are waiting. One reminder for all that are due
+// at once: after a night away, a stack of them is a stack nobody reads. Nothing
+// to answer from it — it is a way back to the task, and the click opens it.
+func (n *Notifier) Remind(rows []acp.Attention) {
+	if n == nil || !n.ok || len(rows) == 0 {
+		return
+	}
+	n.mu.Lock()
+	words := n.words
+	n.mu.Unlock()
+
+	opts := notifications.NotificationOptions{ID: "remind"}
+	if len(rows) == 1 {
+		row := rows[0]
+		opts.Title = row.CardTitle
+		opts.Subtitle = words.reminder(row)
+		opts.Data = map[string]interface{}{"open": row.CardID}
+	} else {
+		titles := make([]string, 0, len(rows))
+		for _, row := range rows {
+			titles = append(titles, row.CardTitle)
+		}
+		opts.Title = strings.ReplaceAll(words.RemindMany, "{n}", strconv.Itoa(len(rows)))
+		opts.Body = strings.Join(titles, "\n")
+	}
+	if opts.Title == "" || (len(rows) == 1 && opts.Subtitle == "") {
+		return // the UI has not said how to word it yet
+	}
+	if err := n.service.SendNotification(opts); err != nil {
+		n.app.log.Debug("could not show a reminder", "err", err)
+	}
+}
+
+func (w NotificationWords) reminder(row acp.Attention) string {
+	switch row.Standing {
+	case engine.StandAnswer:
+		return strings.ReplaceAll(w.RemindAnswer, "{stage}", row.Stage)
+	case engine.StandStopped:
+		return strings.ReplaceAll(w.RemindStopped, "{stage}", row.Stage)
+	case engine.StandPaused:
+		return strings.ReplaceAll(w.RemindPaused, "{stage}", row.Stage)
+	}
+	return w.RemindAgent
 }
 
 // notifyAttention is the hook App.Emit calls: an attention event carries the

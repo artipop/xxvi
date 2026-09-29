@@ -95,6 +95,11 @@ export const en: Dict = {
   "notify.replyPlaceholder": "Answer in your own words",
   "notify.reviewAsked": "Your review is requested on {mr}",
   "notify.mrUpdated": "New commits in {mr} — the review is yours again",
+  "notify.remindAnswer": "Still waiting for your answer at «{stage}»",
+  "notify.remindStopped": "Still stopped at «{stage}» — the next move is yours",
+  "notify.remindPaused": "The step at «{stage}» is paused — continue it when you are ready",
+  "notify.remindAgent": "The agent is still waiting for you",
+  "notify.remindMany": "Tasks waiting for you: {n}",
 
   // ---- inbox ----
   "inbox.title": "Inbox",
@@ -158,7 +163,7 @@ export const en: Dict = {
 
   // ---- needs attention ----
   "attention.title": "Awaiting reply",
-  "attention.lede": "An agent stopped and is waiting for an answer, or a closed task left a working tree behind. Questions do not close by themselves over time.",
+  "attention.lede": "Everything where the next move is yours: an agent waiting for an answer, a task standing on a review or after a stopped step, a working tree a closed task left behind. What waits long is reminded of again, less and less often.",
   "attention.empty": "Nobody is waiting for anything.",
   "attention.card": "Card",
   "attention.openCard": "Open card",
@@ -170,6 +175,10 @@ export const en: Dict = {
   "attention.removeWithChanges": "Remove with the changes",
   "attention.removeTree": "Remove the tree",
   "attention.keep": "Keep",
+  "attention.standAnswer": "Waits for your answer at «{stage}»",
+  "attention.standStopped": "Stands at «{stage}»: nothing runs, and where it goes next is yours to say",
+  "attention.standPaused": "The step at «{stage}» is paused: the application closed, the conversation is saved — continue it on the strip",
+  "attention.openTask": "Open task",
   "question.allowBoth": "Allow {tool}: {text}?",
   "question.allowText": "Allow: {text}?",
   "question.allowTool": "Allow {tool}?",

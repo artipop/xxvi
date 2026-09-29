@@ -87,6 +87,11 @@ export function syncNotificationWords() {
     replyPlaceholder: t("notify.replyPlaceholder"),
     reviewAsked: t("notify.reviewAsked"),
     mrUpdated: t("notify.mrUpdated"),
+    remindAnswer: t("notify.remindAnswer"),
+    remindStopped: t("notify.remindStopped"),
+    remindPaused: t("notify.remindPaused"),
+    remindAgent: t("notify.remindAgent"),
+    remindMany: t("notify.remindMany"),
   }).catch((e) => console.error(e));
 }
 
@@ -217,6 +222,8 @@ export function subscribe() {
   Events.On("update", () => { void loadUpdateState(); });
   // The application menu's «Settings…» (menu.go) has no screen of its own.
   Events.On("open-settings", () => { setTab("settings"); });
+  // A reminder was clicked: what it reminded of is the task.
+  Events.On("open-ribbon", (ev: { data: { cardId: string } }) => { showRibbon(ev.data.cardId); });
 }
 
 export const [stageCards, setStageCards] = createSignal<StageCard[]>([]);
