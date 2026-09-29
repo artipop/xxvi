@@ -96,6 +96,7 @@ export const ru: Dict = {
   "notify.mrUpdated": "В {mr} новые коммиты — ревью снова ждёт вас",
   "notify.remindAnswer": "Всё ещё ждёт вашего ответа на «{stage}»",
   "notify.remindStopped": "Всё ещё стоит на «{stage}» — следующий ход ваш",
+  "notify.remindPaused": "Шаг на «{stage}» на паузе — продолжите, когда будете готовы",
   "notify.remindAgent": "Агент всё ещё ждёт вас",
   "notify.remindMany": "Задач ждут вас: {n}",
 
@@ -175,6 +176,7 @@ export const ru: Dict = {
   "attention.keep": "Оставить",
   "attention.standAnswer": "Ждёт вашего ответа на «{stage}»",
   "attention.standStopped": "Стоит на «{stage}»: ничего не запущено, куда дальше — решать вам",
+  "attention.standPaused": "Шаг на «{stage}» на паузе: приложение закрывалось, разговор сохранён — продолжите на ленте",
   "attention.openTask": "Открыть задачу",
   "question.allowBoth": "Разрешить {tool}: {text}?",
   "question.allowText": "Разрешить: {text}?",

@@ -53,11 +53,12 @@ type NotificationWords struct {
 	// is the MR's number.
 	ReviewAsked string `json:"reviewAsked"`
 	MRUpdated   string `json:"mrUpdated"`
-	// RemindAnswer, RemindStopped and RemindAgent say again that a task waits:
-	// on a person's answer at «{stage}», stopped at «{stage}», or on an agent
-	// that asked. RemindMany is several at once, «{n}» of them.
+	// RemindAnswer, RemindStopped, RemindPaused and RemindAgent say again that
+	// a task waits: on a person's answer at «{stage}», stopped or paused at
+	// «{stage}», or on an agent that asked. RemindMany is several at once, «{n}» of them.
 	RemindAnswer  string `json:"remindAnswer"`
 	RemindStopped string `json:"remindStopped"`
+	RemindPaused  string `json:"remindPaused"`
 	RemindAgent   string `json:"remindAgent"`
 	RemindMany    string `json:"remindMany"`
 }
@@ -275,6 +276,8 @@ func (w NotificationWords) reminder(row acp.Attention) string {
 		return strings.ReplaceAll(w.RemindAnswer, "{stage}", row.Stage)
 	case engine.StandStopped:
 		return strings.ReplaceAll(w.RemindStopped, "{stage}", row.Stage)
+	case engine.StandPaused:
+		return strings.ReplaceAll(w.RemindPaused, "{stage}", row.Stage)
 	}
 	return w.RemindAgent
 }

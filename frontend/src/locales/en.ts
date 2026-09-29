@@ -97,6 +97,7 @@ export const en: Dict = {
   "notify.mrUpdated": "New commits in {mr} — the review is yours again",
   "notify.remindAnswer": "Still waiting for your answer at «{stage}»",
   "notify.remindStopped": "Still stopped at «{stage}» — the next move is yours",
+  "notify.remindPaused": "The step at «{stage}» is paused — continue it when you are ready",
   "notify.remindAgent": "The agent is still waiting for you",
   "notify.remindMany": "Tasks waiting for you: {n}",
 
@@ -176,6 +177,7 @@ export const en: Dict = {
   "attention.keep": "Keep",
   "attention.standAnswer": "Waits for your answer at «{stage}»",
   "attention.standStopped": "Stands at «{stage}»: nothing runs, and where it goes next is yours to say",
+  "attention.standPaused": "The step at «{stage}» is paused: the application closed, the conversation is saved — continue it on the strip",
   "attention.openTask": "Open task",
   "question.allowBoth": "Allow {tool}: {text}?",
   "question.allowText": "Allow: {text}?",

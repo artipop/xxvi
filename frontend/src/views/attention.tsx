@@ -55,7 +55,7 @@ function Ask(props: { a: Attention }) {
       </div>
       <Show when={props.a.standing}>
         <div class="question">
-          <div class="ask">{t(props.a.standing === "answer" ? "attention.standAnswer" : "attention.standStopped", { stage: props.a.stage ?? "" })}</div>
+          <div class="ask">{t(standingText(props.a.standing), { stage: props.a.stage ?? "" })}</div>
           <Show when={props.a.problem}><span class="meta">{say(props.a.problem)}</span></Show>
         </div>
       </Show>
@@ -84,6 +84,14 @@ function Ask(props: { a: Attention }) {
       </Show>
     </div>
   );
+}
+
+function standingText(why: string | undefined): string {
+  switch (why) {
+    case "answer": return "attention.standAnswer";
+    case "paused": return "attention.standPaused";
+    default: return "attention.standStopped";
+  }
 }
 
 function terminalWait(a: Attention): string {

@@ -258,7 +258,7 @@ type Attention struct {
 	Dirty    bool   `json:"dirty,omitempty"`
 
 	// Standing is set on the fourth kind: a card in work that stands where the
-	// next move is a person's — why (engine.StandAnswer, engine.StandStopped),
+	// next move is a person's — why (engine.StandAnswer, engine.StandStopped, engine.StandPaused),
 	// on which stage, and what stopped it, if something did. No agent is
 	// waiting on it; the flow is. The engine says it, not this package: it is
 	// about where the card is, not about a run (app.Attention joins the two).

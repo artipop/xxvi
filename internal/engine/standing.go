@@ -5,6 +5,7 @@ import (
 
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/xxvi/internal/store"
 )
 
 // Why a card in work stands with the next move a person's. A closed set: the UI
@@ -18,6 +19,10 @@ const (
 	// under it, a person took the card — the card is where it was left, and
 	// only a person moves it.
 	StandStopped = "stopped"
+	// StandPaused: the application closed on the stage's terminal and saved
+	// its conversation; it goes on when a person says «Continue», and only
+	// then (store.StatusPaused).
+	StandPaused = "paused"
 )
 
 // Standing is a card in work whose next move is a person's, and has been since
@@ -88,8 +93,9 @@ func (e *Engine) standing(card model.Card) (Standing, bool) {
 			}
 		}
 	}
+	var last *store.Session
 	if sessions, err := e.store.SessionsForCard(card.ID); err == nil {
-		for _, s := range sessions {
+		for i, s := range sessions {
 			if s.StageID != stage.ID || s.StartedAt.Before(cf.Since) || s.FinishedAt.IsZero() {
 				continue
 			}
@@ -99,7 +105,15 @@ func (e *Engine) standing(card model.Card) (Standing, bool) {
 			if out.Problem == nil && s.Error != nil {
 				out.Problem = s.Error
 			}
+			if last == nil || s.StartedAt.After(last.StartedAt) {
+				last = &sessions[i]
+			}
 		}
+	}
+	if last != nil && last.Status == store.StatusPaused {
+		// Nothing went wrong, so there is no problem to show: the step is
+		// whole, and the row only says it is waiting to be continued.
+		out.Why, out.Problem = StandPaused, nil
 	}
 	return out, true
 }

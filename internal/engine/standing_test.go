@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/store"
 )
 
@@ -85,6 +86,28 @@ func TestACardAPersonTookIsTheirs(t *testing.T) {
 
 	if s, ok := standingOf(t, f, card.ID); !ok || s.Why != StandStopped {
 		t.Fatalf("карточка, взятая человеком, ждёт его: %+v", s)
+	}
+}
+
+func TestAPausedStepWaitsToBeContinued(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Т")
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+	running(t, f, card.ID, "work")
+	// The application closes on the step: the run is paused, the runner lets
+	// go of it, and the engine is told nothing.
+	f.runner.Cancel(card.ID, msg.Msg{})
+	paused, finished := store.StatusPaused, time.Now()
+	if err := f.store.UpdateSession("s-"+card.ID, store.SessionUpdate{Status: &paused, FinishedAt: &finished}); err != nil {
+		t.Fatalf("пауза: %v", err)
+	}
+
+	s, ok := standingOf(t, f, card.ID)
+	if !ok || s.Why != StandPaused {
+		t.Fatalf("приостановленный шаг ждёт «Продолжить», получено %+v", s)
+	}
+	if s.Problem != nil {
+		t.Fatalf("пауза — не поломка, причины у неё нет: %+v", s.Problem)
 	}
 }
 
