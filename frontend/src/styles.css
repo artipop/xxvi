@@ -490,6 +490,8 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .card-menu { position: relative; }
 .card-menu .menu { left: auto; right: 0; }
 .menu button.danger { color: var(--warn); }
+.card-menu.workspaces .menu { left: 0; right: auto; }
+.menu-title { min-width: 0; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Over the strip rather than beside it: the strip is the whole window, and
    the journal is looked at and put away, not worked next to. */

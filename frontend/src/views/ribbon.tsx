@@ -6,7 +6,10 @@ import { Events } from "@wailsio/runtime";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
 import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
-import { attention, closedRibbon, guard, leaveRibbons, list, loadAttention, loadRibbons, openRibbon, report, ribbons, setOpenRibbon, setTab, openOutside } from "../state";
+import {
+  attention, closedRibbon, done, guard, inWorkspace, leaveRibbons, list, loadAttention, loadRibbons, openRibbon, projects, report,
+  ribbons, setOpenRibbon, setTab, setWorkspace, showRibbon, workRibbons, workspace, openOutside,
+} from "../state";
 import { QuestionForm } from "./attention";
 import { JournalOf } from "./journal";
 import { Compose } from "./compose";
@@ -100,8 +103,8 @@ export default function Ribbon(): JSX.Element {
   // becomes the card's real strip the moment it is started. With nothing in
   // work it is the whole stack.
   const [drafting, setDrafting] = createSignal(false);
-  const showDraft = () => drafting() || ribbons.length === 0;
-  const stackIDs = () => [...ribbons.map((r) => r.id), ...(showDraft() ? [DRAFT] : [])];
+  const showDraft = () => drafting() || inWorkspace().length === 0;
+  const stackIDs = () => [...inWorkspace().map((r) => r.id), ...(showDraft() ? [DRAFT] : [])];
   // Which pane has taken the keyboard: a preview or a note that a person
   // clicked into. Worth saying out loud, because from inside a preview the
   // ribbon cannot hear a key at all — the page has it — and a person pressing
@@ -111,7 +114,7 @@ export default function Ribbon(): JSX.Element {
   let stack: HTMLDivElement | undefined;
   const flown: Record<string, string> = {};
 
-  const current = () => ribbons.find((r) => r.id === openRibbon());
+  const current = () => inWorkspace().find((r) => r.id === openRibbon());
 
   const focus = () => focusAt()[openRibbon()] ?? current()?.focusId ?? "";
   const setFocus = (id: string) => setFocusAt((f) => ({ ...f, [openRibbon()]: id }));
@@ -171,7 +174,7 @@ export default function Ribbon(): JSX.Element {
   // With nothing open, open the first one there is: arriving at an empty screen
   // beside a stack of ribbons would be asking a question with one answer.
   createEffect(
-    () => ribbons.map((r) => r.id),
+    () => inWorkspace().map((r) => r.id),
     (ids) => {
       if (ids.length === 0) return;
       // A closed card asked for is on its way into the stack, not missing
@@ -267,7 +270,8 @@ export default function Ribbon(): JSX.Element {
   // Given up, the draft goes and the stack stands on real work again.
   const dropDraft = () => {
     setDrafting(false);
-    if (ribbons.length > 0) flyToRibbon(ribbons[ribbons.length - 1].id);
+    const shown = inWorkspace();
+    if (shown.length > 0) flyToRibbon(shown[shown.length - 1].id);
   };
 
   // Taking the keyboard back. Blurring whatever holds it is enough for a note;
@@ -390,8 +394,9 @@ export default function Ribbon(): JSX.Element {
       {/* The only chrome: room for the window's own buttons, the name of the
           job in front of you, and the one offer the ribbon ever makes. */}
       <header class="ribbon-bar">
+        <Workspaces />
         <span class="ribbon-where">
-          <Show when={openRibbon() === DRAFT || ribbons.length === 0}>{t("ribbon.newTask")}</Show>
+          <Show when={openRibbon() === DRAFT || inWorkspace().length === 0}>{t("ribbon.newTask")}</Show>
           {current()?.title}
           <Show when={current()?.stageName}>
             <span class="ribbon-stage"> · {current()!.stageName}</span>
@@ -403,7 +408,8 @@ export default function Ribbon(): JSX.Element {
           </Show>
         </span>
         <div class="spacer" />
-        <Show when={ribbons.length > 0}>
+        <Closed />
+        <Show when={inWorkspace().length > 0}>
           <button class="btn quiet tiny"
                   onClick={newTask} title={t("ribbon.newTaskKey")}>{t("ribbon.addTask")}</button>
         </Show>
@@ -425,7 +431,7 @@ export default function Ribbon(): JSX.Element {
       </header>
 
         <div class="stack" ref={stack}>
-          <For each={ribbons}>
+          <For each={inWorkspace()}>
             {(view) => (
               <section class="workspace" data-ribbon={view.id}>
                 <div class="band">
@@ -485,7 +491,7 @@ export default function Ribbon(): JSX.Element {
                   <div class="screen-body">
                     <Compose
                       onStarted={() => setDrafting(false)}
-                      onCancel={ribbons.length > 0 ? dropDraft : undefined}
+                      onCancel={inWorkspace().length > 0 ? dropDraft : undefined}
                     />
                   </div>
                 </section>
@@ -513,9 +519,9 @@ export default function Ribbon(): JSX.Element {
 
         {/* Where you are in the stack, and which other jobs moved while you
             were not looking. One job needs no map of itself. */}
-        <Show when={ribbons.length > 1}>
+        <Show when={inWorkspace().length > 1}>
         <nav class="rail">
-          <For each={ribbons}>
+          <For each={inWorkspace()}>
             {(view) => (
               <button
                 class={`rail-dot ${view.id === openRibbon() ? "on" : ""} ${moved()[view.id] ? "moved" : ""} ${view.running ? "run" : ""}`}
@@ -527,6 +533,76 @@ export default function Ribbon(): JSX.Element {
         </nav>
         </Show>
     </div>
+  );
+}
+
+/** Folded is a button that opens a short list under itself, and closes on a
+ *  click anywhere else. */
+function Folded(props: { label: JSX.Element; title?: string; class?: string; children: (close: () => void) => JSX.Element }): JSX.Element {
+  const [open, setOpen] = createSignal(false);
+  let box: HTMLDivElement | undefined;
+  onSettled(() => {
+    const away = (e: MouseEvent) => { if (box && !box.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  });
+  return (
+    <div class={`card-menu ${props.class ?? ""}`} ref={box}>
+      <button class="btn quiet tiny" onClick={() => setOpen(!open())} title={props.title}>{props.label}</button>
+      <Show when={open()}>
+        <div class="menu">{props.children(() => setOpen(false))}</div>
+      </Show>
+    </div>
+  );
+}
+
+// Which project's ribbons are shown. With no projects there is one workspace
+// and nothing to switch to.
+function Workspaces(): JSX.Element {
+  const count = (id: string) => workRibbons().filter((r) => (r.project ?? "") === id).length;
+  const name = (id: string) => projects().find((p) => p.id === id)?.name ?? t("ribbon.noProject");
+  // Cards without a project are a workspace only while there are some, or
+  // while standing in it: otherwise it is an empty entry in every list.
+  const ids = () => [
+    ...projects().map((p) => p.id),
+    ...(count("") > 0 || workspace() === "" ? [""] : []),
+  ];
+  return (
+    <Show when={projects().length > 0}>
+      <Folded class="workspaces" label={<>{name(workspace())} ▾</>} title={t("ribbon.workspace")}>
+        {(close) => (
+          <For each={ids()}>
+            {(id) => (
+              <button class={id === workspace() ? "on" : ""} onClick={() => { close(); setWorkspace(id); }}>
+                <span>{name(id)}</span>
+                <Show when={count(id) > 0}><span class="count">{count(id)}</span></Show>
+              </button>
+            )}
+          </For>
+        )}
+      </Folded>
+    </Show>
+  );
+}
+
+// Finished tasks of this workspace, folded: they are visited for their
+// results, not worked in, and the stack is for what is still moving.
+function Closed(): JSX.Element {
+  const here = () => done().filter((c) => (c.project ?? "") === workspace());
+  return (
+    <Show when={here().length > 0}>
+      <Folded label={t("ribbon.closedList", { n: here().length })}>
+        {(close) => (
+          <For each={here().slice(0, 30)}>
+            {(card) => (
+              <button onClick={() => { close(); showRibbon(card.id); }}>
+                <span class="menu-title">{card.title}</span>
+              </button>
+            )}
+          </For>
+        )}
+      </Folded>
+    </Show>
   );
 }
 

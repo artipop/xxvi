@@ -102,6 +102,11 @@ export interface RibbonView {
     "flowName": string;
 
     /**
+     * Project is the card's project, the workspace the ribbon is shown in.
+     */
+    "project"?: string;
+
+    /**
      * StageName and Running are what a ribbon says about itself from outside —
      * enough for the indicator without reading the strip.
      */
