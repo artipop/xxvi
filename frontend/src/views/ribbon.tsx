@@ -395,7 +395,6 @@ export default function Ribbon(): JSX.Element {
       {/* The only chrome: room for the window's own buttons, the name of the
           job in front of you, and the one offer the ribbon ever makes. */}
       <header class="ribbon-bar">
-        <Workspaces />
         <span class="ribbon-where">
           <Show when={openRibbon() === DRAFT || inWorkspace().length === 0}>{t("ribbon.newTask")}</Show>
           {current()?.title}
@@ -429,6 +428,7 @@ export default function Ribbon(): JSX.Element {
             {t("ribbon.next")}
           </button>
         </Show>
+        <Workspaces />
       </header>
 
         <div class="stack" ref={stack}>
