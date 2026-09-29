@@ -253,6 +253,11 @@ tasks:
       - go.sum
     generates:
       - frontend/bindings/**/*
+    # The generator type-checks every package, and the cgo ones ask pkg-config
+    # for libghostty-vt; without the path it warns, though the bindings come
+    # out the same.
+    env:
+      PKG_CONFIG_PATH: '{{.ROOT_DIR}}/build/ghostty/{{OS}}-{{ARCH}}/share/pkgconfig'
     cmds:
       - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true{{if eq .OBFUSCATED "true"}} -obfuscated{{end}} -ts -i
 
