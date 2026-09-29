@@ -49,6 +49,7 @@ type liveStage struct {
 	terms *term.Manager
 	ui    liveUI
 	rep   liveReporter
+	tools *stagemcp.Server
 	job   engine.Job
 }
 
@@ -81,6 +82,7 @@ func newLiveStage(t *testing.T, kind, modelName string) *liveStage {
 	}
 	t.Cleanup(tools.Close)
 	l.m.SetTerminals(l.terms, tools)
+	l.tools = tools
 
 	project, err := st.SaveProject(model.Project{Name: "live", Path: dir})
 	if err != nil {
@@ -144,23 +146,20 @@ func (l *liveStage) screen(run string) string {
 	return "(no terminal)"
 }
 
-// waitFor waits for the card's mark to say one of the reasons.
-func (l *liveStage) waitFor(run string, why ...string) string {
+// idle waits for the CLI to have ended its turn: its conversation is on record
+// and it has drawn nothing for a while. The end of a turn is no mark of its own
+// on the card (a person talking to the agent would get one per answer), so the
+// test reads it the way a person would.
+func (l *liveStage) idle(run string) {
 	l.t.Helper()
-	deadline := time.After(3 * time.Minute)
-	for {
-		select {
-		case a := <-l.ui.waits:
-			l.t.Logf("mark: %s awaiting=%v", a.Terminal, a.Awaiting)
-			for _, w := range why {
-				if a.Awaiting && a.Terminal == w {
-					return w
-				}
-			}
-		case <-deadline:
-			l.t.Fatalf("no %v; screen:\n%s", why, l.screen(run))
+	deadline := time.Now().Add(3 * time.Minute)
+	for time.Now().Before(deadline) {
+		if s := l.terms.Get(run); s != nil && l.conversation(run) != "" && s.Quiet() >= 4*time.Second {
+			return
 		}
+		time.Sleep(250 * time.Millisecond)
 	}
+	l.t.Fatalf("the turn did not end; screen:\n%s", l.screen(run))
 }
 
 func (l *liveStage) say(run, text string) {
@@ -205,7 +204,7 @@ func TestLiveTerminalClaude(t *testing.T) {
 	l := newLiveStage(t, model.KindClaude, "haiku")
 
 	run := l.start("Reply with just the word pong. Do not use any tools.")
-	l.waitFor(run, waitTurnEnded)
+	l.idle(run)
 	first := l.conversation(run)
 	if first == "" {
 		t.Fatal("the conversation id was not recorded")
@@ -224,7 +223,7 @@ func TestLiveTerminalClaude(t *testing.T) {
 	t.Logf("after /clear: %s", second)
 
 	l.say(run, "Reply with just the word ping. Do not use any tools.")
-	l.waitFor(run, waitTurnEnded)
+	l.idle(run)
 	if done := l.finish(run, "ok"); !strings.HasPrefix(done, model.TriggerSuccess) {
 		t.Fatalf("the step did not succeed: %s", done)
 	}
@@ -234,7 +233,7 @@ func TestLiveTerminalClaude(t *testing.T) {
 	if got := l.resumed(again); got != second {
 		t.Fatalf("the return resumes the conversation the last run ended on: %q, want %q", got, second)
 	}
-	l.waitFor(again, waitTurnEnded)
+	l.idle(again)
 	done := l.finish(again, "the word you replied with earlier")
 	t.Logf("second run: %s", done)
 	if !strings.Contains(strings.ToLower(done), "ping") || strings.Contains(strings.ToLower(done), "pong") {
@@ -246,7 +245,7 @@ func TestLiveTerminalCodex(t *testing.T) {
 	l := newLiveStage(t, model.KindCodex, "")
 
 	run := l.start("Reply with just the word pong. Do not run any commands.")
-	l.waitFor(run, waitTurnEnded)
+	l.idle(run)
 	first := l.conversation(run)
 	if first == "" {
 		t.Fatal("the conversation id was not recorded")
@@ -261,10 +260,42 @@ func TestLiveTerminalCodex(t *testing.T) {
 	if got := l.resumed(again); got != first {
 		t.Fatalf("the return resumes the stage's conversation by id: %q, want %q", got, first)
 	}
-	l.waitFor(again, waitTurnEnded)
+	l.idle(again)
 	done := l.finish(again, "the word you replied with at the start")
 	t.Logf("second run: %s", done)
 	if !strings.Contains(strings.ToLower(done), "pong") {
 		t.Fatalf("the resumed conversation does not remember its start: %s", done)
+	}
+}
+
+// The application closing mid-step pauses the step instead of cancelling it,
+// and the next run of the application continues it in the same conversation.
+func TestLiveTerminalPauseClaude(t *testing.T) {
+	l := newLiveStage(t, model.KindClaude, "haiku")
+
+	run := l.start("Remember the word kumquat. Reply with just OK. Do not use any tools.")
+	l.idle(run)
+	conversation := l.conversation(run)
+
+	l.m.Close() // the application quitting
+	runs, _ := l.st.SessionsForCard(l.job.Card.ID)
+	if runs[0].ID != run || runs[0].Status != store.StatusPaused {
+		t.Fatalf("closing the application pauses the step: %s is %s", runs[0].ID, runs[0].Status)
+	}
+
+	// The next run of the application, and a person pressing «Continue»: the
+	// stage is started again, told only what the person said.
+	l.m = New(l.st, l.rep, l.ui, Options{WorkDir: t.TempDir()}, nil)
+	t.Cleanup(l.m.Close)
+	l.m.SetTerminals(l.terms, l.tools)
+	again := l.start("Which word did I ask you to remember? Answer with that word only. Do not use any tools.")
+	if got := l.resumed(again); got != conversation {
+		t.Fatalf("continuing resumes the paused conversation: %q, want %q", got, conversation)
+	}
+	l.idle(again)
+	done := l.finish(again, "the word you were asked to remember")
+	t.Logf("continued: %s", done)
+	if !strings.Contains(strings.ToLower(done), "kumquat") {
+		t.Fatalf("the continued conversation does not remember the paused one: %s", done)
 	}
 }
