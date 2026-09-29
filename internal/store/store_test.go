@@ -602,6 +602,7 @@ func TestStageColumnsAreAddedToADatabaseThatAlreadyHasFlows(t *testing.T) {
 		`ALTER TABLE project DROP COLUMN server`,
 		`ALTER TABLE project DROP COLUMN provider`,
 		`ALTER TABLE card DROP COLUMN session`,
+		`ALTER TABLE card DROP COLUMN typed`,
 		`DROP TABLE project`,
 		`ALTER TABLE stage DROP COLUMN work`,
 		`ALTER TABLE agent_session DROP COLUMN work`,
@@ -717,6 +718,7 @@ func TestCommentModeIsMigratedAway(t *testing.T) {
 		`ALTER TABLE project DROP COLUMN server`,
 		`ALTER TABLE project DROP COLUMN provider`,
 		`ALTER TABLE card DROP COLUMN session`,
+		`ALTER TABLE card DROP COLUMN typed`,
 		`DELETE FROM schema_migration WHERE version >= 11`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -772,6 +774,7 @@ func TestDemoSourcesAreMigratedAway(t *testing.T) {
 		`ALTER TABLE project DROP COLUMN server`,
 		`ALTER TABLE project DROP COLUMN provider`,
 		`ALTER TABLE card DROP COLUMN session`,
+		`ALTER TABLE card DROP COLUMN typed`,
 		`DELETE FROM schema_migration WHERE version >= 12`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -814,6 +817,7 @@ func TestOutcomeWordsAreMigratedToIdentifiers(t *testing.T) {
 		`ALTER TABLE project DROP COLUMN server`,
 		`ALTER TABLE project DROP COLUMN provider`,
 		`ALTER TABLE card DROP COLUMN session`,
+		`ALTER TABLE card DROP COLUMN typed`,
 		`DELETE FROM schema_migration WHERE version >= 15`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {

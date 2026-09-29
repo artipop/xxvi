@@ -360,5 +360,11 @@ ALTER TABLE project ADD COLUMN provider TEXT NOT NULL DEFAULT '';`,
 		// gave it. Empty for every card that began here.
 		`
 ALTER TABLE card ADD COLUMN session TEXT NOT NULL DEFAULT '';`,
+
+		// 18. Whether the card was typed into the ribbon, whose body is then
+		// the person's words and nothing more. Every card before this was
+		// sent to its agent with its title, so none of them is.
+		`
+ALTER TABLE card ADD COLUMN typed INTEGER NOT NULL DEFAULT 0;`,
 	}
 }

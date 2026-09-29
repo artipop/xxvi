@@ -75,6 +75,12 @@ type Card struct {
 	// which is the whole difference between «continue this» and «do this».
 	Session string `json:"session,omitempty"`
 
+	// Typed is a card a person typed straight into the ribbon: its body is
+	// their words as typed, empty when they said nothing, and the title only
+	// what the lists call it. A terminal stage sends the agent those words and
+	// nothing else (engine.TerminalOpening).
+	Typed bool `json:"typed,omitempty"`
+
 	// Props are the card's own named values. A flow condition asks about these,
 	// and a person answers a waiting stage by setting one.
 	Props map[string]string `json:"props,omitempty"`

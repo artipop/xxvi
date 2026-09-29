@@ -10,7 +10,16 @@ import (
 )
 
 // What an agent is told, composed in one place so the runner has nothing to
-// decide and so the order is a rule rather than a habit:
+// decide and so the order is a rule rather than a habit.
+//
+// A stage in the background gets it all in one message (ComposePrompt): nobody
+// reads it but the agent. A stage in a terminal is a person and a CLI at one
+// table, and there the first message is what the person would have typed
+// (TerminalOpening) — everything the route needs from the agent goes to the
+// stage's MCP server as instructions (TerminalBrief), where the CLI reads it
+// without it standing in the conversation as somebody's words.
+//
+// ComposePrompt's order:
 //
 //  1. the agent's own prompt — who it is;
 //  2. the stage's prompt — what is being done at this step;
@@ -51,18 +60,9 @@ func ComposePrompt(card model.Card, flow model.Flow, stage model.Stage, agent mo
 		fmt.Fprintf(&b, "\nCard properties:\n%s", props)
 	}
 
-	// A card with a branch of its own is already on it when the agent starts:
-	// the application made it. An agent that cut another one — which a stage
-	// asking for «Branch» invites — would leave the work where nothing looks.
-	if card.WorkMode == model.WorkModeReview {
-		b.WriteString("\nThis is somebody else's merge request, checked out at its last commit in a working tree of its own. " +
-			"Read it and run it; do not commit, push or switch branches — the work is theirs.\n")
-	} else if card.WorkMode != model.WorkModeFolder {
-		b.WriteString("\nYou are already on this task's branch — do not create another one or switch away; commit here.")
-		if card.Branch != "" {
-			fmt.Fprintf(&b, " Branch: %s.", card.Branch)
-		}
+	if note := workModeNote(card); note != "" {
 		b.WriteString("\n")
+		b.WriteString(note)
 	}
 
 	// Why this card is in front of this agent. Only worth saying when it is
@@ -93,13 +93,88 @@ func ComposePrompt(card model.Card, flow model.Flow, stage model.Stage, agent mo
 		b.WriteString("\n")
 		b.WriteString(hint)
 	}
-	// Messages only: a repository says in what language its code, comments and
-	// commits are written, and a brief overriding that would be wrong in every
-	// repository with a rule of its own.
-	if lang = strings.TrimSpace(lang); lang != "" {
-		fmt.Fprintf(&b, "\nWrite your messages to the person in %s; code, comments and commits follow the repository's own conventions.\n", lang)
+	if note := languageNote(lang); note != "" {
+		b.WriteString("\n")
+		b.WriteString(note)
 	}
 	return strings.TrimSpace(b.String()) + "\n"
+}
+
+// TerminalOpening is the first message a terminal stage's CLI gets: what a
+// person would have typed into it. A task typed in the ribbon is sent as it was
+// typed, and one typed without a word opens the CLI with nothing said. A card
+// that arrived — from a source, or written into the inbox — is sent as it was
+// written there. A card sent back to this stage also says why: that is news the
+// agent has to answer, not a rule of the route.
+func TerminalOpening(card model.Card, arrival string) string {
+	var parts []string
+	if card.Typed {
+		parts = append(parts, strings.TrimSpace(card.Body))
+	} else {
+		parts = append(parts, strings.TrimSpace(card.Title), strings.TrimSpace(card.Body), strings.TrimSpace(card.URL))
+	}
+	parts = append(parts, strings.TrimSpace(arrival))
+	var kept []string
+	for _, p := range parts {
+		if p != "" {
+			kept = append(kept, p)
+		}
+	}
+	return strings.Join(kept, "\n\n")
+}
+
+// TerminalBrief is the rest of what ComposePrompt would say, for the stage's
+// MCP server to hand the CLI as instructions: the agent's and the stage's
+// prompts, the card's properties and branch, what earlier stages left, which
+// closing words route the card, the person's language. How the step ends and
+// what it must bring is the server's own part of those instructions
+// (stagemcp), so it is not repeated here.
+func TerminalBrief(card model.Card, flow model.Flow, stage model.Stage, agent model.Agent, lang string) string {
+	var parts []string
+	add := func(text string) {
+		if text = strings.TrimSpace(text); text != "" {
+			parts = append(parts, text)
+		}
+	}
+	add(agent.Prompt)
+	add(stage.Prompt)
+	if props := describeProps(card.Props); props != "" {
+		add("Card properties:\n" + props)
+	}
+	add(workModeNote(card))
+	add(StageInputs(card, flow, stage))
+	add(outcomeHint(flow, stage))
+	add(languageNote(lang))
+	return strings.Join(parts, "\n\n")
+}
+
+// workModeNote says where the card's work already is. A card with a branch of
+// its own is on it when the agent starts: the application made it. An agent
+// that cut another one — which a stage asking for «Branch» invites — would
+// leave the work where nothing looks.
+func workModeNote(card model.Card) string {
+	switch {
+	case card.WorkMode == model.WorkModeReview:
+		return "This is somebody else's merge request, checked out at its last commit in a working tree of its own. " +
+			"Read it and run it; do not commit, push or switch branches — the work is theirs.\n"
+	case card.WorkMode != model.WorkModeFolder:
+		note := "You are already on this task's branch — do not create another one or switch away; commit here."
+		if card.Branch != "" {
+			note += fmt.Sprintf(" Branch: %s.", card.Branch)
+		}
+		return note + "\n"
+	}
+	return ""
+}
+
+// languageNote covers messages only: a repository says in what language its
+// code, comments and commits are written, and a brief overriding that would be
+// wrong in every repository with a rule of its own.
+func languageNote(lang string) string {
+	if lang = strings.TrimSpace(lang); lang == "" {
+		return ""
+	}
+	return fmt.Sprintf("Write your messages to the person in %s; code, comments and commits follow the repository's own conventions.\n", lang)
 }
 
 // describeProps lists the card's properties in a stable order — a prompt that
@@ -150,21 +225,22 @@ func outcomeHint(flow model.Flow, stage model.Stage) string {
 // card — a preview address, a reviewer's verdict — handed to the agent in its
 // brief instead of hoping it goes looking for it.
 //
-// A read with no value is named as empty rather than dropped, so the agent knows
-// the property exists and that nobody filled it. Which properties those are is
+// A read with no value is left out: on a route that loops, the stages after
+// this one count as ahead of it too, and a first visit listed every value a
+// later check would write, all of them empty. Which properties those are is
 // the flow's answer and not the stage's alone: a stage that declares no reads is
 // handed whatever the stages ahead of it declare they write (Flow.ReadsFor).
 func StageInputs(card model.Card, flow model.Flow, stage model.Stage) string {
-	reads := flow.ReadsFor(stage.ID)
-	if len(reads) == 0 {
+	var b strings.Builder
+	for _, name := range flow.ReadsFor(stage.ID) {
+		if value := model.PropValue(card.Props, name); strings.TrimSpace(value) != "" {
+			fmt.Fprintf(&b, "\n- %s: %s", name, value)
+		}
+	}
+	if b.Len() == 0 {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString("From the card:")
-	for _, name := range reads {
-		fmt.Fprintf(&b, "\n- %s: %s", name, model.PropValue(card.Props, name))
-	}
-	return b.String()
+	return "From the card:" + b.String()
 }
 
 // StageOutputs is the stage's declared writes, said as the contract they are.

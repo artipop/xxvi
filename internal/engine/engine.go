@@ -27,8 +27,14 @@ type Job struct {
 	Stage model.Stage
 	Agent model.Agent
 	// Prompt is what the agent is told: its own prompt, then the stage's, then
-	// the card's task. Composed here so the runner has nothing to decide.
+	// the card's task. Composed here so the runner has nothing to decide. On a
+	// terminal stage it is only the first message (TerminalOpening), and may be
+	// empty.
 	Prompt string
+	// Brief is what a terminal stage's CLI is told outside the conversation,
+	// through the stage's MCP server (TerminalBrief). Empty in the background,
+	// where Prompt holds it all.
+	Brief string
 	// Visit is the transition that put the card on this stage. A step that
 	// ends after the card was moved elsewhere by hand reports into a visit
 	// that is over, and is not allowed to move the card from where it now is.
@@ -540,11 +546,17 @@ func (e *Engine) runStageSaying(card model.Card, flow model.Flow, stage model.St
 	if e.language != nil {
 		lang = e.language()
 	}
-	prompt := said
-	if prompt == "" {
+	var prompt, brief string
+	if stage.Work == model.WorkSession {
 		prompt = ComposePrompt(card, flow, stage, agent, e.arrival(card.ID, flow, stage), lang)
+	} else {
+		prompt = TerminalOpening(card, e.arrival(card.ID, flow, stage))
+		brief = TerminalBrief(card, flow, stage, agent, lang)
 	}
-	job := Job{Card: card, Flow: flow, Stage: stage, Agent: agent, Prompt: prompt}
+	if said != "" {
+		prompt = said
+	}
+	job := Job{Card: card, Flow: flow, Stage: stage, Agent: agent, Prompt: prompt, Brief: brief}
 	if err := e.runner.Start(job); err != nil {
 		e.failStage(card, flow, stage, err)
 		return

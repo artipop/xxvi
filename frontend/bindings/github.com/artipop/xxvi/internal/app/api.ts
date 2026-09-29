@@ -692,10 +692,13 @@ export function StartLaunch(cardID: string, screenID: string, p: launch$0.Profil
  * stray card in the inbox for somebody to find later.
  * 
  * The first line is the title, as it is in a commit: what fits in a list. The
- * whole text is the body, because that is what the agent is handed.
+ * whole text is the body, because that is what the agent is handed — and an
+ * empty one is a task begun without a word, which the agent is handed as
+ * nothing. Its title is then untitled, worded by the screen that knows the
+ * person's language.
  */
-export function StartTask(text: string, projectID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(289388112, text, projectID, workMode, agent, flowID);
+export function StartTask(text: string, untitled: string, projectID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(289388112, text, untitled, projectID, workMode, agent, flowID);
 }
 
 /**
