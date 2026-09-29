@@ -42,6 +42,8 @@ func (r liveReporter) Finished(_ string, outcome string, _ msg.Msg, text string)
 	r.done <- outcome + "|" + text
 }
 
+func (r liveReporter) Abandoned(string) { r.done <- "abandoned|" }
+
 type liveStage struct {
 	t     *testing.T
 	m     *Manager

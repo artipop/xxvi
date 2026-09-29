@@ -260,9 +260,11 @@ func (m *Manager) runTerminal(s *session) {
 		m.finish(s, store.StatusFailed, failure(why))
 		m.record(s, model.EntryProblem, msg.New("journal.terminalFailed").Because(why))
 	case closedByPerson(err, time.Since(opened)):
-		// Somebody ended the conversation. That is an intervention, not an
-		// outcome: the card stays, and where it goes next is theirs to say.
-		s.markCancelled()
+		// Somebody ended the conversation. That is not an outcome the flow
+		// could move on, and the stage has nothing left to wait for: the step
+		// can only be resumed from the CLI's own conversation, which a new
+		// card started «from a session» does. So the card goes.
+		s.markAbandoned()
 		m.finish(s, store.StatusCancelled, msg.New("terminal.closedWithoutReport"))
 		m.record(s, model.EntryProblem, msg.New("journal.terminalClosedByPerson"))
 	case err != nil:

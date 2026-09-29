@@ -278,6 +278,14 @@ func (e *Engine) Drop(cardID string) error {
 	return nil
 }
 
+// Abandoned is what a runner calls when a person closed a step's terminal
+// before it reported: the card is dropped (acp.Reporter).
+func (e *Engine) Abandoned(cardID string) {
+	if err := e.Drop(cardID); err != nil {
+		e.log.Warn("could not drop an abandoned card", "card", cardID, "err", err)
+	}
+}
+
 // Finished is what a runner calls when a session ends: its outcome is the event
 // the stage moves on. A cancelled session reports no outcome at all — somebody
 // intervened, and the flow waits for them.

@@ -70,7 +70,7 @@ export const msgEn: Dict = {
   "msg.card.noTitle": "The card has no title",
   "msg.card.notFound": "The card «{card}» was not found",
   "msg.card.alreadyInWork": "The card «{card}» is already in work",
-  "msg.card.doneCannotDrop": "The card «{card}» is already done — it cannot be dropped",
+  "msg.card.doneCannotDrop": "The card «{card}» is already done — it cannot be deleted",
   "msg.card.projectLocked": "Work on this card is already under way on the branch `{branch}` — its project cannot change",
   "msg.card.workModeLocked": "Work on this card is already under way on the branch `{branch}` — how it works in the folder cannot change",
   "msg.prop.noName": "The property has no name",
@@ -163,7 +163,7 @@ export const msgEn: Dict = {
   "msg.workMode.notRepo": (a) =>
     `The folder of the project «${a.project}» is not a git repository: «${mode(a)}» is not possible there, choose «${label("workMode", "")}»`,
   "msg.branch.folderTaken":
-    "The folder «{project}» is taken by the card «{card}» (branch `{branch}`) — it is free again once that card is done or dropped; or give this card a separate working tree",
+    "The folder «{project}» is taken by the card «{card}» (branch `{branch}`) — it is free again once that card is done or deleted; or give this card a separate working tree",
   "msg.branch.folderDirty":
     "The folder «{project}» has uncommitted changes — switching it to the card's branch would put them at risk; commit or stash them (git stash), or use a separate working tree",
   "msg.branch.switchFailed": "Could not switch to the card's branch",
@@ -233,7 +233,7 @@ export const msgEn: Dict = {
   "msg.cancel.byHand": "stopped by hand",
   "msg.cancel.movedByHand": "the card was moved to another stage by hand",
   "msg.cancel.leftFlow": "the card was taken off the flow",
-  "msg.cancel.dropped": "the card was dropped",
+  "msg.cancel.dropped": "the card was deleted",
   "msg.cancel.cardChanged": "a value the stage moves on was set on the card",
   "msg.move.mrMerged": "MR {mr} merged",
   "msg.move.mrClosed": "MR {mr} closed without merging",
@@ -242,7 +242,7 @@ export const msgEn: Dict = {
 
   // ---- the journal ----
   "msg.journal.leftFlow": "The card was taken off the flow and went back to the inbox.",
-  "msg.journal.dropped": "The card was dropped.",
+  "msg.journal.dropped": "The card was deleted.",
   "msg.journal.stageGone": "Flow «{flow}»: the stage is gone from the route — the card stays where it is.",
   "msg.journal.noEdge": (a) => `Flow «${a.flow}»: the stage «${a.stage}» has no transition on «${on(a)}» — the card stays where it is.`,
   "msg.journal.noCondition": (a) =>
@@ -266,7 +266,7 @@ export const msgEn: Dict = {
   "msg.journal.terminalNotOpened": "The agent's terminal did not open: {cause}",
   "msg.journal.terminalCancelled": "The agent's terminal was closed: the step was cancelled.",
   "msg.journal.terminalClosedByPerson":
-    "The agent's terminal was closed before the step reported. The card stays on the stage — where it goes next is a person's call.",
+    "The agent's terminal was closed before the step reported. Deleting the card. To go on, start a task «From a session».",
   "msg.journal.terminalFailed": "The step in the terminal did not finish: {cause}",
   "msg.journal.terminalPaused": "The step was paused: the application closed. The agent's conversation is saved — continue it from the stage's screen.",
   "msg.journal.continued": "The step was continued.",
