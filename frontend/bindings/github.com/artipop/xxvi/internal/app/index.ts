@@ -8,6 +8,7 @@ export {
 
 export type {
     AgentsView,
+    BackgroundTerminal,
     CardSummary,
     CardView,
     Language,

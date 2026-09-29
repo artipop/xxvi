@@ -1,5 +1,6 @@
 import { lazy, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
+import { BackgroundNotice } from "./views/background";
 import { error, loadAll, loadLanguage, setError, subscribe } from "./state";
 import InboxView from "./views/inbox";
 import WorkView from "./views/work";
@@ -37,6 +38,7 @@ export default function App(): JSX.Element {
                 <button class="btn quiet" onClick={() => setError("")}>×</button>
               </div>
             </Show>
+            <BackgroundNotice floating />
             <RibbonView />
           </div>
         }
@@ -49,6 +51,7 @@ export default function App(): JSX.Element {
                 <button class="btn quiet" onClick={() => setError("")}>×</button>
               </div>
             </Show>
+            <BackgroundNotice />
 
             <Show when={tab() === "inbox"}><InboxView /></Show>
             <Show when={tab() === "work"}><WorkView /></Show>

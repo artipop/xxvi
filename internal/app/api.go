@@ -400,6 +400,35 @@ func (s *API) AgentTerminal(sessionID string) (TerminalHandle, error) {
 	return TerminalHandle{ID: sessionID, URL: endpoint + sessionID}, nil
 }
 
+// BackgroundTerminal is a terminal an earlier run of the application left
+// running when it closed.
+type BackgroundTerminal struct {
+	ID        string `json:"id"`
+	CardTitle string `json:"cardTitle,omitempty"`
+	Command   string `json:"command,omitempty"`
+}
+
+// BackgroundTerminals is what has been running since before the application
+// started: closing it leaves shells and started projects running, and a person
+// who forgot them would otherwise have no way to know.
+func (s *API) BackgroundTerminals() []BackgroundTerminal {
+	var out []BackgroundTerminal
+	for _, t := range s.app.Terminals.LeftOver() {
+		b := BackgroundTerminal{ID: t.ID, Command: t.Command}
+		if card, err := s.app.Store.Card(t.CardID); err == nil {
+			b.CardTitle = card.Title
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
+// StopBackgroundTerminals ends what BackgroundTerminals lists.
+func (s *API) StopBackgroundTerminals() error {
+	s.app.Terminals.StopLeftOver()
+	return nil
+}
+
 // CloseTerminal ends one shell. A person closing a terminal means the process
 // in it, not just the window onto it — the ribbon has no windows to close.
 func (s *API) CloseTerminal(id string) error {

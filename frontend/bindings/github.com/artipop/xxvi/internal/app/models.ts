@@ -26,6 +26,16 @@ export interface AgentsView {
 }
 
 /**
+ * BackgroundTerminal is a terminal an earlier run of the application left
+ * running when it closed.
+ */
+export interface BackgroundTerminal {
+    "id": string;
+    "cardTitle"?: string;
+    "command"?: string;
+}
+
+/**
  * CardSummary is a card in a list: itself, where it is, and whether it wants
  * something from a person.
  */

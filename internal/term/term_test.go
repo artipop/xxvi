@@ -741,3 +741,48 @@ func TestInterruptsAreTheKeysOnTheirOwn(t *testing.T) {
 		t.Fatal("Esc должен быть замечен")
 	}
 }
+
+// What the last run left running is listed once the application starts again,
+// and stopping it ends it — only it, not what this run started.
+func TestTerminalsLeftOverAreListedAndStopped(t *testing.T) {
+	socket := holderSocket(t)
+	first := bare(t)
+	holding(t, first, socket)
+	if _, err := first.Open("card", "old", ""); err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	first.Close()
+
+	second := bare(t)
+	holding(t, second, socket)
+	t.Cleanup(second.Close)
+	fresh, err := second.Open("card", "new", "")
+	if err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	left := second.LeftOver()
+	if len(left) != 1 || left[0].ScreenID != "old" {
+		t.Fatalf("оставшимся с прошлого запуска считается только старый терминал: %+v", left)
+	}
+	second.StopLeftOver()
+	if left[0].Alive() {
+		t.Fatal("старый терминал должен быть остановлен")
+	}
+	if len(second.LeftOver()) != 0 || !fresh.Alive() {
+		t.Fatal("остановка оставшихся не трогает терминалы этого запуска")
+	}
+}
+
+// Quitting with nothing left behind ends even what a plain quit would leave
+// running.
+func TestStopAllEndsWhatWouldOutliveTheApplication(t *testing.T) {
+	m := manager(t)
+	s, err := m.Open("card", "screen", "")
+	if err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	m.StopAll()
+	if s.Alive() {
+		t.Fatal("после «остановить всё» шелл не живёт")
+	}
+}

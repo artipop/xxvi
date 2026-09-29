@@ -17,13 +17,18 @@ import (
 //
 // Until the UI has sent its words the framework's default menu stands: the
 // window is not open yet, and there is nobody to read it.
-type menubar struct{ app *application.App }
+type menubar struct {
+	app *application.App
+	// stopTerminals ends every terminal, before a quit that is not to leave
+	// any running.
+	stopTerminals func()
+}
 
 // SetWords rebuilds the menu in the words given, keyed as the UI's «menu.»
 // dictionary keys them. A word that did not come leaves the role's own title.
 func (m menubar) SetWords(words map[string]string) {
 	application.InvokeSync(func() {
-		m.app.Menu.Set(buildMenu(m.app, words))
+		m.app.Menu.Set(buildMenu(m.app, words, m.stopTerminals))
 	})
 }
 
@@ -40,7 +45,7 @@ var sep = entry{role: application.NoRole}
 // screen of its own to open, so it says so and the UI goes there.
 const EventOpenSettings = "open-settings"
 
-func buildMenu(app *application.App, words map[string]string) *application.Menu {
+func buildMenu(app *application.App, words map[string]string, stopTerminals func()) *application.Menu {
 	darwin := runtime.GOOS == "darwin"
 	menu := application.NewMenu()
 
@@ -60,13 +65,18 @@ func buildMenu(app *application.App, words map[string]string) *application.Menu 
 			entry{application.UnHide, "menu.showAll"}, sep,
 			entry{application.Quit, "menu.quit"},
 		)
+		addQuitStopping(app, sub, words, stopTerminals)
 	}
 
 	file := []entry{{application.Quit, "menu.quit"}}
 	if darwin {
 		file = []entry{{application.CloseWindow, "menu.close"}}
 	}
-	fill(menu.AddSubmenu(title(words, "menu.file", "File")), words, file...)
+	fileMenu := menu.AddSubmenu(title(words, "menu.file", "File"))
+	fill(fileMenu, words, file...)
+	if !darwin {
+		addQuitStopping(app, fileMenu, words, stopTerminals)
+	}
 
 	edit := []entry{
 		{application.Undo, "menu.undo"}, {application.Redo, "menu.redo"}, sep,
@@ -98,6 +108,25 @@ func buildMenu(app *application.App, words map[string]string) *application.Menu 
 	// No Help menu: the framework's one opens the framework's website, and this
 	// application has no help of its own to open yet.
 	return menu
+}
+
+// addQuitStopping is the second way to quit. A plain quit leaves the shells and
+// the started projects running, which is the point of the holder; this one is
+// for the times nothing should be left behind. Beside Quit, where it is looked
+// for, and under the same key with ⌥ — the Mac's way of saying «the other one».
+func addQuitStopping(app *application.App, sub *application.Menu, words map[string]string, stopTerminals func()) {
+	if stopTerminals == nil {
+		return
+	}
+	sub.Add(title(words, "menu.quitStopping", "Quit and Stop Terminals")).
+		SetAccelerator("Alt+CmdOrCtrl+Q").
+		OnClick(func(*application.Context) {
+			// Off the menu's thread: hanging up waits for each process a moment.
+			go func() {
+				stopTerminals()
+				app.Quit()
+			}()
+		})
 }
 
 // fill adds the roles to a submenu and titles each from the words: the role

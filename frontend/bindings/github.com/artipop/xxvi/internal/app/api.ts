@@ -92,6 +92,15 @@ export function Attention(): $CancellablePromise<acp$0.Attention[] | null> {
 }
 
 /**
+ * BackgroundTerminals is what has been running since before the application
+ * started: closing it leaves shells and started projects running, and a person
+ * who forgot them would otherwise have no way to know.
+ */
+export function BackgroundTerminals(): $CancellablePromise<$models.BackgroundTerminal[] | null> {
+    return $Call.ByID(140841648);
+}
+
+/**
  * CancelCard stops whatever is running for a card. A cancelled session produces
  * no outcome: the person who stopped it decides what happens next.
  */
@@ -637,6 +646,13 @@ export function StartLaunch(cardID: string, screenID: string, p: launch$0.Profil
  */
 export function StartTask(text: string, projectID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(289388112, text, projectID, workMode, agent, flowID);
+}
+
+/**
+ * StopBackgroundTerminals ends what BackgroundTerminals lists.
+ */
+export function StopBackgroundTerminals(): $CancellablePromise<void> {
+    return $Call.ByID(289135256);
 }
 
 /**

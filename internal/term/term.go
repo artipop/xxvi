@@ -102,6 +102,9 @@ type Manager struct {
 	// how it is reached again when the connection breaks (recover).
 	holder  *ptyhold.Client
 	connect func() (*ptyhold.Client, error)
+	// leftOver are the terminals an earlier run of the application left
+	// running, as Hold found them (LeftOver).
+	leftOver map[string]bool
 
 	// Where the sockets live: an address the operating system chose and a
 	// secret this run minted.
@@ -356,6 +359,14 @@ func (m *Manager) adopt(holder *ptyhold.Client, info ptyhold.Info) {
 		s.finish()
 		return
 	}
+	if l.Kind == ptyhold.KindScreen {
+		m.mu.Lock()
+		if m.leftOver == nil {
+			m.leftOver = map[string]bool{}
+		}
+		m.leftOver[s.ID] = true
+		m.mu.Unlock()
+	}
 	if l.Kind == ptyhold.KindRun {
 		// A stage's CLI with no stage to report to: the session it worked was
 		// paused when the application opened, and continuing it starts the CLI
@@ -449,6 +460,36 @@ func (m *Manager) CloseCard(cardID string) {
 	}
 	m.mu.Unlock()
 	closeAll(doomed)
+}
+
+// LeftOver is what has been running since before this run of the application
+// started and still is: shells and started projects a person left behind when
+// they closed it, and may have forgotten about.
+func (m *Manager) LeftOver() []*Session {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []*Session
+	for id := range m.leftOver {
+		if s := m.byID[id]; s != nil && s.Alive() {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// StopLeftOver ends what LeftOver lists.
+func (m *Manager) StopLeftOver() { closeAll(m.LeftOver()) }
+
+// StopAll ends every terminal, the ones that would outlive the application
+// included: quitting with nothing left behind.
+func (m *Manager) StopAll() {
+	m.mu.Lock()
+	all := make([]*Session, 0, len(m.byID))
+	for _, s := range m.byID {
+		all = append(all, s)
+	}
+	m.mu.Unlock()
+	closeAll(all)
 }
 
 // Close is the application closing. What a holder runs for a screen is left to

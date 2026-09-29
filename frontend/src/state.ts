@@ -64,7 +64,7 @@ export function report(e: unknown) {
 
 /** MENU_KEYS are the application menu's titles (menu.go keys them the same). */
 const MENU_KEYS = [
-  "about", "settings", "services", "hide", "hideOthers", "showAll", "quit",
+  "about", "settings", "services", "hide", "hideOthers", "showAll", "quit", "quitStopping",
   "file", "close",
   "edit", "undo", "redo", "cut", "copy", "paste", "pasteAndMatchStyle", "delete", "selectAll",
   "view", "reload", "forceReload", "resetZoom", "zoomIn", "zoomOut", "fullscreen",
