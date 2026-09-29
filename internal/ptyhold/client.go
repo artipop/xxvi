@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+// logCap is how big the holder's log may grow before a new holder starts it
+// afresh.
+const logCap = 1 << 20
+
 // callTimeout bounds one request. The holder answers from memory; one that
 // takes this long is not going to answer.
 const callTimeout = 10 * time.Second
@@ -38,9 +42,16 @@ type Client struct {
 	pending map[int64]chan response
 	sinks   map[string]Sink
 	closed  bool
-	// leaving is a Close we asked for: the sessions are not over, we just stop
+	// leaving is a Close we asked for, or the holder saying another
+	// application has taken over: the sessions are not over, we just stop
 	// watching them.
 	leaving bool
+	// onLost, when set, is told the connection broke instead of every session
+	// being declared over: the holder may well be alive, and the one watching
+	// can connect again and find them (term.Manager).
+	onLost func()
+	// pid is the holder's, as it said in hello.
+	pid int
 }
 
 // Connect attaches to the holder on socket, starting one with spawn when none
@@ -85,7 +96,13 @@ func Spawn(socket string, cmd *exec.Cmd) error {
 	if cmd.Stderr == nil {
 		// What a holder says about itself goes beside its socket: it has no
 		// terminal, and its reasons for leaving are worth being able to read.
-		if f, err := os.OpenFile(socket+".log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); err == nil {
+		// Started over once it is past logCap, or every holder ever started
+		// would still be in it.
+		flags := os.O_CREATE | os.O_WRONLY | os.O_APPEND
+		if info, err := os.Stat(socket + ".log"); err == nil && info.Size() > logCap {
+			flags = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+		}
+		if f, err := os.OpenFile(socket+".log", flags, 0o600); err == nil {
 			defer f.Close()
 			cmd.Stderr = f
 		}
@@ -127,9 +144,13 @@ func dial(socket string) (*Client, error) {
 }
 
 func (c *Client) hello() error {
-	_, err := c.call(request{Op: "hello", Protocol: Protocol})
+	resp, err := c.call(request{Op: "hello", Protocol: Protocol})
+	c.pid = resp.Pid
 	return err
 }
+
+// Pid is the holder process's id.
+func (c *Client) Pid() int { return c.pid }
 
 func (c *Client) read() {
 	for {
@@ -160,7 +181,18 @@ func (c *Client) read() {
 			}
 		case tEvt:
 			var evt event
-			if json.Unmarshal(f.payload, &evt) != nil || evt.Event != "exited" {
+			if json.Unmarshal(f.payload, &evt) != nil {
+				continue
+			}
+			if evt.Event == "replaced" {
+				// Another application took the holder: connecting again would
+				// take it back, and the two would pass it between them forever.
+				c.mu.Lock()
+				c.leaving = true
+				c.mu.Unlock()
+				continue
+			}
+			if evt.Event != "exited" {
 				continue
 			}
 			c.mu.Lock()
@@ -186,9 +218,13 @@ func (c *Client) lost() {
 	c.pending = map[int64]chan response{}
 	sinks := c.sinks
 	c.sinks = map[string]Sink{}
-	leaving := c.leaving
+	leaving, onLost := c.leaving, c.onLost
 	c.mu.Unlock()
 	if leaving {
+		return
+	}
+	if onLost != nil {
+		go onLost()
 		return
 	}
 	for _, sink := range sinks {
@@ -250,6 +286,18 @@ func (c *Client) unwatch(id string) {
 	delete(c.sinks, id)
 	c.mu.Unlock()
 }
+
+// OnLost replaces «every session is over» with fn when the connection breaks
+// without either side meaning it to.
+func (c *Client) OnLost(fn func()) {
+	c.mu.Lock()
+	c.onLost = fn
+	c.mu.Unlock()
+}
+
+// Drop breaks the connection the way a failure would — the holder giving up on
+// an application that stopped reading does exactly this — without leaving.
+func (c *Client) Drop() { _ = c.conn.Close() }
 
 // Start runs spec in a new session named by label.ID.
 func (c *Client) Start(label Label, spec Spec, sink Sink) error {

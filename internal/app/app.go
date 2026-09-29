@@ -209,10 +209,9 @@ func (a *App) holdTerminals() {
 	}
 	socket, err := ptyhold.SocketPath(a.DataDir)
 	if err == nil {
-		var holder *ptyhold.Client
-		if holder, err = ptyhold.Connect(socket, func() *exec.Cmd { return HoldTerminals(socket) }); err == nil {
-			err = a.Terminals.Hold(holder)
-		}
+		err = a.Terminals.Hold(func() (*ptyhold.Client, error) {
+			return ptyhold.Connect(socket, func() *exec.Cmd { return HoldTerminals(socket) })
+		})
 	}
 	if err != nil {
 		a.log.Warn("terminals will end with the application", "why", err)

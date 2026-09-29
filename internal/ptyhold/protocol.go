@@ -116,6 +116,7 @@ type response struct {
 	Err string `json:"err,omitempty"`
 
 	Protocol int    `json:"protocol,omitempty"`
+	Pid      int    `json:"pid,omitempty"`
 	Running  bool   `json:"running,omitempty"`
 	Sessions []Info `json:"sessions,omitempty"`
 }

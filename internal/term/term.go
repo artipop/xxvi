@@ -90,8 +90,10 @@ type Manager struct {
 	keep string
 
 	// holder runs the processes when there is one (Hold): they outlive the
-	// application then. Without it they run here and end with it.
-	holder *ptyhold.Client
+	// application then. Without it they run here and end with it. connect is
+	// how it is reached again when the connection breaks (recover).
+	holder  *ptyhold.Client
+	connect func() (*ptyhold.Client, error)
 
 	// Where the sockets live: an address the operating system chose and a
 	// secret this run minted.
@@ -196,7 +198,7 @@ func (m *Manager) run(s *Session, kind string, spec ptyhold.Spec) error {
 	holder := m.holder
 	m.mu.Unlock()
 	if holder != nil {
-		s.eng = held{holder, s.ID}
+		s.eng = held{m, s.ID}
 		label := ptyhold.Label{ID: s.ID, Kind: kind, Card: s.CardID, Screen: s.ScreenID, Command: s.Command}
 		err := holder.Start(label, spec, s.sink())
 		if err == nil || !errors.Is(err, ptyhold.ErrClosed) {
@@ -241,18 +243,90 @@ func (m *Manager) register(s *Session) {
 // application no longer closes them, and takes back what an earlier run of the
 // application left in it. Called once, at startup, after KeepIn: a stage's
 // terminal that ended while nobody watched still has its tail to write.
-func (m *Manager) Hold(holder *ptyhold.Client) error {
-	m.mu.Lock()
-	m.holder = holder
-	m.mu.Unlock()
-	left, err := holder.List()
+//
+// connect reaches the holder, starting one if there is none; it is used again
+// whenever the connection breaks.
+func (m *Manager) Hold(connect func() (*ptyhold.Client, error)) error {
+	holder, err := connect()
 	if err != nil {
 		return err
 	}
+	left, err := holder.List()
+	if err != nil {
+		holder.Close()
+		return err
+	}
+	m.mu.Lock()
+	m.holder, m.connect = holder, connect
+	m.mu.Unlock()
+	holder.OnLost(func() { m.recover(holder) })
 	for _, info := range left {
 		m.adopt(holder, info)
 	}
 	return nil
+}
+
+// client is the holder connection as it stands now, nil while there is none.
+func (m *Manager) client() *ptyhold.Client {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.holder
+}
+
+// recover follows a broken connection to the holder. A connection breaks when
+// the holder dies — its sessions are gone with it — or when the holder gave up
+// on an application that stopped reading, and then they are all still there.
+// So the holder is reached again, a new one started if need be, and each
+// terminal is either taken back or ended by what the holder says of it.
+func (m *Manager) recover(lost *ptyhold.Client) {
+	m.mu.Lock()
+	if m.holder != lost {
+		m.mu.Unlock()
+		return
+	}
+	m.holder = nil
+	connect := m.connect
+	var mine []*Session
+	for _, s := range m.byID {
+		if _, ok := s.eng.(held); ok {
+			mine = append(mine, s)
+		}
+	}
+	m.mu.Unlock()
+	m.log.Warn("lost the terminal holder; connecting again")
+
+	holder, err := connect()
+	var left []ptyhold.Info
+	if err == nil {
+		if left, err = holder.List(); err != nil {
+			holder.Close()
+		}
+	}
+	if err != nil {
+		m.log.Warn("the terminal holder is gone; terminals end with the application now", "err", err)
+		for _, s := range mine {
+			s.finish()
+		}
+		return
+	}
+	m.mu.Lock()
+	m.holder = holder
+	m.mu.Unlock()
+	holder.OnLost(func() { m.recover(holder) })
+
+	sizes := make(map[string]ptyhold.Info, len(left))
+	for _, info := range left {
+		sizes[info.Label.ID] = info
+	}
+	for _, s := range mine {
+		info, ok := sizes[s.ID]
+		if !ok {
+			// Started in a holder that has died since: the process went with it.
+			s.finish()
+			continue
+		}
+		s.reattach(holder, info)
+	}
 }
 
 func (m *Manager) adopt(holder *ptyhold.Client, info ptyhold.Info) {
@@ -262,7 +336,7 @@ func (m *Manager) adopt(holder *ptyhold.Client, info ptyhold.Info) {
 	s := newSession(l.ID, info.Cols, info.Rows, m.log)
 	s.CardID, s.ScreenID, s.Command = l.Card, l.Screen, l.Command
 	s.keepTail = l.Kind == ptyhold.KindRun
-	s.eng = held{holder, l.ID}
+	s.eng = held{m, l.ID}
 	running, err := holder.Attach(l.ID, s.sink())
 	if err != nil {
 		m.log.Warn("could not take back a terminal", "terminal", l.ID, "err", err)
@@ -276,8 +350,9 @@ func (m *Manager) adopt(holder *ptyhold.Client, info ptyhold.Info) {
 	}
 	if l.Kind == ptyhold.KindRun {
 		// A stage's CLI with no stage to report to: the session it worked was
-		// marked cancelled when the application opened, and a CLI left running
-		// would be spending tokens on work nobody is waiting for.
+		// paused when the application opened, and continuing it starts the CLI
+		// afresh in the same conversation. Hung up on, it saves that
+		// conversation; left running, it would spend tokens nobody asked for.
 		go s.Close()
 	}
 }
@@ -434,6 +509,29 @@ func newSession(id string, cols, rows int, log *slog.Logger) *Session {
 		forgotten: make(chan struct{}),
 		log:       log,
 		spoke:     time.Now(),
+	}
+}
+
+// reattach takes the terminal back after the connection to the holder broke.
+// What it printed meanwhile never arrived, so the screen is started over from
+// the holder's, and every window watching it is let go to start over too — the
+// same thing a window that fell behind gets (ws.go).
+func (s *Session) reattach(holder *ptyhold.Client, info ptyhold.Info) {
+	s.mu.Lock()
+	if s.screen == nil {
+		s.mu.Unlock()
+		return
+	}
+	s.screen.Close()
+	s.screen = ptyhold.NewScreen(info.Cols, info.Rows)
+	for c := range s.subs {
+		delete(s.subs, c)
+		close(c)
+	}
+	s.mu.Unlock()
+	running, err := holder.Attach(s.ID, s.sink())
+	if err != nil || !running {
+		s.finish()
 	}
 }
 

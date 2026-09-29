@@ -257,6 +257,8 @@ func TestANewApplicationReplacesTheOld(t *testing.T) {
 	if err := first.Start(Label{ID: "s", Kind: KindScreen}, sh(`sleep 30`), out.sink()); err != nil {
 		t.Fatalf("старт: %v", err)
 	}
+	reconnected := make(chan struct{}, 1)
+	first.OnLost(func() { reconnected <- struct{}{} })
 	second := connect(t, socket)
 	defer second.Close()
 	if _, err := second.List(); err != nil {
@@ -264,6 +266,15 @@ func TestANewApplicationReplacesTheOld(t *testing.T) {
 	}
 	if _, err := first.List(); err == nil {
 		t.Fatal("старое соединение должно быть закрыто")
+	}
+	// Told it was replaced, the old one neither reconnects — the two would take
+	// the holder from each other forever — nor calls its sessions over.
+	select {
+	case <-reconnected:
+		t.Fatal("вытесненное приложение не должно переподключаться")
+	case <-out.exited:
+		t.Fatal("вытеснение — не конец сессий")
+	case <-time.After(200 * time.Millisecond):
 	}
 	// The old connection going is not the session ending.
 	if list, _ := second.List(); len(list) != 1 || !list[0].Running {

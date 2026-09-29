@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -61,15 +62,14 @@ func bare(t *testing.T) *Manager {
 // holding hands a registry to the holder on socket, starting one if none is there.
 func holding(t *testing.T, m *Manager, socket string) {
 	t.Helper()
-	c, err := ptyhold.Connect(socket, func() *exec.Cmd {
-		cmd := exec.Command(os.Args[0])
-		cmd.Env = append(os.Environ(), holderEnv+"="+socket)
-		return cmd
-	})
-	if err != nil {
-		t.Fatalf("держатель: %v", err)
+	connect := func() (*ptyhold.Client, error) {
+		return ptyhold.Connect(socket, func() *exec.Cmd {
+			cmd := exec.Command(os.Args[0])
+			cmd.Env = append(os.Environ(), holderEnv+"="+socket)
+			return cmd
+		})
 	}
-	if err := m.Hold(c); err != nil {
+	if err := m.Hold(connect); err != nil {
 		t.Fatalf("передать терминалы держателю: %v", err)
 	}
 }
@@ -624,5 +624,73 @@ func TestWithoutAHolderTheLastOutputOutlivesTheProcess(t *testing.T) {
 	<-s.Done()
 	if !strings.Contains(string(s.History()), "КОНЕЦ") {
 		t.Fatalf("последняя строка потерялась: %q", tail(s.History()))
+	}
+}
+
+// A connection that breaks with the holder still alive — it gives up on an
+// application that stopped reading — loses nothing: the terminals are taken
+// back, with what they printed meanwhile, and keep working.
+func TestTerminalsComeBackWhenTheConnectionBreaks(t *testing.T) {
+	m := manager(t)
+	s, err := m.Open("card", "screen", "")
+	if err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	history, updates, cancel := s.Subscribe()
+	_ = s.Write([]byte("echo до-$((40+2))\n"))
+	read(t, updates, history, "до-42")
+	cancel()
+
+	lost := m.client()
+	lost.Drop()
+	deadline := time.Now().Add(10 * time.Second)
+	for m.client() == nil || m.client() == lost {
+		if time.Now().After(deadline) {
+			t.Fatal("соединение с держателем должно было восстановиться")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !s.Alive() || m.OnScreen("screen") != s {
+		t.Fatal("терминал должен пережить разрыв соединения")
+	}
+	history, updates, cancel = s.Subscribe()
+	defer cancel()
+	if !strings.Contains(string(history), "до-42") {
+		t.Fatalf("экран должен вернуться от держателя: %q", tail(history))
+	}
+	_ = s.Write([]byte("echo после-$((40+3))\n"))
+	read(t, updates, history, "после-43")
+}
+
+// A holder that dies takes its terminals with it; the registry says so, starts
+// a new holder, and terminals opened after still outlive the application.
+func TestAHolderThatDiesIsReplaced(t *testing.T) {
+	m := manager(t)
+	s, err := m.Open("card", "screen", "")
+	if err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	old := m.client()
+	if err := syscall.Kill(old.Pid(), syscall.SIGKILL); err != nil {
+		t.Fatalf("убить держателя: %v", err)
+	}
+	select {
+	case <-s.Done():
+	case <-time.After(10 * time.Second):
+		t.Fatal("терминал умершего держателя должен закончиться")
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for m.client() == nil || m.client() == old {
+		if time.Now().After(deadline) {
+			t.Fatal("должен был подняться новый держатель")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	again, err := m.Open("card", "screen", "")
+	if err != nil {
+		t.Fatalf("открыть терминал заново: %v", err)
+	}
+	if _, inHolder := again.eng.(held); !inHolder {
+		t.Fatal("новый терминал должен жить в новом держателе, а не в приложении")
 	}
 }

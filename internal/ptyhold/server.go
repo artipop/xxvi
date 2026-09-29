@@ -183,7 +183,7 @@ func (s *Server) handle(p *peer, req request) response {
 			return response{Err: fmt.Sprintf("protocol mismatch: holder %d, application %d", Protocol, req.Protocol)}
 		}
 		s.welcome(p)
-		return response{Protocol: Protocol}
+		return response{Protocol: Protocol, Pid: os.Getpid()}
 	}
 	switch req.Op {
 	case "start":
@@ -242,6 +242,7 @@ func (s *Server) welcome(p *peer) {
 	s.client = p
 	s.mu.Unlock()
 	if old != nil && old != p {
+		_ = old.send(frame{typ: tEvt, payload: marshal(event{Event: "replaced"})})
 		old.conn.Close()
 	}
 }

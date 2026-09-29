@@ -24,18 +24,49 @@ func (l local) Hangup() error               { return l.p.Hangup() }
 func (l local) Kill()                       { l.p.Kill() }
 func (l local) Release()                    { l.p.Close() }
 
-// held is a session in the holder.
+// held is a session in the holder. It asks the registry for the connection
+// each time rather than keeping one: the connection is replaced when it breaks
+// (Manager.recover), and the session outlives it.
 type held struct {
-	c  *ptyhold.Client
+	m  *Manager
 	id string
 }
 
-func (h held) Write(b []byte) error        { return h.c.Write(h.id, b) }
-func (h held) Resize(cols, rows int) error { return h.c.Resize(h.id, cols, rows) }
-func (h held) Hangup() error               { return h.c.Hangup(h.id) }
-func (h held) Kill()                       { _ = h.c.Kill(h.id) }
+func (h held) Write(b []byte) error {
+	c := h.m.client()
+	if c == nil {
+		return ptyhold.ErrClosed
+	}
+	return c.Write(h.id, b)
+}
+
+func (h held) Resize(cols, rows int) error {
+	c := h.m.client()
+	if c == nil {
+		return ptyhold.ErrClosed
+	}
+	return c.Resize(h.id, cols, rows)
+}
+
+func (h held) Hangup() error {
+	c := h.m.client()
+	if c == nil {
+		return ptyhold.ErrClosed
+	}
+	return c.Hangup(h.id)
+}
+
+func (h held) Kill() {
+	if c := h.m.client(); c != nil {
+		_ = c.Kill(h.id)
+	}
+}
 
 // Release forgets the session in the holder: by the time it has ended, its
 // screen is in the Session already. Waited for, so an application closing right
 // after does not leave a holder keeping an ended session for nobody.
-func (h held) Release() { _ = h.c.Forget(h.id) }
+func (h held) Release() {
+	if c := h.m.client(); c != nil {
+		_ = c.Forget(h.id)
+	}
+}
