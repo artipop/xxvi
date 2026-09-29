@@ -208,6 +208,7 @@ export const msgRu: Dict = {
   "msg.update.nothingToSkip": "Нечего пропускать: обновление не найдено",
   "msg.update.restartFailed": "Не удалось перезапустить",
   "msg.store.newerSchema": "База собрана более новой версией приложения (схема {applied}, известно {known})",
+  "msg.store.olderSchema": "База собрана слишком старой версией приложения (схема {applied}): её можно открыть только версией, которая умеет схему {baseline}",
 
   // ---- sessions ----
   "msg.session.appClosed": "Приложение было закрыто во время работы",

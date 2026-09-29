@@ -8,24 +8,37 @@ import "fmt"
 // A step is never edited once released — the next one is appended instead —
 // because an installed database has already run it.
 //
+// The first step is a baseline: the seventeen steps the schema was built in,
+// squashed into what they came to. It stands for versions 1 to Baseline, and
+// the steps after it are Baseline+1 and on. A database stopped partway
+// through those seventeen is refused rather than guessed at (Store.migrate):
+// the steps that would finish it are gone.
+//
 // Times are INTEGER unix milliseconds throughout. Sets that a person orders
 // (a stage's crew, a flow's edges) carry an explicit `ord`, because "the order
 // they were inserted in" is not a thing SQL promises.
+
+// Baseline is the version the first step brings a new database to.
+const Baseline = 17
+
 func migrations(d Dialect) []string {
 	return []string{
-		// 1. Registries: sources with their rules, and agents.
-		`
+		// 1–17. The baseline.
+		fmt.Sprintf(`
 -- name_key is the name folded for comparison, computed in Go rather than by
 -- lower(): SQLite's own lower() is ASCII-only, so «Über» and
 -- «über» would be two different sources. Every case-insensitive lookup
 -- and every uniqueness rule in this schema goes through such a column.
+
+-- ---- registries: sources with their rules, agents, projects ----
+
 CREATE TABLE source (
 	name             TEXT PRIMARY KEY,
 	name_key         TEXT    NOT NULL,
 	plugin           TEXT    NOT NULL DEFAULT '',
 	enabled          INTEGER NOT NULL DEFAULT 1,
 	noisy            INTEGER NOT NULL DEFAULT 0,
-	update_mode      TEXT    NOT NULL DEFAULT 'comment',
+	update_mode      TEXT    NOT NULL DEFAULT 'update',
 	config           TEXT    NOT NULL DEFAULT '{}',
 	interval_seconds INTEGER NOT NULL DEFAULT 0,
 	created_at       INTEGER NOT NULL
@@ -60,12 +73,29 @@ CREATE TABLE agent (
 -- The agent's key is model.Username, not a plain fold: a card whose assignee
 -- reads "my-agent" and a registry entry named "My Agent" are one agent, and
 -- that has to hold in the index as well as in the code.
-CREATE UNIQUE INDEX idx_agent_key ON agent(name_key);`,
+CREATE UNIQUE INDEX idx_agent_key ON agent(name_key);
 
-		// 2. Flows, laid out relationally rather than as a JSON blob: "where are
-		// this flow's cards" and "which stages use this agent" are queries, and
-		// they should be queries.
-		`
+-- Where the work happens. A card points at one by id, so renaming a project
+-- drags nothing behind it. Its hosting — which remote, which server, which
+-- kind — is here; the token is not: it lives in the system keychain, by server.
+CREATE TABLE project (
+	id         TEXT PRIMARY KEY,
+	name       TEXT NOT NULL,
+	name_key   TEXT NOT NULL UNIQUE,
+	kind       TEXT NOT NULL,
+	path       TEXT NOT NULL,
+	created_at INTEGER NOT NULL,
+	remote     TEXT NOT NULL DEFAULT '',
+	server     TEXT NOT NULL DEFAULT '',
+	provider   TEXT NOT NULL DEFAULT ''
+);
+
+-- ---- flows ----
+--
+-- Laid out relationally rather than as a JSON blob: "where are this flow's
+-- cards" and "which stages use this agent" are queries, and they should be
+-- queries.
+
 CREATE TABLE flow (
 	id          TEXT PRIMARY KEY,
 	name        TEXT NOT NULL,
@@ -76,17 +106,29 @@ CREATE TABLE flow (
 );
 CREATE UNIQUE INDEX idx_flow_key ON flow(name_key);
 
+-- What a stage leaves on the card, what it is handed on the way in and what it
+-- puts in front of the person standing at it are JSON in a column rather than
+-- more tables: none is ever queried across flows — they are read with the
+-- stage and written with it — and a table would be a join for something that
+-- is part of the stage's own text.
+--
+-- work is where an agent stage runs: in the card's terminal or as a session
+-- (docs/system.md §4.1.1).
 CREATE TABLE stage (
-	id          TEXT PRIMARY KEY,
-	flow_id     TEXT    NOT NULL REFERENCES flow(id) ON DELETE CASCADE,
-	ord         INTEGER NOT NULL DEFAULT 0,
-	name        TEXT    NOT NULL,
-	action      TEXT    NOT NULL DEFAULT 'none',
-	prompt      TEXT    NOT NULL DEFAULT '',
-	max_running INTEGER NOT NULL DEFAULT 0,
-	final       INTEGER NOT NULL DEFAULT 0,
-	x           REAL    NOT NULL DEFAULT 0,
-	y           REAL    NOT NULL DEFAULT 0
+	id           TEXT PRIMARY KEY,
+	flow_id      TEXT    NOT NULL REFERENCES flow(id) ON DELETE CASCADE,
+	ord          INTEGER NOT NULL DEFAULT 0,
+	name         TEXT    NOT NULL,
+	action       TEXT    NOT NULL DEFAULT 'none',
+	prompt       TEXT    NOT NULL DEFAULT '',
+	max_running  INTEGER NOT NULL DEFAULT 0,
+	final        INTEGER NOT NULL DEFAULT 0,
+	x            REAL    NOT NULL DEFAULT 0,
+	y            REAL    NOT NULL DEFAULT 0,
+	writes_json  TEXT    NOT NULL DEFAULT '[]',
+	reads_json   TEXT    NOT NULL DEFAULT '[]',
+	screens_json TEXT    NOT NULL DEFAULT '[]',
+	work         TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX idx_stage_flow ON stage(flow_id);
 
@@ -103,33 +145,52 @@ CREATE TABLE stage_agent (
 CREATE INDEX idx_stage_agent_key ON stage_agent(agent_key);
 
 CREATE TABLE edge (
-	id           TEXT PRIMARY KEY,
-	flow_id      TEXT    NOT NULL REFERENCES flow(id) ON DELETE CASCADE,
-	ord          INTEGER NOT NULL DEFAULT 0,
-	from_stage   TEXT    NOT NULL,
-	to_stage     TEXT    NOT NULL,
-	on_trigger   TEXT    NOT NULL,
-	cond_property TEXT   NOT NULL DEFAULT '',
-	cond_value    TEXT   NOT NULL DEFAULT '',
-	cond_comment  TEXT   NOT NULL DEFAULT ''
+	id            TEXT PRIMARY KEY,
+	flow_id       TEXT    NOT NULL REFERENCES flow(id) ON DELETE CASCADE,
+	ord           INTEGER NOT NULL DEFAULT 0,
+	from_stage    TEXT    NOT NULL,
+	to_stage      TEXT    NOT NULL,
+	on_trigger    TEXT    NOT NULL,
+	cond_property TEXT    NOT NULL DEFAULT '',
+	cond_value    TEXT    NOT NULL DEFAULT '',
+	cond_comment  TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX idx_edge_flow ON edge(flow_id);
-CREATE INDEX idx_edge_from ON edge(from_stage, on_trigger);`,
+CREATE INDEX idx_edge_from ON edge(from_stage, on_trigger);
 
-		// 3. Cards, their properties and their history.
-		fmt.Sprintf(`
+-- ---- cards, their properties and their journal ----
+
+-- project is the registry entry the card works in; empty is a real answer: a
+-- task starting from a blank page gets a folder of its own.
+--
+-- work_mode is how the card works in its project when that is a repository —
+-- in the folder as it stands, in a separate working tree, or on a branch in
+-- the folder itself — and branch, base_ref and worktree what that came to. On
+-- the card, because the card is what owns the work. keep_worktree remembers
+-- «keep» as an answer to removing a closed card's tree, or the question would
+-- come back every time the list is read.
+--
+-- session is a conversation the card was started from, by the id its agent
+-- gave it.
 CREATE TABLE card (
-	id           TEXT PRIMARY KEY,
-	source       TEXT NOT NULL DEFAULT '',
-	external_id  TEXT NOT NULL DEFAULT '',
-	item_version TEXT NOT NULL DEFAULT '',
-	title        TEXT NOT NULL,
-	body         TEXT NOT NULL DEFAULT '',
-	url          TEXT NOT NULL DEFAULT '',
-	state        TEXT NOT NULL,
-	assignee     TEXT NOT NULL DEFAULT '',
-	created_at   INTEGER NOT NULL,
-	updated_at   INTEGER NOT NULL
+	id            TEXT PRIMARY KEY,
+	source        TEXT    NOT NULL DEFAULT '',
+	external_id   TEXT    NOT NULL DEFAULT '',
+	item_version  TEXT    NOT NULL DEFAULT '',
+	title         TEXT    NOT NULL,
+	body          TEXT    NOT NULL DEFAULT '',
+	url           TEXT    NOT NULL DEFAULT '',
+	state         TEXT    NOT NULL,
+	assignee      TEXT    NOT NULL DEFAULT '',
+	created_at    INTEGER NOT NULL,
+	updated_at    INTEGER NOT NULL,
+	project       TEXT    NOT NULL DEFAULT '',
+	work_mode     TEXT    NOT NULL DEFAULT '',
+	branch        TEXT    NOT NULL DEFAULT '',
+	base_ref      TEXT    NOT NULL DEFAULT '',
+	worktree      TEXT    NOT NULL DEFAULT '',
+	keep_worktree INTEGER NOT NULL DEFAULT 0,
+	session       TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX idx_card_state ON card(state);
 CREATE INDEX idx_card_source ON card(source);
@@ -144,17 +205,28 @@ CREATE TABLE card_prop (
 	PRIMARY KEY (card_id, name)
 );
 
+-- The card's journal. An entry says what it is and where it belongs: the ribbon
+-- shows a step's report and the reason a card stands on their own segment.
+-- Time cannot place them — a report is written in the same millisecond as the
+-- transition after it — so the entry carries the run it was written for and the
+-- transition the card stood in. What the application itself writes is a code
+-- (msg) the UI words in the person's language, beside the text an agent or a
+-- person wrote.
 CREATE TABLE card_comment (
-	id         %s,
-	card_id    TEXT NOT NULL REFERENCES card(id) ON DELETE CASCADE,
-	author     TEXT NOT NULL DEFAULT '',
-	text       TEXT NOT NULL,
-	created_at INTEGER NOT NULL
+	id         %[1]s,
+	card_id    TEXT    NOT NULL REFERENCES card(id) ON DELETE CASCADE,
+	author     TEXT    NOT NULL DEFAULT '',
+	text       TEXT    NOT NULL,
+	created_at INTEGER NOT NULL,
+	kind       TEXT    NOT NULL DEFAULT '',
+	session_id TEXT    NOT NULL DEFAULT '',
+	event_id   INTEGER NOT NULL DEFAULT 0,
+	msg        TEXT    NOT NULL DEFAULT ''
 );
-CREATE INDEX idx_card_comment_card ON card_comment(card_id, id);`, d.AutoIncrementPK()),
+CREATE INDEX idx_card_comment_card ON card_comment(card_id, id);
 
-		// 4. Where a card stands, where it has been, and why it moved.
-		fmt.Sprintf(`
+-- ---- where a card stands, where it has been, and why it moved ----
+
 CREATE TABLE card_flow (
 	card_id    TEXT PRIMARY KEY REFERENCES card(id) ON DELETE CASCADE,
 	flow_id    TEXT NOT NULL,
@@ -171,7 +243,7 @@ CREATE TABLE card_flow_visit (
 );
 
 CREATE TABLE flow_event (
-	id         %s,
+	id         %[1]s,
 	card_id    TEXT NOT NULL REFERENCES card(id) ON DELETE CASCADE,
 	flow_id    TEXT NOT NULL,
 	from_stage TEXT NOT NULL DEFAULT '',
@@ -180,11 +252,15 @@ CREATE TABLE flow_event (
 	detail     TEXT NOT NULL DEFAULT '',
 	created_at INTEGER NOT NULL
 );
-CREATE INDEX idx_flow_event_card ON flow_event(card_id, id);`, d.AutoIncrementPK()),
+CREATE INDEX idx_flow_event_card ON flow_event(card_id, id);
 
-		// 5. The running half: sessions, their stream, the stage queue, and the
-		// keys that make one event move a card once.
-		fmt.Sprintf(`
+-- ---- the running half: sessions, their stream, the stage queue, and the keys
+-- that make one event move a card once ----
+
+-- work is recorded on the run as well as on the stage, and not because it
+-- could be read off the stage: the ribbon is a journal, and a stage whose mode
+-- was changed afterwards must not make last week's step look like something it
+-- never was.
 CREATE TABLE agent_session (
 	id             TEXT PRIMARY KEY,
 	card_id        TEXT NOT NULL,
@@ -197,13 +273,14 @@ CREATE TABLE agent_session (
 	cwd            TEXT NOT NULL DEFAULT '',
 	started_at     INTEGER NOT NULL,
 	finished_at    INTEGER,
-	error_text     TEXT NOT NULL DEFAULT ''
+	error_text     TEXT NOT NULL DEFAULT '',
+	work           TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX idx_session_card ON agent_session(card_id);
 CREATE INDEX idx_session_status ON agent_session(status);
 
 CREATE TABLE session_event (
-	id         %s,
+	id         %[1]s,
 	session_id TEXT    NOT NULL REFERENCES agent_session(id) ON DELETE CASCADE,
 	seq        INTEGER NOT NULL,
 	kind       TEXT    NOT NULL,
@@ -239,126 +316,10 @@ CREATE TABLE setting (
 	value TEXT NOT NULL DEFAULT ''
 );`, d.AutoIncrementPK()),
 
-		// 6. What a stage declares it leaves on the card and what it is handed
-		// on the way in. JSON in a column rather than two more tables: neither
-		// is ever queried across flows — they are read with the stage and
-		// written with it — and a table would be a join for something that is
-		// part of the stage's own text.
+		// 18. Whether the card was typed into the ribbon, whose body is then
+		// the person's words and nothing more. Every card before this was
+		// sent to its agent with its title, so none of them is.
 		`
-ALTER TABLE stage ADD COLUMN writes_json TEXT NOT NULL DEFAULT '[]';
-ALTER TABLE stage ADD COLUMN reads_json  TEXT NOT NULL DEFAULT '[]';`,
-
-		// 7. What a stage puts in front of the person standing at it. Same seam
-		// as 6 and for the same reason: screens are read with the stage and
-		// written with it, and nothing ever asks across flows which stage shows
-		// which screen.
-		`
-ALTER TABLE stage ADD COLUMN screens_json TEXT NOT NULL DEFAULT '[]';`,
-
-		// 8. Where the work happens. A registry like the agents and the sources,
-		// and a card points at one by id — so renaming a project drags nothing
-		// behind it. Empty on the card is a real answer: a task starting from a
-		// blank page gets a folder of its own.
-		`
-CREATE TABLE IF NOT EXISTS project (
-	id         TEXT PRIMARY KEY,
-	name       TEXT NOT NULL,
-	name_key   TEXT NOT NULL UNIQUE,
-	kind       TEXT NOT NULL,
-	path       TEXT NOT NULL,
-	created_at INTEGER NOT NULL
-);
-ALTER TABLE card ADD COLUMN project TEXT NOT NULL DEFAULT '';`,
-
-		// 9. Where an agent stage runs: in the card's terminal or as a session
-		// (docs/system.md §4.1.1). The same word is recorded on the run as well,
-		// and not because it could be read off the stage: the ribbon is a
-		// journal, and a stage whose mode was changed afterwards must not make
-		// last week's step look like something it never was.
-		`
-ALTER TABLE stage ADD COLUMN work TEXT NOT NULL DEFAULT '';
-ALTER TABLE agent_session ADD COLUMN work TEXT NOT NULL DEFAULT '';`,
-
-		// 10. The comments became the card's journal, and an entry says what
-		// it is and where it belongs: the ribbon shows a step's report and the
-		// reason a card stands on their own segment, and leaves the rest to the
-		// journal. Time cannot place them — a report is written in the same
-		// millisecond as the transition after it — so the entry carries the run
-		// it was written for and the transition the card stood in.
-		`
-ALTER TABLE card_comment ADD COLUMN kind       TEXT    NOT NULL DEFAULT '';
-ALTER TABLE card_comment ADD COLUMN session_id TEXT    NOT NULL DEFAULT '';
-ALTER TABLE card_comment ADD COLUMN event_id   INTEGER NOT NULL DEFAULT 0;`,
-
-		// 11. A changed item no longer comments on its card — it updates it —
-		// and a rule can no longer ask for a comment. Saved sources are moved
-		// off both, or they would fail validation the next time they are saved.
-		// A comment rule never made a card for an item it had not seen, so
-		// dropping is what keeps it from starting to.
-		`
-UPDATE source SET update_mode = 'update' WHERE update_mode = 'comment';
-UPDATE source_rule SET then_action = 'drop' WHERE then_action = 'comment';`,
-
-		// 12. The demo sources a first run used to create go, with the cards
-		// they filed that nobody took anywhere. A card that has been on a flow
-		// is somebody's work and stays, whoever brought it. Only the demo
-		// plugin under the names the seed gave: a source somebody set up
-		// themselves under one of those names is theirs.
-		`
-DELETE FROM card
-WHERE state = 'inbox'
-  AND source IN (SELECT name FROM source WHERE plugin = 'demo' AND name IN ('Задачи', 'Телефон'))
-  AND id NOT IN (SELECT card_id FROM flow_event);
-DELETE FROM source_item
-WHERE source IN (SELECT name FROM source WHERE plugin = 'demo' AND name IN ('Задачи', 'Телефон'));
-DELETE FROM source_rule
-WHERE source IN (SELECT name FROM source WHERE plugin = 'demo' AND name IN ('Задачи', 'Телефон'));
-DELETE FROM source WHERE plugin = 'demo' AND name IN ('Задачи', 'Телефон');`,
-
-		// 13. How a card works in its project when that is a repository — in
-		// the folder as it stands, in a separate working tree, or on a branch
-		// in the folder itself — and what that came to: the branch, what it
-		// was cut from, and where the tree is. On the card, because the card
-		// is what owns the work; an empty mode is what every card did before.
-		`
-ALTER TABLE card ADD COLUMN work_mode TEXT NOT NULL DEFAULT '';
-ALTER TABLE card ADD COLUMN branch    TEXT NOT NULL DEFAULT '';
-ALTER TABLE card ADD COLUMN base_ref  TEXT NOT NULL DEFAULT '';
-ALTER TABLE card ADD COLUMN worktree  TEXT NOT NULL DEFAULT '';`,
-
-		// 14. A closed card's working tree is removed only when a person says
-		// so, and «keep» is an answer too: remembered, or the question
-		// would come back every time the list is read.
-		`
-ALTER TABLE card ADD COLUMN keep_worktree INTEGER NOT NULL DEFAULT 0;`,
-
-		// 15. The application stops speaking in sentences: what it writes to a
-		// card's journal is a code the UI words in the person's language, kept
-		// beside the text an agent or a person wrote. Its own field for how a
-		// stage ended and the field a source's rule suggests a flow in are
-		// identifiers from now on rather than Russian words, so every card and
-		// every condition that named them by the old words is renamed with them.
-		// The old spellings are the data being migrated, not anything shown.
-		`
-ALTER TABLE card_comment ADD COLUMN msg TEXT NOT NULL DEFAULT '';
-UPDATE card_prop SET value = 'passed' WHERE name IN ('Исход', 'исход') AND value = 'прошло';
-UPDATE card_prop SET value = 'failed' WHERE name IN ('Исход', 'исход') AND value = 'не прошло';
-UPDATE OR REPLACE card_prop SET name = 'Outcome' WHERE name IN ('Исход', 'исход');
-UPDATE OR REPLACE card_prop SET name = 'Flow' WHERE name = 'Флоу';
-UPDATE edge SET cond_value = 'passed' WHERE cond_property IN ('Исход', 'исход') AND cond_value = 'прошло';
-UPDATE edge SET cond_value = 'failed' WHERE cond_property IN ('Исход', 'исход') AND cond_value = 'не прошло';
-UPDATE edge SET cond_property = 'Outcome' WHERE cond_property IN ('Исход', 'исход');`,
-
-		// 16. A project's hosting: which remote, which server, which kind.
-		// The token is not here: it lives in the system keychain, by server.
-		`
-ALTER TABLE project ADD COLUMN remote   TEXT NOT NULL DEFAULT '';
-ALTER TABLE project ADD COLUMN server   TEXT NOT NULL DEFAULT '';
-ALTER TABLE project ADD COLUMN provider TEXT NOT NULL DEFAULT '';`,
-
-		// 17. A conversation the card was started from, by the id its agent
-		// gave it. Empty for every card that began here.
-		`
-ALTER TABLE card ADD COLUMN session TEXT NOT NULL DEFAULT '';`,
+ALTER TABLE card ADD COLUMN typed INTEGER NOT NULL DEFAULT 0;`,
 	}
 }

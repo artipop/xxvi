@@ -209,6 +209,7 @@ export const msgEn: Dict = {
   "msg.update.nothingToSkip": "Nothing to skip: no update was found",
   "msg.update.restartFailed": "Could not restart",
   "msg.store.newerSchema": "The database was made by a newer version of the application (schema {applied}, known {known})",
+  "msg.store.olderSchema": "The database was made by too old a version of the application (schema {applied}): only a version that knows schema {baseline} can open it",
 
   // ---- sessions ----
   "msg.session.appClosed": "The application was closed while it was running",

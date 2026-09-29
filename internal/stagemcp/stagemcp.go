@@ -48,6 +48,10 @@ type Report struct {
 type Step struct {
 	CardTitle string
 	StageName string
+	// Brief is the route's part of the agent's instructions — the stage's
+	// prompt, the card's branch and values — kept out of the conversation,
+	// whose first message is the person's own.
+	Brief string
 	// Next names the stages a finished step leads to, so the agent can ask the
 	// person about the move in the words the board shows.
 	Next []string
@@ -276,6 +280,10 @@ func instructions(step Step) string {
 	b.WriteString("Leaving the terminal does not count as finishing the step. ")
 	b.WriteString(whenToFinish(step))
 	b.WriteString(lastCall)
+	if brief := strings.TrimSpace(step.Brief); brief != "" {
+		b.WriteString("\n\n")
+		b.WriteString(brief)
+	}
 	return b.String()
 }
 

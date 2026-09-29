@@ -20,7 +20,8 @@ type Dialect interface {
 	AutoIncrementPK() string
 	// Setup is what has to run on every fresh connection before anything else.
 	Setup() []string
-	// Migrations are the schema steps, in order. Index is the version.
+	// Migrations are the schema steps, in order: the baseline, standing for
+	// versions 1 to Baseline, then one step per version after it.
 	Migrations() []string
 }
 

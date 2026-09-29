@@ -492,7 +492,7 @@ func TestStartTaskGoesStraightToWork(t *testing.T) {
 		t.Fatalf("проект: %v", err)
 	}
 
-	view, err := api.StartTask("Починить форму входа\n\nПадает на пустом пароле.", proj.ID, "", "Claude", dev.ID)
+	view, err := api.StartTask("Починить форму входа\n\nПадает на пустом пароле.", "", proj.ID, "", "Claude", dev.ID)
 	if err != nil {
 		t.Fatalf("начать задачу: %v", err)
 	}
@@ -505,10 +505,10 @@ func TestStartTaskGoesStraightToWork(t *testing.T) {
 	}
 
 	// A refusal comes before anything exists.
-	if _, err := api.StartTask("Ещё одна", "нет-такого", "", "Claude", dev.ID); err == nil {
+	if _, err := api.StartTask("Ещё одна", "", "нет-такого", "", "Claude", dev.ID); err == nil {
 		t.Fatal("несуществующий проект — отказ")
 	}
-	if _, err := api.StartTask("   ", "", "", "Claude", dev.ID); err == nil {
+	if _, err := api.StartTask("   ", "", "", "", "Claude", dev.ID); err == nil {
 		t.Fatal("пустая задача — отказ")
 	}
 	if cards, _ := a.Store.CardsInState(model.StateInbox); len(cards) != 0 {
@@ -607,7 +607,7 @@ func TestWorkModeIsARepositoryQuestionAnsweredOnce(t *testing.T) {
 		t.Fatal("ветка уже есть — проект не меняется")
 	}
 
-	if _, err := api.StartTask("Ещё", plain.ID, model.WorkModeWorktree, "Claude", mustFlow(t, a, "Development").ID); err == nil {
+	if _, err := api.StartTask("Ещё", "", plain.ID, model.WorkModeWorktree, "Claude", mustFlow(t, a, "Development").ID); err == nil {
 		t.Fatal("задача с деревом в папке без git — отказ до создания")
 	}
 }

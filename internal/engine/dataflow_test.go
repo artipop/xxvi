@@ -40,9 +40,13 @@ func propOf(t *testing.T, f fixture, cardID, name string) string {
 }
 
 // The contract in both directions: what the stage owes is asked for in its
-// brief, and what it answered lands on the card before the fork reads it.
+// brief, and what it answered lands on the card before the fork reads it. In
+// the background, where the brief is the one message and the answer is the
+// agent's closing words; a terminal stage is asked through its tool (stagemcp).
 func TestStageOutputsReachTheCardBeforeTheFork(t *testing.T) {
-	f := setup(t, dataFlow())
+	flow := dataFlow()
+	flow.Stages[1].Work = model.WorkSession
+	f := setup(t, flow)
 	card := f.card(t, "Проверить форму")
 
 	if err := f.engine.TakeIntoWork(card.ID, f.flow.ID); err != nil {
@@ -177,7 +181,7 @@ func TestReadsFallBackToWhatTheRouteWrote(t *testing.T) {
 	f.runner.finish(card.ID, model.TriggerSuccess, "готово")
 	f.runner.finish(card.ID, model.TriggerSuccess, "Вердикт: fail\nПревью: https://preview.example/1")
 
-	brief := f.runner.lastJob(t).Prompt
+	brief := f.runner.lastJob(t).Brief
 	if !strings.Contains(brief, "From the card:") || !strings.Contains(brief, "https://preview.example/1") {
 		t.Fatalf("стадия без своих входов получает то, что записали до неё:\n%s", brief)
 	}

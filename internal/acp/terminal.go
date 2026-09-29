@@ -147,6 +147,7 @@ func (m *Manager) runTerminal(s *session) {
 	token := tools.Grant(stagemcp.Step{
 		CardTitle: s.card.Title,
 		StageName: s.stage.Name,
+		Brief:     s.brief,
 		Next:      nextStages(s.flow, s.stage.ID),
 		Writes:    s.stage.Writes,
 		Report: func(r stagemcp.Report) error {

@@ -78,12 +78,12 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     setBusy(true);
     const from = fromSession() ? session() : undefined;
     // A card needs a title, and a task begun without a word gets one that
-    // says so rather than one that pretends to describe it.
-    const typed = text().trim() || t("compose.untitled");
+    // says so rather than one that pretends to describe it. Only the title:
+    // the agent is handed what was typed, and here that is nothing.
     const view = await guard(() =>
       from
         ? API.ContinueSession(from.id, from.title ?? "", "", projectID(), "", agentName(), flowID())
-        : API.StartTask(typed, projectID(), mode(), agentName(), flowID()));
+        : API.StartTask(text(), t("compose.untitled"), projectID(), mode(), agentName(), flowID()));
     setBusy(false);
     if (!view) return;
     try {

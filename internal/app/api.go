@@ -658,18 +658,21 @@ func (s *API) AddCard(sourceName, title, body string) (model.Card, error) {
 // stray card in the inbox for somebody to find later.
 //
 // The first line is the title, as it is in a commit: what fits in a list. The
-// whole text is the body, because that is what the agent is handed.
-func (s *API) StartTask(text, projectID, workMode, agent, flowID string) (CardView, error) {
+// whole text is the body, because that is what the agent is handed — and an
+// empty one is a task begun without a word, which the agent is handed as
+// nothing. Its title is then untitled, worded by the screen that knows the
+// person's language.
+func (s *API) StartTask(text, untitled, projectID, workMode, agent, flowID string) (CardView, error) {
 	text = strings.TrimSpace(text)
+	title := taskTitle(text)
 	if text == "" {
+		title = strings.TrimSpace(untitled)
+	}
+	if title == "" {
 		return CardView{}, msg.Err("task.empty")
 	}
-	title, body := taskTitle(text), ""
-	if title != text {
-		body = text
-	}
 	return s.startCard(model.Card{
-		Title: title, Body: body,
+		Title: title, Body: text, Typed: true,
 		Assignee: strings.TrimSpace(agent), Project: projectID, WorkMode: workMode,
 	}, flowID)
 }
@@ -688,17 +691,15 @@ func (s *API) ContinueSession(sessionID, sessionTitle, text, projectID, workMode
 		return CardView{}, err
 	}
 	text = strings.TrimSpace(text)
-	title, body := taskTitle(text), ""
+	title := taskTitle(text)
 	switch {
 	case text == "" && strings.TrimSpace(sessionTitle) != "":
 		title = taskTitle(sessionTitle)
 	case text == "":
 		title = sessionID
-	case title != text:
-		body = text
 	}
 	return s.startCard(model.Card{
-		Title: title, Body: body, Session: sessionID,
+		Title: title, Body: text, Typed: true, Session: sessionID,
 		Assignee: agent, Project: projectID, WorkMode: workMode,
 	}, flowID)
 }

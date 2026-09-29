@@ -385,7 +385,7 @@ func TestPromptTellsTheAgentWhichWordsRouteTheCard(t *testing.T) {
 	card := f.card(t, "Т")
 	f.engine.TakeIntoWork(card.ID, f.flow.ID)
 
-	prompt := f.runner.lastJob(t).Prompt
+	prompt := f.runner.lastJob(t).Brief
 	if !strings.Contains(prompt, "ГОТОВО К ДЕПЛОЮ") {
 		t.Fatalf("в промпте нет слов, по которым едет маршрут:\n%s", prompt)
 	}
@@ -402,14 +402,37 @@ func TestPromptCarriesAgentStageAndCard(t *testing.T) {
 	})
 	f.engine.TakeIntoWork(card.ID, f.flow.ID)
 
-	prompt := f.runner.lastJob(t).Prompt
-	for _, want := range []string{"Ты инженер.", "Работай аккуратно.", "Починить кран", "Капает на кухне", "https://example.org/1", "Приоритет: срочно"} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("в промпте нет %q:\n%s", want, prompt)
+	// In a terminal the conversation opens with the card as it was written;
+	// the prompts and the values are the route's, and go to the instructions.
+	job := f.runner.lastJob(t)
+	for _, want := range []string{"Починить кран", "Капает на кухне", "https://example.org/1"} {
+		if !strings.Contains(job.Prompt, want) {
+			t.Fatalf("в первом сообщении нет %q:\n%s", want, job.Prompt)
 		}
 	}
-	if strings.Index(prompt, "Ты инженер.") > strings.Index(prompt, "Работай аккуратно.") {
+	for _, want := range []string{"Ты инженер.", "Работай аккуратно.", "Приоритет: срочно"} {
+		if !strings.Contains(job.Brief, want) || strings.Contains(job.Prompt, want) {
+			t.Fatalf("%q должно быть в инструкциях, а не в разговоре:\nпервое сообщение: %s\nинструкции: %s", want, job.Prompt, job.Brief)
+		}
+	}
+	if strings.Index(job.Brief, "Ты инженер.") > strings.Index(job.Brief, "Работай аккуратно.") {
 		t.Fatal("промпт агента идёт перед промптом стадии")
+	}
+}
+
+// A task typed into the ribbon is sent as typed, and one typed without a word
+// opens the CLI with nothing said — not its title, which only names it in lists.
+func TestTypedTaskOpensWithTheWordsTyped(t *testing.T) {
+	for _, tc := range []struct{ title, body, want string }{
+		{"Починить кран", "Починить кран\n\nКапает на кухне", "Починить кран\n\nКапает на кухне"},
+		{"Задача без описания", "", ""},
+	} {
+		f := setup(t, devFlow())
+		card, _ := f.store.CreateCard(model.Card{Title: tc.title, Body: tc.body, Typed: true})
+		f.engine.TakeIntoWork(card.ID, f.flow.ID)
+		if got := f.runner.lastJob(t).Prompt; got != tc.want {
+			t.Fatalf("первое сообщение: %q, ожидалось %q", got, tc.want)
+		}
 	}
 }
 

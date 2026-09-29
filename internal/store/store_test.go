@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -54,6 +55,68 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	empty, err := s.IsEmpty()
 	if err != nil || !empty {
 		t.Fatalf("свежая база должна быть пустой (empty=%v, err=%v)", empty, err)
+	}
+}
+
+// A new database is brought through the baseline and every step after it, and
+// says so: the next start must not take it for one stopped halfway.
+func TestNewDatabaseStandsAtTheLastVersion(t *testing.T) {
+	s := open(t)
+	var version int
+	if err := s.db.Get(&version, `SELECT MAX(version) FROM schema_migration`); err != nil {
+		t.Fatalf("версия схемы: %v", err)
+	}
+	if want := Baseline + len(s.d.Migrations()) - 1; version != want {
+		t.Fatalf("новая база должна стоять на %d, стоит на %d", want, version)
+	}
+}
+
+// A database at the baseline — every installed one when the steps were
+// squashed — takes only the steps after it.
+func TestDatabaseAtTheBaselineTakesTheStepsAfterIt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "at-baseline.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("открыть: %v", err)
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE card DROP COLUMN typed`,
+		`DELETE FROM schema_migration WHERE version > ` + strconv.Itoa(Baseline),
+	} {
+		if _, err := s.db.Exec(stmt); err != nil {
+			t.Fatalf("вернуть базу на %d (%s): %v", Baseline, stmt, err)
+		}
+	}
+	s.Close()
+	back, err := Open(path)
+	if err != nil {
+		t.Fatalf("открыть базу на %d: %v", Baseline, err)
+	}
+	defer back.Close()
+	if _, err := back.CreateCard(model.Card{Title: "т", Typed: true}); err != nil {
+		t.Fatalf("карточка после шагов за базой: %v", err)
+	}
+}
+
+// A database stopped partway through the steps the baseline replaced cannot be
+// finished: those steps are gone. Refused by name rather than half-migrated.
+func TestDatabaseOlderThanTheBaselineIsRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("открыть: %v", err)
+	}
+	for _, stmt := range []string{
+		`DELETE FROM schema_migration`,
+		`INSERT INTO schema_migration (version, applied_at) VALUES (` + strconv.Itoa(Baseline-1) + `, 0)`,
+	} {
+		if _, err := s.db.Exec(stmt); err != nil {
+			t.Fatalf("состарить базу (%s): %v", stmt, err)
+		}
+	}
+	s.Close()
+	if _, err := Open(path); err == nil || !strings.Contains(err.Error(), "store.olderSchema") {
+		t.Fatalf("старая база должна быть отвергнута как старая, получено %v", err)
 	}
 }
 
@@ -560,101 +623,6 @@ func TestStageDeclarationsSurviveARoundTrip(t *testing.T) {
 	}
 }
 
-// The upgrade path, on a database that already has flows in it. A column is
-// added to a populated table, and every step of the list has to survive that —
-// which is not the same thing as a fresh database running the whole list.
-//
-// The "old" database is made by undoing the step rather than by keeping a copy
-// of the previous schema: a copy is a second description of the same thing, and
-// it is the one that goes stale.
-func TestStageColumnsAreAddedToADatabaseThatAlreadyHasFlows(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "xxvi.db")
-
-	s, err := Open(path)
-	if err != nil {
-		t.Fatalf("открыть базу: %v", err)
-	}
-	claude(t, s)
-	saved, err := s.SaveFlow(model.Flow{
-		Name: "С проверкой", EntryStage: "qa",
-		Stages: []model.Stage{{
-			ID: "qa", Name: "Проверка", Action: model.ActionAgent, Crew: []string{"Claude"},
-			Writes:  []model.PropertyWrite{{Property: "Вердикт", Required: true}},
-			Screens: []model.Screen{{Kind: model.ScreenBrowser, Ref: "{Превью}"}},
-		}},
-	})
-	if err != nil {
-		t.Fatalf("сохранить флоу: %v", err)
-	}
-
-	// Back to the schema as it was before the stage learned to declare anything.
-	// The version rows go too, and all of them: the runner takes the highest
-	// applied version, so leaving a later one behind would hide the step being
-	// tested. Which means every step from the sixth on has to be undone here —
-	// this list grows with them, and that is the price of building the old
-	// database by undoing rather than by keeping a copy that goes stale.
-	for _, stmt := range []string{
-		`ALTER TABLE stage DROP COLUMN writes_json`,
-		`ALTER TABLE stage DROP COLUMN reads_json`,
-		`ALTER TABLE stage DROP COLUMN screens_json`,
-		`ALTER TABLE card DROP COLUMN project`,
-		`ALTER TABLE project DROP COLUMN remote`,
-		`ALTER TABLE project DROP COLUMN server`,
-		`ALTER TABLE project DROP COLUMN provider`,
-		`ALTER TABLE card DROP COLUMN session`,
-		`DROP TABLE project`,
-		`ALTER TABLE stage DROP COLUMN work`,
-		`ALTER TABLE agent_session DROP COLUMN work`,
-		`ALTER TABLE card_comment DROP COLUMN kind`,
-		`ALTER TABLE card_comment DROP COLUMN session_id`,
-		`ALTER TABLE card_comment DROP COLUMN event_id`,
-		`ALTER TABLE card DROP COLUMN work_mode`,
-		`ALTER TABLE card DROP COLUMN branch`,
-		`ALTER TABLE card DROP COLUMN base_ref`,
-		`ALTER TABLE card DROP COLUMN worktree`,
-		`ALTER TABLE card DROP COLUMN keep_worktree`,
-		`ALTER TABLE card_comment DROP COLUMN msg`,
-		`DELETE FROM schema_migration WHERE version >= 6`,
-	} {
-		if _, err := s.db.Exec(stmt); err != nil {
-			t.Fatalf("вернуть старую схему (%s): %v", stmt, err)
-		}
-	}
-	s.Close()
-
-	back, err := Open(path)
-	if err != nil {
-		t.Fatalf("открыть старую базу заново: %v", err)
-	}
-	defer back.Close()
-
-	flow, err := back.Flow(saved.ID)
-	if err != nil {
-		t.Fatalf("прочитать флоу после обновления: %v", err)
-	}
-	// The declaration itself is gone with the column — that is what dropping it
-	// means. What has to be true is that the flow is still readable and the
-	// stage can declare again.
-	if len(flow.Stages) != 1 || flow.Stages[0].Name != "Проверка" {
-		t.Fatalf("флоу должен читаться после обновления схемы: %+v", flow.Stages)
-	}
-	flow.Stages[0].Writes = []model.PropertyWrite{{Property: "Вердикт", Required: true}}
-	flow.Stages[0].Screens = []model.Screen{{Kind: model.ScreenBrowser, Ref: "{Превью}"}}
-	if _, err := back.SaveFlow(flow); err != nil {
-		t.Fatalf("сохранить выходы стадии после обновления: %v", err)
-	}
-	again, err := back.Flow(saved.ID)
-	if err != nil {
-		t.Fatalf("прочитать флоу: %v", err)
-	}
-	if len(again.Stages[0].Writes) != 1 || !again.Stages[0].Writes[0].Required {
-		t.Fatalf("выходы стадии не пережили обновление схемы: %+v", again.Stages[0].Writes)
-	}
-	if len(again.Stages[0].Screens) != 1 || again.Stages[0].Screens[0].Ref != "{Превью}" {
-		t.Fatalf("экраны стадии не пережили обновление схемы: %+v", again.Stages[0].Screens)
-	}
-}
-
 // A stage's screens are stored with it and come back as declared — including
 // the one that has no reference at all, because a terminal without a command is
 // a shell in the card's folder rather than an unfinished screen.
@@ -690,148 +658,5 @@ func TestStageScreensSurviveSaving(t *testing.T) {
 	}
 	if screens[1].Kind != model.ScreenTerminal || screens[1].Ref != "" {
 		t.Fatalf("терминал без команды должен пережить сохранение: %+v", screens[1])
-	}
-}
-
-// A source saved while «comment» was still a mode and a rule action has to come
-// out the other side as something that validates, or it can never be saved
-// again.
-func TestCommentModeIsMigratedAway(t *testing.T) {
-	s := open(t)
-	if _, err := s.SaveSource(model.Source{
-		Name: "Почта", Enabled: true,
-		Rules: []model.Rule{{Name: "шум", Then: model.ActionCard}},
-	}); err != nil {
-		t.Fatalf("сохранить источник: %v", err)
-	}
-	for _, stmt := range []string{
-		`UPDATE source SET update_mode = 'comment'`,
-		`UPDATE source_rule SET then_action = 'comment'`,
-		`ALTER TABLE card DROP COLUMN work_mode`,
-		`ALTER TABLE card DROP COLUMN branch`,
-		`ALTER TABLE card DROP COLUMN base_ref`,
-		`ALTER TABLE card DROP COLUMN worktree`,
-		`ALTER TABLE card DROP COLUMN keep_worktree`,
-		`ALTER TABLE card_comment DROP COLUMN msg`,
-		`ALTER TABLE project DROP COLUMN remote`,
-		`ALTER TABLE project DROP COLUMN server`,
-		`ALTER TABLE project DROP COLUMN provider`,
-		`ALTER TABLE card DROP COLUMN session`,
-		`DELETE FROM schema_migration WHERE version >= 11`,
-	} {
-		if _, err := s.db.Exec(stmt); err != nil {
-			t.Fatalf("вернуть старое (%s): %v", stmt, err)
-		}
-	}
-	if err := s.migrate(); err != nil {
-		t.Fatalf("миграция: %v", err)
-	}
-	src, err := s.Source("Почта")
-	if err != nil {
-		t.Fatalf("прочитать источник: %v", err)
-	}
-	if src.Update != model.UpdateInPlace || src.Rules[0].Then != model.ActionDrop {
-		t.Fatalf("режим — обновить на месте, правило — отбросить: %+v", src)
-	}
-	if _, err := s.SaveSource(src); err != nil {
-		t.Fatalf("источник после миграции сохраняется: %v", err)
-	}
-}
-
-// The demo sources go with what they filed, except for a card that has been on
-// a flow: that is somebody's work, whoever brought it.
-func TestDemoSourcesAreMigratedAway(t *testing.T) {
-	s := open(t)
-	claude(t, s)
-	flow, _ := s.SaveFlow(devFlow())
-	for _, src := range []model.Source{
-		{Name: "Задачи", Plugin: "demo", Enabled: true},
-		{Name: "Телефон", Plugin: "demo", Enabled: true},
-		{Name: "Почта", Plugin: "demo", Enabled: true},
-	} {
-		if _, err := s.SaveSource(src); err != nil {
-			t.Fatalf("источник: %v", err)
-		}
-	}
-	idle, _ := s.CreateCard(model.Card{Source: "Задачи", ExternalID: "seed-1", Title: "Лежит"})
-	s.SeenItem("Задачи", "seed-1", "1", idle.ID)
-	worked, _ := s.CreateCard(model.Card{Source: "Задачи", ExternalID: "seed-2", Title: "Ездила"})
-	s.EnterStage(worked.ID, flow.ID, "work")
-	s.AppendFlowEvent(model.FlowEvent{CardID: worked.ID, FlowID: flow.ID, ToStage: "work"})
-	s.LeaveFlow(worked.ID, model.StateInbox)
-	mine, _ := s.CreateCard(model.Card{Source: "Почта", ExternalID: "1", Title: "Своё"})
-
-	for _, stmt := range []string{
-		`ALTER TABLE card DROP COLUMN work_mode`,
-		`ALTER TABLE card DROP COLUMN branch`,
-		`ALTER TABLE card DROP COLUMN base_ref`,
-		`ALTER TABLE card DROP COLUMN worktree`,
-		`ALTER TABLE card DROP COLUMN keep_worktree`,
-		`ALTER TABLE card_comment DROP COLUMN msg`,
-		`ALTER TABLE project DROP COLUMN remote`,
-		`ALTER TABLE project DROP COLUMN server`,
-		`ALTER TABLE project DROP COLUMN provider`,
-		`ALTER TABLE card DROP COLUMN session`,
-		`DELETE FROM schema_migration WHERE version >= 12`,
-	} {
-		if _, err := s.db.Exec(stmt); err != nil {
-			t.Fatalf("откатить версию (%s): %v", stmt, err)
-		}
-	}
-	if err := s.migrate(); err != nil {
-		t.Fatalf("миграция: %v", err)
-	}
-
-	sources, _ := s.Sources()
-	if len(sources) != 1 || sources[0].Name != "Почта" {
-		t.Fatalf("остаётся только не демонстрационный источник: %+v", sources)
-	}
-	if _, err := s.Card(idle.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("карточка демо-источника, никуда не ездившая, удалена: %v", err)
-	}
-	for _, id := range []string{worked.ID, mine.ID} {
-		if _, err := s.Card(id); err != nil {
-			t.Fatalf("карточка %s остаётся: %v", id, err)
-		}
-	}
-}
-
-// The outcome field and the suggested flow were Russian words before they were
-// identifiers. A card and a condition that named them by the old words have to
-// keep meaning the same thing, or a flow built before the rename would wait for
-// a value nothing writes any more.
-func TestOutcomeWordsAreMigratedToIdentifiers(t *testing.T) {
-	s := open(t)
-	claude(t, s)
-	flow, _ := s.SaveFlow(devFlow())
-	card, _ := s.CreateCard(model.Card{Title: "Old card"})
-	for _, stmt := range []string{
-		`INSERT INTO card_prop (card_id, name, value) VALUES ('` + card.ID + `', 'Исход', 'не прошло')`,
-		`INSERT INTO card_prop (card_id, name, value) VALUES ('` + card.ID + `', 'Флоу', '` + flow.Name + `')`,
-		`UPDATE edge SET cond_property = 'Исход', cond_value = 'прошло' WHERE flow_id = '` + flow.ID + `'`,
-		`ALTER TABLE card_comment DROP COLUMN msg`,
-		`ALTER TABLE project DROP COLUMN remote`,
-		`ALTER TABLE project DROP COLUMN server`,
-		`ALTER TABLE project DROP COLUMN provider`,
-		`ALTER TABLE card DROP COLUMN session`,
-		`DELETE FROM schema_migration WHERE version >= 15`,
-	} {
-		if _, err := s.db.Exec(stmt); err != nil {
-			t.Fatalf("roll back (%s): %v", stmt, err)
-		}
-	}
-	if err := s.migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-
-	got, _ := s.Card(card.ID)
-	if got.Props[model.OutcomeProperty] != model.OutcomeFailed || got.Props["Flow"] != flow.Name || len(got.Props) != 2 {
-		t.Fatalf("the card's fields are renamed with their values: %+v", got.Props)
-	}
-	migrated, _ := s.Flow(flow.ID)
-	for _, e := range migrated.Edges {
-		if e.If != nil && (e.If.Property != model.OutcomeProperty || e.If.Value != model.OutcomePassed) {
-			t.Fatalf("the conditions are renamed too: %+v", e.If)
-		}
 	}
 }

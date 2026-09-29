@@ -168,7 +168,7 @@ func (m *Manager) Start(job engine.Job) error {
 
 	s := &session{
 		id: uuid.NewString(), card: job.Card, flow: job.Flow, stage: job.Stage,
-		agent: job.Agent, prompt: job.Prompt, cwd: cwd, launch: launch,
+		agent: job.Agent, prompt: job.Prompt, brief: job.Brief, cwd: cwd, launch: launch,
 		policy: policyFor(job.Agent, m.opts.Policy), status: store.StatusQueued,
 		work: workOf(job.Stage),
 	}
@@ -638,6 +638,7 @@ type session struct {
 	stage  model.Stage
 	agent  model.Agent
 	prompt string
+	brief  string
 	cwd    string
 	launch launch
 	policy ToolPolicy
