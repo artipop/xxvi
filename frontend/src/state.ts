@@ -265,7 +265,11 @@ export async function loadRibbons() {
     const looking = tab() === "ribbon";
     const watching = openRibbon();
     if (looking && watching && !next.some((r) => r.id === watching) && ribbons.some((r) => r.id === watching)) {
-      setClosedRibbon(watching);
+      // Only a card that finished is kept to look at. One that was dropped —
+      // by hand, or by its agent's terminal closing without a report — is
+      // gone, and keeping it showed a dead terminal on an empty stack.
+      const gone = await API.Card(watching).then((v) => v.card.state !== "done", () => true);
+      setClosedRibbon(gone ? "" : watching);
     }
     // Visited, not kept: once the person has gone elsewhere, the stack is the
     // work in progress again.
