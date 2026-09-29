@@ -15,6 +15,7 @@ import { JournalOf } from "./journal";
 import { Compose } from "./compose";
 import { entryText, label, propName, questionText, say, t } from "../i18n";
 import { MarkButtons, RemarksForm, sendMark } from "./marks";
+import { Icon } from "../icons";
 import type { Msg } from "../../bindings/github.com/artipop/xxvi/internal/msg/models";
 import type { Mark } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 
@@ -569,7 +570,7 @@ function Workspaces(): JSX.Element {
   ];
   return (
     <Show when={projects().length > 0}>
-      <Folded class="workspaces" label={<>{name(workspace())} ▾</>} title={t("ribbon.workspace")}>
+      <Folded class="workspaces" label={<>{name(workspace())}<Icon name="chevron" /></>} title={t("ribbon.workspace")}>
         {(close) => (
           <For each={ids()}>
             {(id) => (
