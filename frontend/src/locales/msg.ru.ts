@@ -69,7 +69,7 @@ export const msgRu: Dict = {
   "msg.card.noTitle": "У карточки нет заголовка",
   "msg.card.notFound": "Карточка «{card}» не найдена",
   "msg.card.alreadyInWork": "Карточка «{card}» уже в работе",
-  "msg.card.doneCannotDrop": "Карточка «{card}» уже сделана — отбросить её нельзя",
+  "msg.card.doneCannotDrop": "Карточка «{card}» уже сделана — удалить её нельзя",
   "msg.card.projectLocked": "Работа по карточке уже идёт в ветке `{branch}` — проект у неё не меняется",
   "msg.card.workModeLocked": "Работа по карточке уже идёт в ветке `{branch}` — способ работы с папкой у неё не меняется",
   "msg.prop.noName": "У свойства нет названия",
@@ -162,7 +162,7 @@ export const msgRu: Dict = {
   "msg.workMode.notRepo": (a) =>
     `Папка проекта «${a.project}» — не git-репозиторий: «${mode(a)}» для неё невозможно, выберите «${label("workMode", "")}»`,
   "msg.branch.folderTaken":
-    "Папка «{project}» занята карточкой «{card}» (ветка `{branch}`) — освободится, когда та будет готова или отброшена; или выберите для этой карточки отдельное рабочее дерево",
+    "Папка «{project}» занята карточкой «{card}» (ветка `{branch}`) — освободится, когда та будет готова или удалена; или выберите для этой карточки отдельное рабочее дерево",
   "msg.branch.folderDirty":
     "В папке «{project}» есть незакоммиченные изменения — переключить её на ветку карточки нельзя, не рискуя ими; закоммитьте или спрячьте их (git stash), или выберите отдельное рабочее дерево",
   "msg.branch.switchFailed": "Не удалось переключиться на ветку карточки",
@@ -232,7 +232,7 @@ export const msgRu: Dict = {
   "msg.cancel.byHand": "остановлено вручную",
   "msg.cancel.movedByHand": "карточка переведена на другую стадию вручную",
   "msg.cancel.leftFlow": "карточка снята с флоу",
-  "msg.cancel.dropped": "карточка отброшена",
+  "msg.cancel.dropped": "карточка удалена",
   "msg.cancel.cardChanged": "на карточке выбрано значение, по которому стадия переходит дальше",
   "msg.move.mrMerged": "MR {mr} влит",
   "msg.move.mrClosed": "MR {mr} закрыт без вливания",
@@ -241,7 +241,7 @@ export const msgRu: Dict = {
 
   // ---- the journal ----
   "msg.journal.leftFlow": "Карточка снята с флоу и вернулась во входящие.",
-  "msg.journal.dropped": "Карточка отброшена.",
+  "msg.journal.dropped": "Карточка удалена.",
   "msg.journal.stageGone": "Флоу «{flow}»: стадия исчезла из маршрута — карточка осталась на месте.",
   "msg.journal.noEdge": (a) => `Флоу «${a.flow}»: у стадии «${a.stage}» нет перехода по событию «${on(a)}» — карточка осталась на месте.`,
   "msg.journal.noCondition": (a) =>
@@ -265,7 +265,7 @@ export const msgRu: Dict = {
   "msg.journal.terminalNotOpened": "Терминал агента не открылся: {cause}",
   "msg.journal.terminalCancelled": "Терминал агента закрыт: шаг отменён.",
   "msg.journal.terminalClosedByPerson":
-    "Терминал агента закрыли, а шаг так и не отчитался. Карточка стоит на стадии — куда ей дальше, решает человек.",
+    "Терминал агента закрыли, а шаг так и не отчитался. Удаляю карточку. Захотите продолжить — заведите задачу «Из сессии».",
   "msg.journal.terminalFailed": "Шаг в терминале не закончился: {cause}",
   "msg.journal.terminalPaused": "Шаг приостановлен: приложение закрылось. Разговор агента сохранён — продолжить можно с экрана стадии.",
   "msg.journal.continued": "Шаг продолжен.",

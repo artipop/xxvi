@@ -70,6 +70,9 @@ func (o Options) withDefaults() Options {
 // records the calls.
 type Reporter interface {
 	Finished(cardID, outcome string, detail msg.Msg, agentText string)
+	// Abandoned is a step a person walked out of: the terminal was closed
+	// before it reported. Nothing on the stage can pick it up again.
+	Abandoned(cardID string)
 }
 
 // Emitter pushes events to the UI.
@@ -289,6 +292,10 @@ func (m *Manager) release(s *session) {
 	m.emitSession(s)
 
 	if m.to == nil {
+		return
+	}
+	if s.wasAbandoned() {
+		m.to.Abandoned(s.card.ID)
 		return
 	}
 	outcome, detail := s.outcome()
@@ -645,6 +652,7 @@ type session struct {
 	// cancelPending records a cancel that arrived before a turn existed.
 	cancelPending bool
 	cancelled     bool
+	abandoned     bool
 	allowTools    map[string]bool
 	final         strings.Builder
 	// conversation is the vendor's id of the conversation a terminal run is
@@ -706,6 +714,20 @@ func (s *session) markCancelSent() bool {
 	already := s.cancelSent
 	s.cancelSent = true
 	return !already
+}
+
+// markAbandoned is a cancel nobody will follow up on: see Reporter.Abandoned.
+func (s *session) markAbandoned() {
+	s.mu.Lock()
+	s.cancelled = true
+	s.abandoned = true
+	s.mu.Unlock()
+}
+
+func (s *session) wasAbandoned() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.abandoned
 }
 
 func (s *session) wasCancelled() bool {
