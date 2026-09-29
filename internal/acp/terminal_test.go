@@ -436,7 +436,7 @@ func TestAConversationThatIsGoneFailsTheStepByName(t *testing.T) {
 func TestTheTrustQuestionIsSeenOnScreen(t *testing.T) {
 	for _, screen := range []string{
 		"  ❯ No, exit\n    Yes, I trust this folder\n  Enter to confirm", // claude
-		"  Folder access\n  Trust this folder? Codex can read, edit…",      // codex
+		"  Folder access\n  Trust this folder? Codex can read, edit…",    // codex
 	} {
 		if !trustAsked(screen) {
 			t.Errorf("вопрос о доверии не узнан: %q", screen)
