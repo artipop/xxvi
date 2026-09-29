@@ -10,7 +10,9 @@ import (
 
 // Protocol is bumped on incompatible wire changes. An application that meets a
 // holder speaking another one shuts it down and starts its own: the sessions
-// in it are lost, which beats two programs disagreeing about the bytes.
+// in it are lost, which beats two programs disagreeing about the bytes. That
+// is every shell a person had open, lost on an update — so the wire grows by
+// fields old readers ignore, and this number moves as rarely as it can.
 const Protocol = 2
 
 // Frame types. Control frames carry JSON, data frames raw bytes.
