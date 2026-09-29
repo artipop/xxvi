@@ -219,7 +219,13 @@ static bool ensureApp(void) {
   static char *argv[] = {"xxvi", NULL};
   if (ghostty_init(1, argv) != 0) return false;
   ghostty_config_t cfg = ghostty_config_new();
-  // The person's own Ghostty settings — font, theme — if they have any.
+  // The application's colours first, so a terminal without settings of its own
+  // looks like part of the window (styles.css --bg, --text) rather than a grey
+  // patch in it; then the person's own Ghostty settings, which win.
+  NSString *base = [NSTemporaryDirectory() stringByAppendingPathComponent:@"xxvi-ghostty.conf"];
+  [@"background = #111216\nforeground = #e6e8ee\nwindow-padding-x = 6\nwindow-padding-y = 4\n"
+      writeToFile:base atomically:YES encoding:NSUTF8StringEncoding error:nil];
+  ghostty_config_load_file(cfg, base.fileSystemRepresentation);
   ghostty_config_load_default_files(cfg);
   ghostty_config_finalize(cfg);
   ghostty_runtime_config_s rt = {0};
@@ -231,6 +237,21 @@ static bool ensureApp(void) {
   rt.close_surface_cb = closeSurface;
   app = ghostty_app_new(&rt, cfg);
   views = [NSMutableDictionary new];
+
+  // A key on its way to a focused terminal goes straight to it. AppKit first
+  // offers every key to every view in the window as a key equivalent, and the
+  // web view takes Esc there — a terminal never saw it, and Esc is how a CLI's
+  // turn is broken off. Keys with ⌘ still go the usual way: they are the
+  // menu's (copy, paste, quit).
+  [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown | NSEventMaskKeyUp
+                                        handler:^NSEvent *(NSEvent *e) {
+    NSResponder *r = e.window.firstResponder;
+    if (![r isKindOfClass:[NTView class]]) return e;
+    if (e.modifierFlags & NSEventModifierFlagCommand) return e;
+    NTView *v = (NTView *)r;
+    if (e.type == NSEventTypeKeyDown) [v keyDown:e]; else [v keyUp:e];
+    return nil;
+  }];
   return app != NULL;
 }
 
