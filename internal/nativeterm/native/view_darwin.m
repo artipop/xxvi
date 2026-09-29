@@ -30,6 +30,23 @@ static void toPage(NSWindow *win) {
   [win makeFirstResponder:pageIn(win.contentView)];
 }
 
+// The ribbon's keys from inside a terminal: ⇧⌘ with an arrow, Home, End, F,
+// N, J or Esc (frontend/src/views/ribbon.tsx). With ⌘ alone they are the
+// terminal's own, and Ghostty binds none of these to anything this host does:
+// its ⇧⌘↑ and ⇧⌘↓ repeat ⌘↑ and ⌘↓, and ⇧⌘F ends a search there is none of.
+static BOOL forRibbon(NSEvent *e) {
+  NSEventModifierFlags held = e.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagShift |
+                                                 NSEventModifierFlagOption | NSEventModifierFlagControl);
+  if (held != (NSEventModifierFlagCommand | NSEventModifierFlagShift)) return NO;
+  switch (e.keyCode) {
+    case 123: case 124: case 125: case 126: // arrows
+    case 115: case 119:                     // Home, End
+    case 3: case 45: case 38: case 53:      // F, N, J, Esc — by place, whatever the layout
+      return YES;
+  }
+  return NO;
+}
+
 // A key the menu has a command for.
 static BOOL inMenu(NSMenu *menu, NSEvent *e) {
   NSEventModifierFlags want = e.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagShift |
@@ -57,13 +74,34 @@ static ghostty_input_mods_e modsOf(NSEventModifierFlags f) {
   return (ghostty_input_mods_e)m;
 }
 
-@interface NTView : NSView
+@interface NTView : NSView <NSTextInputClient>
 @property ghostty_surface_t surface;
 @property(copy) NSString *ident;
 @end
 
+// A key's own text, as Ghostty wants it: a control character is said without
+// its control, which Ghostty encodes itself, and a function key has none.
+static NSString *textOf(NSEvent *e) {
+  NSString *chars = e.characters;
+  if (chars.length != 1) return chars;
+  unichar c = [chars characterAtIndex:0];
+  if (c < 0x20) return [e charactersByApplyingModifiers:e.modifierFlags & ~NSEventModifierFlagControl];
+  if (c >= 0xF700 && c <= 0xF8FF) return nil;
+  return chars;
+}
+
+static BOOL isControl(NSString *t) {
+  return t.length == 1 && [t characterAtIndex:0] < 0x20;
+}
+
 @implementation NTView {
   NSTrackingArea *tracking;
+  // Text an input method is composing — a dead key's accent, a word in
+  // Japanese — shown by Ghostty as preedit until it is committed.
+  NSMutableAttributedString *marked;
+  // What the input method committed during the keyDown under way; nil outside
+  // one.
+  NSMutableArray<NSString *> *committed;
 }
 
 - (BOOL)acceptsFirstResponder { return YES; }
@@ -80,26 +118,143 @@ static ghostty_input_mods_e modsOf(NSEventModifierFlags f) {
 }
 
 // ---- keys ----
+//
+// As Ghostty's own host does it (SurfaceView_AppKit.swift): the key goes
+// through the input method first, and what reaches the terminal is either the
+// text it committed or the key itself.
 
-- (void)key:(NSEvent *)e action:(ghostty_input_action_e)a {
+- (void)send:(NSEvent *)e action:(ghostty_input_action_e)a text:(NSString *)text composing:(BOOL)composing {
   if (!self.surface) return;
   ghostty_input_key_s k = {0};
   k.action = a;
-  k.mods = modsOf(e.modifierFlags);
   k.keycode = e.keyCode;
-  NSString *chars = e.characters;
-  if (a != GHOSTTY_ACTION_RELEASE && chars.length > 0) {
-    unichar c = [chars characterAtIndex:0];
-    // Control characters and function keys are the key's to say, not text's.
-    if (c >= 0x20 && !(c >= 0xF700 && c <= 0xF8FF)) k.text = chars.UTF8String;
-  }
-  NSString *un = e.charactersIgnoringModifiers;
+  k.mods = modsOf(e.modifierFlags);
+  // Control and ⌘ never make text; whatever else is held is taken to have.
+  k.consumed_mods = modsOf(e.modifierFlags & ~(NSEventModifierFlagControl | NSEventModifierFlagCommand));
+  NSString *un = [e charactersByApplyingModifiers:0];
   if (un.length > 0) k.unshifted_codepoint = [un characterAtIndex:0];
+  k.composing = composing;
+  if (text.length > 0) k.text = text.UTF8String;
   ghostty_surface_key(self.surface, k);
 }
 
-- (void)keyDown:(NSEvent *)e { [self key:e action:e.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS]; }
-- (void)keyUp:(NSEvent *)e { [self key:e action:GHOSTTY_ACTION_RELEASE]; }
+// Text the input method committed, which is no key's.
+- (void)commit:(NSString *)text action:(ghostty_input_action_e)a {
+  if (!self.surface || text.length == 0) return;
+  ghostty_input_key_s k = {0};
+  k.action = a;
+  k.text = text.UTF8String;
+  ghostty_surface_key(self.surface, k);
+}
+
+- (void)keyDown:(NSEvent *)e {
+  if (!self.surface) return;
+  ghostty_input_action_e a = e.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS;
+  BOOL markedBefore = marked.length > 0;
+  committed = [NSMutableArray array];
+  [self interpretKeyEvents:@[ e ]];
+  NSArray<NSString *> *texts = committed;
+  committed = nil;
+  [self syncPreedit];
+  // A key that ended a composition is the composition's, not the terminal's:
+  // backspace in Japanese input cancels it rather than deleting what came before.
+  BOOL composing = marked.length > 0 || markedBefore;
+  if (texts.count > 0) {
+    for (NSString *t in texts) {
+      if (composing && isControl(t)) continue;
+      if (markedBefore) [self commit:t action:a];
+      else [self send:e action:a text:t composing:NO];
+    }
+    return;
+  }
+  if (composing && isControl(e.characters)) return;
+  [self send:e action:a text:textOf(e) composing:composing];
+}
+
+- (void)keyUp:(NSEvent *)e { [self send:e action:GHOSTTY_ACTION_RELEASE text:nil composing:NO]; }
+
+// A modifier on its own: Ghostty shows links under the pointer while ⌘ is held,
+// and a program may ask for modifier presses.
+- (void)flagsChanged:(NSEvent *)e {
+  if (!self.surface || marked.length > 0) return;
+  int mod;
+  switch (e.keyCode) {
+    case 0x39: mod = GHOSTTY_MODS_CAPS; break;
+    case 0x38: case 0x3C: mod = GHOSTTY_MODS_SHIFT; break;
+    case 0x3B: case 0x3E: mod = GHOSTTY_MODS_CTRL; break;
+    case 0x3A: case 0x3D: mod = GHOSTTY_MODS_ALT; break;
+    case 0x37: case 0x36: mod = GHOSTTY_MODS_SUPER; break;
+    default: return;
+  }
+  ghostty_input_action_e a = GHOSTTY_ACTION_RELEASE;
+  if (modsOf(e.modifierFlags) & mod) {
+    // Held, but by this key or by its twin on the other side?
+    NSUInteger side;
+    switch (e.keyCode) {
+      case 0x3C: side = NX_DEVICERSHIFTKEYMASK; break;
+      case 0x3E: side = NX_DEVICERCTLKEYMASK; break;
+      case 0x3D: side = NX_DEVICERALTKEYMASK; break;
+      case 0x36: side = NX_DEVICERCMDKEYMASK; break;
+      default: side = 0;
+    }
+    if (!side || (e.modifierFlags & side)) a = GHOSTTY_ACTION_PRESS;
+  }
+  [self send:e action:a text:nil composing:NO];
+}
+
+- (void)syncPreedit {
+  if (!self.surface) return;
+  if (marked.length > 0) {
+    const char *s = marked.string.UTF8String;
+    ghostty_surface_preedit(self.surface, s, strlen(s));
+  } else {
+    ghostty_surface_preedit(self.surface, NULL, 0);
+  }
+}
+
+// ---- NSTextInputClient ----
+
+- (void)insertText:(id)string replacementRange:(NSRange)range {
+  NSString *text = [string isKindOfClass:[NSAttributedString class]] ? [string string] : string;
+  [self unmarkText];
+  if (committed) [committed addObject:text];
+  // Outside a key: the input method's own window, dictation.
+  else [self commit:text action:GHOSTTY_ACTION_PRESS];
+}
+
+- (void)setMarkedText:(id)string selectedRange:(NSRange)sel replacementRange:(NSRange)range {
+  marked = [string isKindOfClass:[NSAttributedString class]]
+      ? [[NSMutableAttributedString alloc] initWithAttributedString:string]
+      : [[NSMutableAttributedString alloc] initWithString:string];
+  // Changed from outside a key — the layout switched mid-composition.
+  if (!committed) [self syncPreedit];
+}
+
+- (void)unmarkText {
+  if (marked.length == 0) return;
+  marked = nil;
+  if (!committed) [self syncPreedit];
+}
+
+// Keys the input method does not turn into text arrive here as editing
+// commands; the terminal gets them as keys from keyDown instead.
+- (void)doCommandBySelector:(SEL)selector {}
+
+- (BOOL)hasMarkedText { return marked.length > 0; }
+- (NSRange)markedRange { return marked.length > 0 ? NSMakeRange(0, marked.length) : NSMakeRange(NSNotFound, 0); }
+- (NSRange)selectedRange { return NSMakeRange(NSNotFound, 0); }
+- (NSArray<NSAttributedStringKey> *)validAttributesForMarkedText { return @[]; }
+- (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)r actualRange:(NSRangePointer)actual { return nil; }
+- (NSUInteger)characterIndexForPoint:(NSPoint)p { return 0; }
+
+// Where the input method's window goes: at the cursor.
+- (NSRect)firstRectForCharacterRange:(NSRange)r actualRange:(NSRangePointer)actual {
+  double x = 0, y = 0, w = 0, h = 0;
+  if (self.surface) ghostty_surface_ime_point(self.surface, &x, &y, &w, &h);
+  NSRect rect = NSMakeRect(x, self.frame.size.height - y, 0, h);
+  rect = [self convertRect:rect toView:nil];
+  return self.window ? [self.window convertRectToScreen:rect] : rect;
+}
 
 // The Edit menu's items reach the first responder by selector: with the
 // terminal focused they are the terminal's copy, paste and select all.
@@ -282,19 +437,27 @@ static bool ensureApp(void) {
   // A key on its way to a focused terminal goes straight to it. AppKit first
   // offers every key to every view in the window as a key equivalent, and the
   // web view takes Esc there — a terminal never saw it, and Esc is how a CLI's
-  // turn is broken off. Keys with ⌘ are the menu's (copy, paste, quit) or else
-  // the page's: ⌘ with an arrow moves along the ribbon, and the page gives the
-  // keyboard back to whichever terminal it lands on.
+  // turn is broken off. Of the keys with ⌘, the ribbon's go to the page, and
+  // the page gives the keyboard back to whichever terminal it lands on; the
+  // menu's (copy, paste, quit) go to the menu; the rest are the terminal's —
+  // ⌘← and ⌘→ to the ends of the line, ⌘⌫, ⌘K, and whatever the person bound.
   [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown | NSEventMaskKeyUp
                                         handler:^NSEvent *(NSEvent *e) {
     NSResponder *r = e.window.firstResponder;
     if (![r isKindOfClass:[NTView class]]) return e;
-    if (e.modifierFlags & NSEventModifierFlagCommand) {
-      if (e.type == NSEventTypeKeyDown && !inMenu(NSApp.mainMenu, e)) toPage(e.window);
-      return e;
-    }
     NTView *v = (NTView *)r;
-    if (e.type == NSEventTypeKeyDown) [v keyDown:e]; else [v keyUp:e];
+    if (e.type == NSEventTypeKeyUp) {
+      [v keyUp:e];
+      return nil;
+    }
+    if (e.modifierFlags & NSEventModifierFlagCommand) {
+      if (forRibbon(e)) {
+        toPage(e.window);
+        return e;
+      }
+      if (inMenu(NSApp.mainMenu, e)) return e;
+    }
+    [v keyDown:e];
     return nil;
   }];
   return app != NULL;
