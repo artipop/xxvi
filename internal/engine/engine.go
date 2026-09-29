@@ -148,6 +148,69 @@ func (e *Engine) TakeIntoWork(cardID, flowID string) error {
 	return nil
 }
 
+// continueWords is what a paused agent is told when the person continuing it
+// wrote nothing: the conversation it resumes says what it was doing.
+const continueWords = "Continue where you left off."
+
+// Continue picks up a stage the application closed on (store.StatusPaused),
+// in the conversation it stopped in. It is a person's move and only theirs: a
+// stage that went on by itself after a restart would spend tokens nobody saw
+// being spent.
+//
+// The agent is told what the person wrote, not its brief again — the
+// conversation it resumes holds the brief already, and a second copy reads as a
+// second task.
+func (e *Engine) Continue(cardID, text string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	st, ok, err := e.store.FlowState(cardID)
+	if err != nil {
+		return err
+	}
+	if !ok || !e.pausedOn(cardID, st.StageID) {
+		return msg.Err("stage.notPaused")
+	}
+	card, err := e.store.Card(cardID)
+	if err != nil {
+		return err
+	}
+	flow, err := e.store.Flow(st.FlowID)
+	if err != nil {
+		return err
+	}
+	stage, ok := flow.Stage(st.StageID)
+	if !ok {
+		return msg.Err("stage.notInFlow", "stage", st.StageID, "flow", flow.Name)
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		text = continueWords
+		e.record(cardID, model.EntryMove, msg.New("journal.continued"))
+	} else {
+		e.record(cardID, model.EntryMove, msg.New("journal.continuedSaying", "text", text))
+	}
+	e.runStageSaying(card, flow, stage, text)
+	e.emitCard(cardID)
+	return nil
+}
+
+// pausedOn reports whether the last run on the card's stage is one the
+// application closed on. Only the last: a paused run followed by another is
+// history, not a stage waiting.
+func (e *Engine) pausedOn(cardID, stageID string) bool {
+	sessions, err := e.store.SessionsForCard(cardID)
+	if err != nil {
+		return false
+	}
+	for _, s := range sessions {
+		if s.StageID == stageID {
+			return s.Status == store.StatusPaused
+		}
+	}
+	return false
+}
+
 // MoveTo puts a card on a stage by hand. A person is always above the graph:
 // whatever was running is cancelled, and the stage starts as if an edge had
 // brought the card there.
@@ -398,6 +461,13 @@ func (e *Engine) enterStage(card model.Card, flow model.Flow, stage model.Stage,
 // counts as a failed one, so the flow can carry the card to its failure branch
 // instead of silently stalling.
 func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
+	e.runStageSaying(card, flow, stage, "")
+}
+
+// runStageSaying is runStage with what the agent is told given rather than
+// composed: a stage continued (Continue) resumes a conversation that already
+// holds its brief.
+func (e *Engine) runStageSaying(card model.Card, flow model.Flow, stage model.Stage, said string) {
 	// A final stage is where the card stops. Nothing runs, nothing waits.
 	if stage.Final {
 		if err := e.store.LeaveFlow(card.ID, model.StateDone); err != nil {
@@ -462,8 +532,11 @@ func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
 	if e.language != nil {
 		lang = e.language()
 	}
-	job := Job{Card: card, Flow: flow, Stage: stage, Agent: agent,
-		Prompt: ComposePrompt(card, flow, stage, agent, e.arrival(card.ID, flow, stage), lang)}
+	prompt := said
+	if prompt == "" {
+		prompt = ComposePrompt(card, flow, stage, agent, e.arrival(card.ID, flow, stage), lang)
+	}
+	job := Job{Card: card, Flow: flow, Stage: stage, Agent: agent, Prompt: prompt}
 	if err := e.runner.Start(job); err != nil {
 		e.failStage(card, flow, stage, err)
 		return

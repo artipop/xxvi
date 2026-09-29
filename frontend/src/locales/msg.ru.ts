@@ -40,6 +40,7 @@ export const msgRu: Dict = {
   "msg.stage.readsWithoutAgent": "Стадия «{stage}» не запускает агента — передавать ему значения с карточки некому",
   "msg.stage.notFound": "Стадия «{stage}» не найдена",
   "msg.stage.notInFlow": "Стадия «{stage}» не найдена во флоу «{flow}»",
+  "msg.stage.notPaused": "Стадия не приостановлена — продолжать нечего",
   "msg.edge.fromMissing": "Переход ведёт из несуществующей стадии «{stage}»",
   "msg.edge.toMissing": "Переход из «{from}» ведёт в несуществующую стадию «{stage}»",
   "msg.edge.unknownTrigger": "Неизвестное событие перехода «{on}»",
@@ -211,6 +212,7 @@ export const msgRu: Dict = {
   // ---- sessions ----
   "msg.session.appClosed": "Приложение было закрыто во время работы",
   "msg.session.appQuitting": "Приложение завершается",
+  "msg.session.paused": "Приостановлено: приложение закрылось",
   "msg.session.cancelled": "Сессия отменена",
   "msg.session.stepCancelled": "Шаг отменён",
   "msg.session.turnTimeout": "Таймаут хода ({timeout})",
@@ -265,6 +267,9 @@ export const msgRu: Dict = {
   "msg.journal.terminalClosedByPerson":
     "Терминал агента закрыли, а шаг так и не отчитался. Карточка стоит на стадии — куда ей дальше, решает человек.",
   "msg.journal.terminalFailed": "Шаг в терминале не закончился: {cause}",
+  "msg.journal.terminalPaused": "Шаг приостановлен: приложение закрылось. Разговор агента сохранён — продолжить можно с экрана стадии.",
+  "msg.journal.continued": "Шаг продолжен.",
+  "msg.journal.continuedSaying": "Шаг продолжен: «{text}».",
   "msg.journal.asked": (a) => {
     const what = questionText(String(a.kind ?? ""), String(a.tool ?? ""), String(a.text ?? ""));
     return `Агент ${a.agent} спрашивает:\n\n${what}${a.options ? `\n${a.options}` : ""}`;

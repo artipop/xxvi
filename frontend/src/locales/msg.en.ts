@@ -40,6 +40,7 @@ export const msgEn: Dict = {
   "msg.stage.readsWithoutAgent": "The stage «{stage}» starts no agent — there is nobody to hand the card's values to",
   "msg.stage.notFound": "The stage «{stage}» was not found",
   "msg.stage.notInFlow": "The stage «{stage}» is not in the flow «{flow}»",
+  "msg.stage.notPaused": "The stage is not paused — there is nothing to continue",
   "msg.edge.fromMissing": "A transition leads from a stage that does not exist: «{stage}»",
   "msg.edge.toMissing": "A transition from «{from}» leads to a stage that does not exist: «{stage}»",
   "msg.edge.unknownTrigger": "Unknown transition event «{on}»",
@@ -212,6 +213,7 @@ export const msgEn: Dict = {
   // ---- sessions ----
   "msg.session.appClosed": "The application was closed while it was running",
   "msg.session.appQuitting": "The application is quitting",
+  "msg.session.paused": "Paused: the application closed",
   "msg.session.cancelled": "Session cancelled",
   "msg.session.stepCancelled": "Step cancelled",
   "msg.session.turnTimeout": "Turn timed out ({timeout})",
@@ -266,6 +268,9 @@ export const msgEn: Dict = {
   "msg.journal.terminalClosedByPerson":
     "The agent's terminal was closed before the step reported. The card stays on the stage — where it goes next is a person's call.",
   "msg.journal.terminalFailed": "The step in the terminal did not finish: {cause}",
+  "msg.journal.terminalPaused": "The step was paused: the application closed. The agent's conversation is saved — continue it from the stage's screen.",
+  "msg.journal.continued": "The step was continued.",
+  "msg.journal.continuedSaying": "The step was continued: «{text}».",
   "msg.journal.asked": (a) => {
     const what = questionText(String(a.kind ?? ""), String(a.tool ?? ""), String(a.text ?? ""));
     return `Agent ${a.agent} asks:\n\n${what}${a.options ? `\n${a.options}` : ""}`;

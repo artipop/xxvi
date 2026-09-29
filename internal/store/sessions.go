@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
 )
 
@@ -24,11 +25,16 @@ const (
 	StatusDone      SessionStatus = "done"
 	StatusFailed    SessionStatus = "failed"
 	StatusCancelled SessionStatus = "cancelled"
+	// StatusPaused is a terminal run the application closed on. Its CLI saved
+	// the conversation, and the stage waits for a person to continue it
+	// (Engine.Continue) rather than being over.
+	StatusPaused SessionStatus = "paused"
 )
 
-// Terminal reports whether the status is final.
+// Terminal reports whether the status is final. A paused run is: the process
+// is gone, and continuing it is a new run.
 func (s SessionStatus) Terminal() bool {
-	return s == StatusDone || s == StatusFailed || s == StatusCancelled
+	return s == StatusDone || s == StatusFailed || s == StatusCancelled || s == StatusPaused
 }
 
 // Session is one recorded run of an agent against one card on one stage.
@@ -142,15 +148,23 @@ func (s *Store) SessionsForCard(cardID string) ([]Session, error) {
 	return out, nil
 }
 
-// AbandonRunningSessions marks as cancelled every session left running by a
-// previous run of the application. A process that is gone is not still working:
-// a row that says otherwise would make a card look busy forever.
+// AbandonRunningSessions ends every session left running by a previous run of
+// the application. A process that is gone is not still working: a row that says
+// otherwise would make a card look busy forever.
+//
+// A terminal run whose conversation is known is paused, as it would have been
+// had the application closed properly: the CLI keeps its conversation on disk
+// whichever way it went. Anything else is cancelled.
 func (s *Store) AbandonRunningSessions() (int, error) {
 	res, err := s.db.Exec(`
 		UPDATE agent_session
-		SET status = ?, finished_at = ?, error_text = ?
+		SET status = CASE WHEN work = ? AND acp_session_id != '' THEN ? ELSE ? END,
+		    finished_at = ?,
+		    error_text = CASE WHEN work = ? AND acp_session_id != '' THEN ? ELSE ? END
 		WHERE status IN (?, ?, ?)`,
-		string(StatusCancelled), millis(time.Now()), msg.New("session.appClosed").Store(),
+		model.WorkTerminal, string(StatusPaused), string(StatusCancelled),
+		millis(time.Now()),
+		model.WorkTerminal, msg.New("session.paused").Store(), msg.New("session.appClosed").Store(),
 		string(StatusQueued), string(StatusRunning), string(StatusAsking))
 	if err != nil {
 		return 0, err

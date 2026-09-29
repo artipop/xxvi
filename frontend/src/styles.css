@@ -633,6 +633,21 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .remarks-form { display: flex; flex-direction: column; gap: 8px; }
 .remarks-form textarea { width: 100%; box-sizing: border-box; }
 
+/* Same strip as the report above it: one padding, one divider. The status on
+   its own line so the field keeps the width; the field one line tall, since
+   what goes there is a remark, not a brief. */
+.screen-continue {
+  flex: 0 0 auto; padding: 6px 12px;
+  border-top: 1px solid var(--line); background: var(--panel-2);
+  display: flex; flex-direction: column; gap: 6px; font-size: 12px;
+}
+.screen-continue .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.screen-continue .row { display: flex; align-items: center; gap: 8px; }
+.screen-continue textarea {
+  flex: 1 1 auto; min-width: 0; min-height: 0; height: 26px;
+  padding: 4px 8px; resize: none; font-size: 12px; line-height: 16px;
+}
+
 .screen-report {
   flex: 0 0 auto; padding: 6px 12px;
   border-top: 1px solid var(--line); background: var(--panel-2);

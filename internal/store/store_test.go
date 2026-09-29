@@ -482,6 +482,31 @@ func TestAbandonRunningSessionsOnStart(t *testing.T) {
 	}
 }
 
+// A terminal run whose conversation is known is paused rather than cancelled,
+// whether the application closed properly or not: its CLI keeps the
+// conversation on disk either way. A run with nothing to resume is cancelled.
+func TestAbandonPausesATerminalRunWithAConversation(t *testing.T) {
+	s := open(t)
+	card, _ := s.CreateCard(model.Card{Title: "Т"})
+	s.InsertSession(Session{ID: "term", CardID: card.ID, Work: model.WorkTerminal, Status: StatusRunning, StartedAt: time.Now()})
+	id := "разговор-1"
+	s.UpdateSession("term", SessionUpdate{ACPSessionID: &id})
+	s.InsertSession(Session{ID: "term-new", CardID: card.ID, Work: model.WorkTerminal, Status: StatusRunning, StartedAt: time.Now()})
+	s.InsertSession(Session{ID: "acp", CardID: card.ID, Work: model.WorkSession, Status: StatusRunning, StartedAt: time.Now()})
+	s.UpdateSession("acp", SessionUpdate{ACPSessionID: &id})
+
+	if _, err := s.AbandonRunningSessions(); err != nil {
+		t.Fatalf("уборка: %v", err)
+	}
+	got, _ := s.SessionsForCard(card.ID)
+	want := map[string]SessionStatus{"term": StatusPaused, "term-new": StatusCancelled, "acp": StatusCancelled}
+	for _, sess := range got {
+		if sess.Status != want[sess.ID] {
+			t.Errorf("%s: %s, ждали %s", sess.ID, sess.Status, want[sess.ID])
+		}
+	}
+}
+
 func TestNotFoundIsRecognisable(t *testing.T) {
 	s := open(t)
 	if _, err := s.Card("нет-такой"); !errors.Is(err, ErrNotFound) {

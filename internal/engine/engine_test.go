@@ -1,9 +1,11 @@
 package engine
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
@@ -781,5 +783,76 @@ func TestRemarksReachTheAgentTheCardReturnsTo(t *testing.T) {
 	}
 	if prompt := f.runner.lastJob(t).Prompt; !strings.Contains(prompt, "What the reviewer says is wrong:\nКран всё ещё течёт") {
 		t.Fatalf("замечаний нет в брифе:\n%s", prompt)
+	}
+}
+
+// pause leaves the card's stage the way the application closing leaves it: its
+// run paused on a conversation it can resume.
+func (f fixture) pause(t *testing.T, cardID string) {
+	t.Helper()
+	job := f.runner.lastJob(t)
+	f.runner.Cancel(cardID, msg.Msg{})
+	f.runner.mu.Lock()
+	delete(f.runner.busy, model.Username(job.Agent.Name))
+	f.runner.mu.Unlock()
+	paused := store.StatusPaused
+	n := f.runner.count()
+	id := fmt.Sprintf("run-%s-%d", cardID, n)
+	if err := f.store.InsertSession(store.Session{
+		ID: id, CardID: cardID, FlowID: f.flow.ID, StageID: job.Stage.ID,
+		AgentName: job.Agent.Name, Work: model.WorkTerminal, Status: store.StatusRunning,
+		StartedAt: time.Now().Add(time.Duration(n) * time.Second),
+	}); err != nil {
+		t.Fatalf("сессия: %v", err)
+	}
+	f.store.UpdateSession(id, store.SessionUpdate{Status: &paused})
+}
+
+// A paused stage goes on only when a person says so, and the agent is told what
+// they said — or to go on — rather than its brief again: the conversation it
+// resumes holds the brief already.
+func TestAPausedStageContinuesWithWhatThePersonSaid(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Задача")
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+	brief := f.runner.lastJob(t).Prompt
+	f.pause(t, card.ID)
+
+	if err := f.engine.Continue(card.ID, "  а теперь тесты  "); err != nil {
+		t.Fatalf("продолжить: %v", err)
+	}
+	job := f.runner.lastJob(t)
+	if job.Prompt != "а теперь тесты" || job.Stage.ID != "work" {
+		t.Fatalf("агент должен получить слова человека на той же стадии: %q на %s", job.Prompt, job.Stage.ID)
+	}
+	if strings.Contains(job.Prompt, strings.TrimSpace(brief)) {
+		t.Fatal("бриф второй раз не отправляется")
+	}
+
+	f.pause(t, card.ID)
+	if err := f.engine.Continue(card.ID, ""); err != nil {
+		t.Fatalf("продолжить без слов: %v", err)
+	}
+	if got := f.runner.lastJob(t).Prompt; got != continueWords {
+		t.Fatalf("без слов агенту говорят продолжать: %q", got)
+	}
+}
+
+// Only a paused stage can be continued: one running, finished or never paused
+// has nothing to pick up, and continuing it would start a second run.
+func TestOnlyAPausedStageContinues(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Задача")
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+	if err := f.engine.Continue(card.ID, ""); err == nil {
+		t.Fatal("идущую стадию не продолжают")
+	}
+	before := f.runner.count()
+	other := f.card(t, "Не в работе")
+	if err := f.engine.Continue(other.ID, ""); err == nil {
+		t.Fatal("карточку не на флоу не продолжают")
+	}
+	if f.runner.count() != before {
+		t.Fatal("отказ не должен ничего запускать")
 	}
 }

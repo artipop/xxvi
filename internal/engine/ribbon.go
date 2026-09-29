@@ -43,6 +43,9 @@ type ScreenView struct {
 	// Report is what the run said its step came to. A terminal has nowhere
 	// else to show it: the agent hands it over in a tool call, not on screen.
 	Report *msg.Msg `json:"report,omitempty"`
+	// Paused is set on the last run of the stage the card stands on when the
+	// application closed on it: the screen offers to continue it (Continue).
+	Paused bool `json:"paused,omitempty"`
 }
 
 // Notice is a journal entry the strip shows: why the card stands here, or why
@@ -217,7 +220,8 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 		// the CLI the person and the agent talked in, a session shows the
 		// stream, which is all a session ever had. The run says which — not the
 		// stage, which may have been edited since (docs/system.md §12.2).
-		for _, s := range sessionsIn(sessions, stage.ID, ev.CreatedAt, entryAfter(events, i)) {
+		runs := sessionsIn(sessions, stage.ID, ev.CreatedAt, entryAfter(events, i))
+		for n, s := range runs {
 			visitOf[s.ID] = ev.ID
 			kind := "agent"
 			if s.Work == model.WorkTerminal {
@@ -229,6 +233,7 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 				Agent:     s.AgentName,
 				SessionID: s.ID,
 				Report:    lastReport(journal, s.ID),
+				Paused:    seg.Current && n == len(runs)-1 && s.Status == store.StatusPaused,
 			})
 		}
 		for n, sc := range stage.Screens {

@@ -448,3 +448,40 @@ func TestAWaitThatEndedIsNotShown(t *testing.T) {
 		t.Fatalf("остаётся только то, что случилось после старта: %+v", got)
 	}
 }
+
+// The screen of a paused run is the one that offers to continue it, and only
+// while nothing has run after it.
+func TestAPausedRunIsMarkedOnItsScreen(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Задача")
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+	f.pause(t, card.ID)
+
+	pausedScreens := func() int {
+		view, err := f.engine.Ribbon(card.ID)
+		if err != nil {
+			t.Fatalf("лента: %v", err)
+		}
+		n := 0
+		for _, seg := range view.Segments {
+			for _, sc := range seg.Screens {
+				if sc.Paused {
+					n++
+				}
+			}
+		}
+		return n
+	}
+	if got := pausedScreens(); got != 1 {
+		t.Fatalf("приостановленный прогон должен быть отмечен один раз: %d", got)
+	}
+	if err := f.store.InsertSession(store.Session{
+		ID: "after", CardID: card.ID, FlowID: f.flow.ID, StageID: "work", Work: model.WorkTerminal,
+		Status: store.StatusRunning, StartedAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("сессия: %v", err)
+	}
+	if got := pausedScreens(); got != 0 {
+		t.Fatalf("после нового прогона продолжать нечего: %d", got)
+	}
+}

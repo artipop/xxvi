@@ -681,7 +681,44 @@ function Pane(props: {
       <Show when={props.screen?.report}>
         <Report report={props.screen!.report!} />
       </Show>
+      <Show when={props.screen?.paused}>
+        <ContinueBar cardId={props.cardId ?? ""} />
+      </Show>
     </section>
+  );
+}
+
+// A stage the application closed on waits here for a person: it goes on only
+// when somebody says so, in the conversation it stopped in. What is typed is
+// the next thing the agent reads; nothing typed means «go on».
+function ContinueBar(props: { cardId: string }): JSX.Element {
+  const [text, setText] = createSignal("");
+  const [busy, setBusy] = createSignal(false);
+  const go = async () => {
+    setBusy(true);
+    const done = await guard(() => API.ContinueStage(props.cardId, text()));
+    setBusy(false);
+    if (done) {
+      setText("");
+      await loadRibbons();
+    }
+  };
+  return (
+    <div class="screen-continue">
+      <span class="meta" title={t("ribbon.pausedTitle")}>{t("ribbon.paused")}</span>
+      <div class="row">
+        <textarea
+          rows={1}
+          placeholder={t("ribbon.continuePlaceholder")}
+          value={text()}
+          onInput={(e) => setText(e.currentTarget.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void go(); }}
+        />
+        <button class="btn primary tiny" disabled={busy()} onClick={() => void go()} title={t("ribbon.continueTitle")}>
+          {t("ribbon.continue")}
+        </button>
+      </div>
+    </div>
   );
 }
 

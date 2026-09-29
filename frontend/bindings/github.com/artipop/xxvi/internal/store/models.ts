@@ -63,4 +63,11 @@ export enum SessionStatus {
     StatusDone = "done",
     StatusFailed = "failed",
     StatusCancelled = "cancelled",
+
+    /**
+     * StatusPaused is a terminal run the application closed on. Its CLI saved
+     * the conversation, and the stage waits for a person to continue it
+     * (Engine.Continue) rather than being over.
+     */
+    StatusPaused = "paused",
 };

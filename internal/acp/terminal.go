@@ -234,6 +234,12 @@ func (m *Manager) runTerminal(s *session) {
 	sess.Close()
 
 	switch {
+	case m.rootCtx.Err() != nil && s.conversationID() != "":
+		// The application closing is not the step ending: the CLI was hung up
+		// on and saved its conversation, and the stage waits for a person to
+		// continue it there (engine.Continue).
+		m.finish(s, store.StatusPaused, msg.New("session.paused"))
+		m.record(s, model.EntryProblem, msg.New("journal.terminalPaused"))
 	case m.rootCtx.Err() != nil:
 		m.finish(s, store.StatusCancelled, msg.New("session.appQuitting"))
 	case s.wasCancelled():

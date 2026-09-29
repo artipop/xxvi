@@ -161,6 +161,12 @@ export interface ScreenView {
      * else to show it: the agent hands it over in a tool call, not on screen.
      */
     "report"?: msg$0.Msg | null;
+
+    /**
+     * Paused is set on the last run of the stage the card stands on when the
+     * application closed on it: the screen offers to continue it (Continue).
+     */
+    "paused"?: boolean;
 }
 
 /**

@@ -143,6 +143,15 @@ export function ContinueSession(sessionID: string, sessionTitle: string, text: s
 }
 
 /**
+ * ContinueStage picks up a stage the application closed on, in the
+ * conversation it stopped in, telling the agent text — or to go on, when text is
+ * empty.
+ */
+export function ContinueStage(cardID: string, text: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(2366371620, cardID, text);
+}
+
+/**
  * DeleteAgent removes an entry, refusing while a flow still names it: a stage
  * whose crew is nobody is a card that silently never starts, and finding that
  * out here is better than finding it out mid-run.

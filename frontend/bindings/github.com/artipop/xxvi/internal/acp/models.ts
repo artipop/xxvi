@@ -111,8 +111,8 @@ export interface Attention {
 
     /**
      * Terminal is set on a terminal's row: why it is waiting — its CLI asked
-     * for a permission or an answer («asking»), its turn ended without the
-     * step closing («turnEnded»), or it has only gone silent («quiet»).
+     * for a permission or an answer («asking»), or it has only gone silent
+     * («quiet»).
      */
     "terminal"?: string;
 
