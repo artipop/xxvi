@@ -98,17 +98,23 @@ func (s *Store) migrate() error {
 	if err := s.db.Get(&applied, `SELECT COALESCE(MAX(version), 0) FROM schema_migration`); err != nil {
 		return fmt.Errorf("read schema version: %w", err)
 	}
+	// The first step is the baseline and stands for versions 1 to Baseline;
+	// the rest follow it one version each.
 	steps := s.d.Migrations()
-	if applied > len(steps) {
-		return msg.Err("store.newerSchema", "applied", strconv.Itoa(applied), "known", strconv.Itoa(len(steps)))
+	known := Baseline + len(steps) - 1
+	switch {
+	case applied > known:
+		return msg.Err("store.newerSchema", "applied", strconv.Itoa(applied), "known", strconv.Itoa(known))
+	case applied > 0 && applied < Baseline:
+		return msg.Err("store.olderSchema", "applied", strconv.Itoa(applied), "baseline", strconv.Itoa(Baseline))
 	}
-	for i := applied; i < len(steps); i++ {
-		version := i + 1
+	for version := max(applied+1, Baseline); version <= known; version++ {
+		step := steps[version-Baseline]
 		tx, err := s.db.Begin()
 		if err != nil {
 			return fmt.Errorf("migration %d: %w", version, err)
 		}
-		if _, err := tx.Exec(steps[i]); err != nil {
+		if _, err := tx.Exec(step); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("migration %d: %w", version, err)
 		}
