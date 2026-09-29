@@ -1,10 +1,9 @@
 //go:build !windows
 
-// Package nativeterm shows a terminal in a native view drawn by Ghostty
-// instead of xterm.js in the page. Ghostty runs a process of its own on a pty
-// of its own and has no way to be fed bytes instead, so the process it runs is
-// Attach: a bridge from that pty to the terminal's socket, the same one the
-// page's emulator talks to.
+// Package nativeterm shows terminals in native views drawn by Ghostty, laid
+// over the page. Ghostty runs a process of its own on a pty of its own and has
+// no way to be fed bytes instead, so the process it runs is Attach: a bridge
+// from that pty to the terminal's socket (term.Manager's endpoint).
 package nativeterm
 
 import (

@@ -1,10 +1,5 @@
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 
-/** TERMINAL_ENGINE is where the choice between Ghostty and the page's own
- *  terminal is kept: «web» for the page's, anything else for Ghostty where it
- *  is available. */
-export const TERMINAL_ENGINE = "xxvi.terminalEngine";
-
 let answer: Promise<boolean> | undefined;
 
 /** nativeAvailable says Ghostty can draw terminals on this machine

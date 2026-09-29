@@ -374,8 +374,8 @@ export function MoveTo(cardID: string, stageID: string): $CancellablePromise<$mo
 }
 
 /**
- * NativeTerminals says terminals can be drawn by Ghostty in a native view over
- * the page instead of by xterm.js in it (internal/nativeterm). An experiment.
+ * NativeTerminals says terminals can be shown here: Ghostty draws them in native
+ * views over the page (internal/nativeterm), and its library is macOS's.
  */
 export function NativeTerminals(): $CancellablePromise<boolean> {
     return $Call.ByID(2597766577);

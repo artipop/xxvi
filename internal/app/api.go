@@ -431,8 +431,8 @@ func (s *API) StopBackgroundTerminals() error {
 	return nil
 }
 
-// NativeTerminals says terminals can be drawn by Ghostty in a native view over
-// the page instead of by xterm.js in it (internal/nativeterm). An experiment.
+// NativeTerminals says terminals can be shown here: Ghostty draws them in native
+// views over the page (internal/nativeterm), and its library is macOS's.
 func (s *API) NativeTerminals() bool {
 	return nativeterm.Available() && s.app.nativeWindow() != nil
 }

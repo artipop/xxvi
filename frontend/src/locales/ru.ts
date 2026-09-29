@@ -83,10 +83,6 @@ export const ru: Dict = {
   "settings.lede": "Как приложение ведёт себя на этой машине.",
   "settings.interface": "Интерфейс",
   "settings.language": "Язык",
-  "settings.terminal": "Терминал",
-  "settings.terminalNative": "Ghostty",
-  "settings.terminalWeb": "Встроенный в страницу",
-  "settings.terminalHint": "Ghostty рисует терминал нативно — тем же движком, что держит экраны терминалов между запусками, с вашим шрифтом и темой из настроек Ghostty. Встроенный рисуется в самой странице. Смена действует на терминалы, открытые после неё.",
   "settings.languageHint": "Слова на экране и в уведомлениях. «Как в системе» следует за языком, выбранным в настройках системы.",
   "lang.system": "Как в системе — {name}",
 
@@ -309,7 +305,7 @@ export const ru: Dict = {
 
   // ---- terminal ----
   "terminal.shellEnded": "шелл завершился",
-  "terminal.reconnecting": "переподключение…",
+  "terminal.unavailable": "Терминал рисует Ghostty, а он есть только в приложении для macOS.",
 
   // ---- diff ----
   "fileStatus.added": "новый",
