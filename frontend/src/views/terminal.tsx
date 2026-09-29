@@ -118,7 +118,14 @@ function followNatively(handle: { id: string; url: string }, host: () => HTMLEle
     if (gone()) return;
     const el = host();
     if (el) {
-      const r = el.getBoundingClientRect();
+      // Inside the host's padding, as xterm.js draws: the view is not clipped
+      // by the page, and its square edge laid on the pane's rounded border
+      // looks like the terminal running off the bottom.
+      const b = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      const pl = parseFloat(cs.paddingLeft) || 0, pr = parseFloat(cs.paddingRight) || 0;
+      const pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
+      const r = { left: b.left + pl, top: b.top + pt, width: b.width - pl - pr, height: b.height - pt - pb, right: b.right - pr, bottom: b.bottom - pb };
       const onScreen = r.width > 8 && r.height > 8 && r.right > 0 && r.bottom > 0
         && r.left < window.innerWidth && r.top < window.innerHeight;
       // Nothing of the page is checked for lying over the pane: the view is
