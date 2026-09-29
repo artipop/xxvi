@@ -84,6 +84,10 @@ export const en: Dict = {
   "settings.lede": "How this application behaves on this machine.",
   "settings.interface": "Interface",
   "settings.language": "Language",
+  "settings.terminal": "Terminal",
+  "settings.terminalNative": "Ghostty",
+  "settings.terminalWeb": "In the page",
+  "settings.terminalHint": "Ghostty draws the terminal natively — with the same engine that keeps terminal screens between runs, and your font and theme from Ghostty's settings. The other one is drawn in the page itself. A change applies to terminals opened after it.",
   "settings.languageHint": "The words on the screen and in notifications. «As in the system» follows the language chosen in the system settings.",
   "lang.system": "As in the system — {name}",
 

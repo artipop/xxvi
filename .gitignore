@@ -20,3 +20,6 @@ dist
 
 # libghostty-vt and the Ghostty source it is built from (wails3 task common:ghostty:lib).
 build/ghostty
+
+# The native terminal's dylib (wails3 task common:ghostty:native).
+build/nativeterm

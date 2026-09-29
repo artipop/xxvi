@@ -29,6 +29,44 @@ tasks:
         fi
       - cd "{{.SRC}}" && zig build -Demit-lib-vt -Doptimize=ReleaseFast -Dtarget={{.ZIG_TARGET}} --prefix "{{.PREFIX}}"
 
+  ghostty:native:
+    summary: Builds the native half of internal/nativeterm — Ghostty's full library in libxxvinative.dylib (macOS)
+    # Ghostty's own macOS library (the renderer, fonts, input) from the same
+    # source as libghostty-vt, then our host code around it in one dylib. A
+    # dylib because the two Ghostty builds share hundreds of symbols and cannot
+    # sit in one image; the application opens it at run time and falls back to
+    # the page's terminal without it.
+    platforms: [darwin]
+    deps:
+      - task: ghostty:lib
+    vars:
+      SRC: '{{.ROOT_DIR}}/build/ghostty/src'
+      FRAMEWORK: '{{.ROOT_DIR}}/build/ghostty/src/macos/GhosttyKit.xcframework'
+      OUT: '{{.ROOT_DIR}}/build/nativeterm/libxxvinative.dylib'
+    sources:
+      - internal/nativeterm/native/*.m
+    generates:
+      - build/nativeterm/libxxvinative.dylib
+    preconditions:
+      - sh: xcrun --find metal >/dev/null 2>&1
+        msg: "Ghostty's renderer needs Xcode's Metal toolchain: xcodebuild -downloadComponent MetalToolchain"
+    cmds:
+      # The xcframework holds one slice, named for the machine it was built on.
+      - |
+        if ! ls "{{.FRAMEWORK}}"/macos-*/libghostty-internal.a >/dev/null 2>&1; then
+          cd "{{.SRC}}" && zig build -Demit-xcframework=true -Dxcframework-target=native -Dapp-runtime=none \
+            -Demit-macos-app=false -Dsentry=false -Doptimize=ReleaseFast
+        fi
+      - |
+        KIT="$(dirname "$(ls "{{.FRAMEWORK}}"/macos-*/libghostty-internal.a | head -1)")"
+        mkdir -p "{{.ROOT_DIR}}/build/nativeterm"
+        clang -dynamiclib -fobjc-arc -O2 -mmacosx-version-min=13.0 \
+          "{{.ROOT_DIR}}/internal/nativeterm/native/view_darwin.m" -I"$KIT/Headers" "$KIT/libghostty-internal.a" \
+          -o "{{.OUT}}" -install_name @rpath/libxxvinative.dylib \
+          -framework Cocoa -framework Metal -framework MetalKit -framework QuartzCore -framework CoreText \
+          -framework CoreGraphics -framework IOSurface -framework Carbon -framework UniformTypeIdentifiers \
+          -framework CoreVideo -framework IOKit -framework Security -lc++
+
   go:mod:tidy:
     summary: Runs `go mod tidy`
     internal: true

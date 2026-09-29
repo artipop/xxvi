@@ -1,6 +1,8 @@
 import { createSignal, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { report } from "../state";
+import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
+import { nativeAvailable, TERMINAL_ENGINE } from "./native";
 import { errorText, t } from "../i18n";
 import "@xterm/xterm/css/xterm.css";
 
@@ -27,6 +29,11 @@ import "@xterm/xterm/css/xterm.css";
 // a resize on open and on every change of size, sent from the same numbers
 // xterm itself is drawing with.
 
+// FONT_SIZE is both engines': Ghostty is given the page's size, so a pane holds
+// as many columns in either — a tail drawn for one width and replayed at
+// another lands in the wrong places.
+const FONT_SIZE = 12;
+
 export default function Terminal(props: {
   // open connects this pane to a terminal and hands back where its socket is.
   open: () => Promise<{ url: string }>;
@@ -47,10 +54,27 @@ export default function Terminal(props: {
     let observer: ResizeObserver | null = null;
     let socket: WebSocket | null = null;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    let stopNative: (() => void) | undefined;
 
     const start = async () => {
       const handle = await props.open();
       if (disposed) return;
+      if (await nativeWanted()) {
+        stopNative = followNatively(handle as { id: string; url: string }, () => host, () => disposed);
+        setStatus("live");
+        // Only to hear the end, and say it under the view the way the page's
+        // own terminal does: Ghostty draws, and its bridge has a socket of its
+        // own.
+        socket = new WebSocket(handle.url);
+        socket.onmessage = (ev) => {
+          if (typeof ev.data !== "string") return;
+          try {
+            // The view stays: it shows how the terminal ended.
+            if (JSON.parse(ev.data).type === "exit") setStatus("closed");
+          } catch { /* not a control message */ }
+        };
+        return;
+      }
 
       const [{ Terminal }, { FitAddon }] = await Promise.all([
         import("@xterm/xterm"),
@@ -68,7 +92,7 @@ export default function Terminal(props: {
 
       terminal = new Terminal({
         fontFamily: value("--mono", 'ui-monospace, SFMono-Regular, Menlo, monospace'),
-        fontSize: 12,
+        fontSize: FONT_SIZE,
         cursorBlink: true,
         convertEol: false,
         scrollback: 5000,
@@ -179,6 +203,7 @@ export default function Terminal(props: {
       observer?.disconnect();
       socket?.close();
       terminal?.dispose();
+      stopNative?.();
     };
   });
 
@@ -196,6 +221,70 @@ export default function Terminal(props: {
       </Show>
     </div>
   );
+}
+
+// ---- Ghostty in a native view over the pane ----
+//
+// Where the native half is available (macOS, internal/nativeterm), the terminal
+// is drawn by Ghostty — the same emulator the holder keeps its screens in —
+// rather than by xterm.js, unless the settings say otherwise. The pane stays in
+// the page as a placeholder that keeps the layout; the terminal is a native
+// view laid over it, moved to wherever the pane is drawn on every frame — the
+// ribbon slides, and a view that followed only resizes would stay behind.
+
+function nativeWanted(): Promise<boolean> {
+  let engine = "";
+  try { engine = localStorage.getItem(TERMINAL_ENGINE) ?? ""; } catch { /* no storage */ }
+  return engine === "web" ? Promise.resolve(false) : nativeAvailable();
+}
+
+// covered says something of the page lies over the pane — a menu, a panel, a
+// floating notice. The native view is above the whole page, so it would hide
+// that thing rather than be hidden by it; it steps aside instead.
+//
+// Looked for on a grid over the whole pane rather than at its corners: a menu
+// or a notice is often smaller than the pane and would slip between them. A
+// hit test is cheap enough to do this every frame.
+function covered(el: HTMLElement, r: DOMRect): boolean {
+  const step = 80, inset = 3;
+  const cols = Math.max(2, Math.ceil(r.width / step)), rows = Math.max(2, Math.ceil(r.height / step));
+  for (let i = 0; i <= cols; i++) {
+    for (let j = 0; j <= rows; j++) {
+      const x = r.left + inset + (r.width - 2 * inset) * (i / cols);
+      const y = r.top + inset + (r.height - 2 * inset) * (j / rows);
+      const hit = document.elementFromPoint(x, y);
+      if (hit !== null && hit !== el && !el.contains(hit)) return true;
+    }
+  }
+  return false;
+}
+
+function followNatively(handle: { id: string; url: string }, host: () => HTMLElement | undefined, gone: () => boolean): () => void {
+  let last = "";
+  let frame = 0;
+  const tick = () => {
+    if (gone()) return;
+    const el = host();
+    if (el) {
+      const r = el.getBoundingClientRect();
+      const onScreen = r.width > 8 && r.height > 8 && r.right > 0 && r.bottom > 0
+        && r.left < window.innerWidth && r.top < window.innerHeight;
+      const visible = onScreen && !covered(el, r);
+      const dpr = window.devicePixelRatio || 1;
+      const key = visible ? `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)},${dpr}` : "hidden";
+      if (key !== last) {
+        last = key;
+        if (visible) void API.ShowNativeTerminal(handle.id, handle.url, r.left, r.top, r.width, r.height, dpr, FONT_SIZE);
+        else void API.HideNativeTerminal(handle.id);
+      }
+    }
+    frame = requestAnimationFrame(tick);
+  };
+  frame = requestAnimationFrame(tick);
+  return () => {
+    cancelAnimationFrame(frame);
+    void API.CloseNativeTerminal(handle.id);
+  };
 }
 
 // belowContent is where the closing line goes: under the last line anything was

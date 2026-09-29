@@ -89,6 +89,13 @@ jobs:
         with:
           version: 0.16.0
 
+      # The native terminal (internal/nativeterm) is Ghostty's own macOS
+      # library, whose renderer is compiled with Xcode's Metal toolchain — a
+      # component recent Xcodes download on demand.
+      - name: Make sure the Metal toolchain is present
+        if: matrix.target.platform == 'darwin'
+        run: xcrun --find metal || xcodebuild -downloadComponent MetalToolchain
+
       - name: Install the Wails CLI
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
 
