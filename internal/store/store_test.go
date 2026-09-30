@@ -81,6 +81,8 @@ func TestDatabaseAtTheBaselineTakesTheStepsAfterIt(t *testing.T) {
 	}
 	for _, stmt := range []string{
 		`ALTER TABLE card DROP COLUMN typed`,
+		`ALTER TABLE stage DROP COLUMN template`,
+		`DROP TABLE stage_template`,
 		`DELETE FROM schema_migration WHERE version > ` + strconv.Itoa(Baseline),
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {

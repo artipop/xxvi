@@ -15,7 +15,6 @@ export type {
     LaunchPlan,
     LaunchRun,
     NotificationWords,
-    StageCard,
     TerminalHandle,
     UpdateState,
     Vocabulary

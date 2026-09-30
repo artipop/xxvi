@@ -42,7 +42,9 @@ frontend          Solid 2 + TypeScript, биндинги генерирует wa
 
 ## Запуск
 
-Нужны Go 1.26+, Node.js, [wails3](https://v3.wails.io/) и Zig 0.16 (`brew install
+Нужны Go 1.26+, Node.js, [wails3](https://v3.wails.io/) той же версии, что
+модуль в `go.mod` (`go install
+github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.26`), и Zig 0.16 (`brew install
 zig`): им собирается libghostty-vt — эмулятор терминала, в котором держатель pty
 хранит экраны. Сборка скачивает исходники Ghostty и собирает её сама при первом
 запуске, в `build/ghostty/`, и под Windows тоже: там Zig ещё и компилятор C

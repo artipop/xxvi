@@ -1,9 +1,9 @@
 import { createSignal, createStore, reconcile } from "solid-js";
 import { Browser, Events } from "@wailsio/runtime";
 import * as API from "../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { AgentsView, CardView, StageCard, UpdateState, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
+import type { AgentsView, CardView, UpdateState, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp/models";
-import type { Card, Flow, InboxGroup, Project, Source } from "../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { Card, Flow, InboxGroup, Project, Source, StageTemplate } from "../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { CardSummary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
 import { applyLanguage, choose, type Choice, errorText, label, lang, langInEnglish, t } from "./i18n";
@@ -17,6 +17,8 @@ export const [inWork, setInWork] = createSignal<CardSummary[]>([]);
 export const [done, setDone] = createSignal<Card[]>([]);
 export const [flows, setFlows] = createSignal<Flow[]>([]);
 export const [sources, setSources] = createSignal<Source[]>([]);
+// The flow editor's palette: the kinds of node, as rows a person edits.
+export const [templates, setTemplates] = createSignal<StageTemplate[]>([]);
 export const [agents, setAgents] = createSignal<AgentsView>({ agents: [], adapters: [] });
 export const [attention, setAttention] = createSignal<Attention[]>([]);
 export const [projects, setProjects] = createSignal<Project[]>([]);
@@ -143,6 +145,9 @@ export async function loadFlows() {
 export async function loadSources() {
   try { setSources(list(await API.Sources())); } catch (e) { report(e); }
 }
+export async function loadTemplates() {
+  try { setTemplates(list(await API.StageTemplates())); } catch (e) { report(e); }
+}
 export async function loadAgents() {
   try { setAgents(await API.Agents()); } catch (e) { report(e); }
 }
@@ -172,17 +177,23 @@ export function updateWaiting(): boolean {
 export async function loadAll() {
   await Promise.all([
     loadInbox(), loadInWork(), loadDone(), loadFlows(), loadSources(), loadAgents(), loadAttention(),
-    loadProjects(), loadRibbons(), loadUpdateState(),
+    loadProjects(), loadRibbons(), loadUpdateState(), loadTemplates(),
   ]);
   try { setVocabulary(await API.Vocabulary()); } catch (e) { report(e); }
 }
 
-// The currently open card, which several screens navigate into.
+// The currently open card. It is shown in one place, beside the inbox: a
+// card that followed a person onto every screen was a second column nobody had
+// asked for there, and «where did I see that card» had as many answers as there
+// were screens.
 export const [openCard, setOpenCard] = createSignal<CardView | null>(null);
 
 export async function openCardByID(id: string) {
   const view = await guard(() => API.Card(id));
-  if (view) setOpenCard(view);
+  if (view) {
+    setOpenCard(view);
+    setTab("inbox");
+  }
 }
 
 export function closeCard() { setOpenCard(null); }
@@ -203,9 +214,12 @@ export function applyCard(view: CardView | undefined) {
  * in the event would be a second way to learn it, and the two would drift.
  */
 export function subscribe() {
+  // Re-read in place: an event is no reason to take anybody to the inbox.
   const refreshCard = async () => {
     const current = openCard();
-    if (current) await openCardByID(current.card.id);
+    if (!current) return;
+    const view = await guard(() => API.Card(current.card.id));
+    if (view) setOpenCard(view);
   };
   // The strip re-reads on the same events the rest of the screens do: a card
   // that moved is a segment that was added, and a session that said something
@@ -222,19 +236,13 @@ export function subscribe() {
   Events.On("flows", () => { void loadFlows(); });
   Events.On("sources", () => { void loadSources(); });
   Events.On("agents", () => { void loadAgents(); });
+  Events.On("templates", () => { void loadTemplates(); });
   Events.On("projects", () => { void loadProjects(); });
   Events.On("update", () => { void loadUpdateState(); });
   // The application menu's «Settings…» (menu.go) has no screen of its own.
   Events.On("open-settings", () => { setTab("settings"); });
   // A reminder was clicked: what it reminded of is the task.
   Events.On("open-ribbon", (ev: { data: { cardId: string } }) => { showRibbon(ev.data.cardId); });
-}
-
-export const [stageCards, setStageCards] = createSignal<StageCard[]>([]);
-
-export async function loadFlowCards(flowID: string) {
-  const cards = await guard(() => API.FlowCards(flowID));
-  setStageCards(list(cards));
 }
 
 // ---- the ribbon ----

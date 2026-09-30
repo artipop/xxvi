@@ -1,23 +1,35 @@
-import { createEffect, createMemo, createSignal, createStore, storePath, For, Show, type StoreSetter } from "solid-js";
+import { createEffect, createMemo, createSignal, createStore, For, Show, type StoreSetter } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { Edge, Flow, PropertyWrite, Screen, Stage } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { Edge, Flow, PropertyWrite, Screen, Stage, StageTemplate } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import { agents, flows, guard, list, loadFlows, loadTemplates, templates, vocabulary } from "../state";
+import FlowCanvas, { type CanvasApi, DRAG_KIND, NODE_HEIGHT, NODE_WIDTH, type Selection, type StageWrite, condLabel, edgeIndexOf } from "./flowCanvas";
 import {
-  agents, flows, guard, list, loadFlowCards, loadFlows, openCardByID, stageCards, vocabulary,
-} from "../state";
-import FlowCanvas, { type Selection, type StageWrite, condLabel, edgeIndexOf } from "./flowCanvas";
-import { actionLabel, errorText, label, propName, t } from "../i18n";
+  NODE_COLORS, NODE_ICONS, NodeIcon, Tile, applyTemplate, newStage, ownsScreen, shapeOf, templateName, templateNote,
+  templateOf,
+} from "./templates";
+import { errorText, label, propName, t } from "../i18n";
 
-// The flow editor. The canvas is the flow itself: a box is a stage — a place a
-// card stands and the work done there — an arrow is what moves a card on, and
-// the chips along the bottom of a box are what the stage leaves on the card.
+// The flow editor. The canvas is the flow itself and takes the whole window: a
+// box is a stage — a place a card stands and the work done there — an arrow is
+// what moves a card on, and the chips along the bottom of a box are what the
+// stage leaves on the card.
+//
+// A box is made from a template — an agent, a terminal, a page, a diff — picked
+// from the palette by what it is rather than assembled out of an action, a work
+// mode and a list of screens. The inspector then asks only what that node needs:
+// a command for a terminal, an address for a page, a brief for an agent. The
+// templates themselves are a registry, edited from the same palette.
 //
 // A conditional arrow is pulled from the chip it asks about, which is the whole
 // point of drawing the outputs at all: the edge that branches on «Verdict»
-// starts at the thing that produces «Verdict», instead of being assembled in a
-// panel out of a list of every property anybody ever typed.
+// starts at the thing that produces «Verdict».
 //
 // A flow is saved whole and checked whole: the refusal that comes back names the
 // part that is wrong, and it is shown as it came.
+//
+// The cards standing on a flow are not shown here: a card is looked at in the
+// inbox and worked on its ribbon, and a third place for it is a third place to
+// look for it.
 
 export default function FlowsView() {
   const [selectedID, setSelectedID] = createSignal<string>("");
@@ -33,22 +45,8 @@ export default function FlowsView() {
   const current = () => flows().find((f) => f.id === selectedID());
 
   return (
-    <>
-      <h1>{t("flows.title")}</h1>
-
-      <div class="row wrap toolbar">
-        <For each={flows()}>
-          {(f) => (
-            <button class={`btn ${f.id === selectedID() ? "primary" : ""}`} onClick={() => setSelectedID(f.id)}>
-              {f.name}
-            </button>
-          )}
-        </For>
-        <button class="btn quiet" onClick={() => setSelectedID("")}>{t("flows.new")}</button>
-      </div>
-
-      <Editor flow={current()} onSaved={(f) => setSelectedID(f.id)} onRemoved={() => setSelectedID("")} />
-    </>
+    <Editor flow={current()} selectedID={selectedID()} onPick={setSelectedID}
+            onSaved={(f) => setSelectedID(f.id)} onRemoved={() => setSelectedID("")} />
   );
 }
 
@@ -57,12 +55,27 @@ export default function FlowsView() {
 function blankFlow(): Flow {
   return {
     id: "", name: "", description: "", entryStage: "s1",
-    stages: [{ id: "s1", name: t("flows.firstStage"), action: "none", x: 80, y: 120 } as Stage],
+    stages: [{ id: "s1", name: t("flows.firstStage"), template: "wait", action: "none", x: 80, y: 120 } as Stage],
     edges: [],
   } as Flow;
 }
 
-function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () => void }) {
+/** freeName is the kind's own name, numbered past the ones already taken: two
+ *  stages of one name are refused, and «Terminal 2» is a better start than an
+ *  error on save. */
+function freeName(stages: Stage[], base: string): string {
+  const taken = new Set(stages.map((s) => s.name.trim().toLowerCase()));
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let n = 2; ; n++) {
+    const name = `${base} ${n}`;
+    if (!taken.has(name.toLowerCase())) return name;
+  }
+}
+
+function Editor(props: {
+  flow?: Flow; selectedID: string; onPick: (id: string) => void;
+  onSaved: (f: Flow) => void; onRemoved: () => void;
+}) {
   const [draft, setDraft] = createStore<Flow>(blankFlow());
   const [selected, setSelected] = createSignal<Selection>(null);
   const [saveError, setSaveError] = createSignal("");
@@ -71,6 +84,22 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
   // Whether the flow has been asked about. Dropped whenever the panel stops
   // being about it, so a confirmation never follows the eye onto another flow.
   const [confirming, setConfirming] = createSignal(false);
+
+  // The template open in the inspector, when it is a template being edited
+  // rather than a stage: its id, or a fresh one being made. Never both at once
+  // with a selected stage — the inspector is about one thing.
+  const [editing, setEditing] = createSignal<StageTemplate | null>(null);
+
+  // The palette's own state lives here, since the canvas has to know how much of
+  // its left edge the palette covers.
+  const [paletteOpen, setPaletteOpen] = createSignal(rememberedOpen());
+  const togglePalette = () => {
+    const next = !paletteOpen();
+    setPaletteOpen(next);
+    try { localStorage.setItem(PALETTE_KEY, next ? "1" : "0"); } catch { /* the choice lasts this run */ }
+  };
+  const select = (s: Selection) => { setSelected(s); if (s) setEditing(null); };
+  const editTemplate = (tpl: StageTemplate) => { setSelected(null); setEditing(tpl); };
 
   // Loading a flow into the draft is a copy, not a reference: the canvas is
   // edited freely and nothing is written until «Save», because the engine
@@ -81,7 +110,6 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
     setSaveError("");
     setDirty(false);
     setConfirming(false);
-    if (f?.id) void loadFlowCards(f.id);
   });
 
   const touch = () => setDirty(true);
@@ -115,42 +143,30 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
     props.onRemoved();
   };
 
-  const addStage = (stage?: Partial<Stage>) => {
-    const id = `stage-${Math.random().toString(36).slice(2, 9)}`;
-    setDraft((f) => {
-      const list = f.stages || (f.stages = []);
-      list.push({
-        id, name: t("flows.newStage"), action: "none",
-        x: 60 + list.length * 220, y: 140, ...stage,
-      } as Stage);
-      if (!f.entryStage) f.entryStage = id;
-    });
-    setSelected({ kind: "stage", id });
-    touch();
+  // A node clicked in the palette goes to the middle of what can be seen of the
+  // canvas, stepped down past any box already standing there — the canvas is
+  // not refitted for it, so a place off screen would be a box nobody sees
+  // arrive. Dragged, it goes where it was let go.
+  let canvas: CanvasApi | undefined;
+  const nextSpot = () => {
+    const at = canvas?.visibleCentre(INSPECTOR_WIDTH) ?? { x: 80, y: 120 };
+    const clear = (y: number) =>
+      stages().every((s) => Math.abs((s.x ?? 0) - at.x) >= NODE_WIDTH || Math.abs((s.y ?? 0) - y) >= NODE_HEIGHT + 16);
+    let y = at.y;
+    for (let tries = 0; tries < 20 && !clear(y); tries++) y += NODE_HEIGHT + 24;
+    return { x: at.x, y };
   };
 
-  // A review is a stage that runs nothing and shows what is being judged: the
-  // waiting point of §4.1 with the diff screen open on it. It is a button
-  // rather than a kind of stage of its own, because that is all it is — and a
-  // fourth action would have to be explained where two are enough.
-  //
-  // The edges are not drawn here. Where «passed» and «failed» lead is the
-  // one arrow a person draws (docs/system.md §4.4), and guessing it would make
-  // the button a flow of its own.
-  const addReview = () =>
-    addStage({ name: t("flows.review"), action: "none", screens: [{ kind: "diff", ref: "" } as Screen] });
-
-  // Push and MR are the application's own step (docs/system.md §15.2): there
-  // is nothing to configure on it, so the button is the whole of it.
-  const addPublish = () => addStage({ name: t("flows.mrStage"), action: "publish" });
-
-  const cardsOn = (stageID: string) => stageCards().filter((c) => c.stageId === stageID);
-
-  const counts = createMemo(() =>
-    stages().map((s) => {
-      const on = cardsOn(s.id);
-      return { stageId: s.id, cards: on.length, running: 0, queued: 0 };
-    }));
+  const addStage = (tpl: StageTemplate, at = nextSpot()) => {
+    const stage = newStage(tpl, freeName(stages(), templateName(tpl)), at);
+    setDraft((f) => {
+      const list = f.stages || (f.stages = []);
+      list.push(stage);
+      if (!f.entryStage) f.entryStage = stage.id;
+    });
+    select({ kind: "stage", id: stage.id });
+    touch();
+  };
 
   // What a stage leaves on the card, for the chips on its box. Branchable is
   // whether an arrow can ask about it: an arrow asks "is it this value", and
@@ -200,106 +216,176 @@ function Editor(props: { flow?: Flow; onSaved: (f: Flow) => void; onRemoved: () 
   const selectedEdge = () => (selected()?.kind === "edge" ? edgeIndexOf(selected()!.id) : -1);
 
   return (
-    <>
-      <div class="row wrap toolbar">
-        <label class="field grow">
-          <span>{t("projects.name")}</span>
-          <input type="text" value={draft.name}
-                 onInput={(e) => { setDraft(storePath("name", e.currentTarget.value)); touch(); }} />
-        </label>
-        <label class="field grow-2">
-          <span>{t("flows.description")}</span>
-          <input type="text" value={draft.description ?? ""}
-                 onInput={(e) => { setDraft(storePath("description", e.currentTarget.value)); touch(); }} />
-        </label>
-      </div>
+    <div class="flowpage">
+      <header class="flowpage__head">
+        <div class="flowpage__flows" role="tablist">
+          <For each={flows()}>
+            {(f) => (
+              <button class={`flowtab ${f.id === props.selectedID ? "on" : ""}`} role="tab"
+                      aria-selected={f.id === props.selectedID ? "true" : "false"} onClick={() => props.onPick(f.id)}>
+                {f.name}
+              </button>
+            )}
+          </For>
+          <button class={`flowtab flowtab--new ${props.selectedID === "" ? "on" : ""}`}
+                  onClick={() => props.onPick("")}>{t("flows.new")}</button>
+        </div>
 
-      <div class="row toolbar">
-        <button class="btn" onClick={() => addStage()}>{t("flows.addStage")}</button>
-        <button class="btn" onClick={addReview} title={t("flows.addReviewTitle")}>{t("flows.addReview")}</button>
-        <button class="btn" onClick={addPublish} title={t("flows.addMRTitle")}>{t("flows.addMR")}</button>
-        <div class="spacer" />
-        <Show when={dirty()}><span class="meta">{t("flows.unsaved")}</span></Show>
-        <Show when={draft.id}>
-          <Show when={confirming()} fallback={
-            <button class="btn quiet" onClick={() => setConfirming(true)}>{t("flows.delete")}</button>
-          }>
-            <span class="meta">{t("flows.confirmDelete", { name: draft.name })}</span>
-            <button class="btn quiet" onClick={() => setConfirming(false)}>{t("common.cancel")}</button>
-            <button class="btn danger" onClick={remove}>{t("common.delete")}</button>
+        <div class="flowpage__meta">
+          <input type="text" class="flowpage__name" placeholder={t("flows.namePlaceholder")} value={draft.name}
+                 aria-label={t("projects.name")}
+                 onInput={(e) => { setDraft((d) => { d.name = e.currentTarget.value; }); touch(); }} />
+          <input type="text" class="flowpage__desc" placeholder={t("flows.description")} value={draft.description ?? ""}
+                 aria-label={t("flows.description")}
+                 onInput={(e) => { setDraft((d) => { d.description = e.currentTarget.value; }); touch(); }} />
+          <div class="spacer" />
+          <Show when={dirty()}><span class="meta">{t("flows.unsaved")}</span></Show>
+          <Show when={draft.id}>
+            <Show when={confirming()} fallback={
+              <button class="btn quiet" onClick={() => setConfirming(true)}>{t("flows.delete")}</button>
+            }>
+              <span class="meta">{t("flows.confirmDelete", { name: draft.name })}</span>
+              <button class="btn quiet" onClick={() => setConfirming(false)}>{t("common.cancel")}</button>
+              <button class="btn danger" onClick={remove}>{t("common.delete")}</button>
+            </Show>
           </Show>
+          <button class="btn primary" onClick={save}>{t("common.save")}</button>
+        </div>
+      </header>
+
+      <div class="flowpage__body">
+        <FlowCanvas
+          flow={draft}
+          triggers={list(vocabulary().triggers)}
+          templates={templates()}
+          outcomeProperty={vocabulary().outcomeProperty}
+          outcomePassed={list(vocabulary().outcomeValues)[0]}
+          writesOf={writesOf}
+          selected={selected()}
+          onSelect={select}
+          onApi={(api) => { canvas = api; }}
+          insetLeft={paletteOpen() ? PALETTE_WIDTH : 0}
+          insetRight={selected() || editing() ? INSPECTOR_WIDTH : 0}
+          onDropKind={(id, at) => {
+            const tpl = templates().find((x) => x.id === id);
+            if (tpl) addStage(tpl, at);
+          }}
+          onChange={(nextStages, nextEdges) => {
+            setDraft((f) => { f.stages = nextStages; f.edges = nextEdges; });
+            touch();
+          }}
+        />
+
+        <Palette open={paletteOpen()} onToggle={togglePalette} onAdd={(tpl) => addStage(tpl)} onEdit={editTemplate}
+                 onNew={() => editTemplate({ id: "", name: "", icon: "terminal", color: NODE_COLORS[0], action: "none" } as StageTemplate)} />
+
+        <Show when={selected() || editing()}>
+          <aside class="flowpage__inspector">
+            <Show when={editing()} keyed>
+              {(tpl) => <TemplatePanel tpl={tpl} onClose={() => setEditing(null)} onSaved={(saved) => setEditing(saved)} />}
+            </Show>
+            <Show when={selectedStage()}>
+              <StagePanel draft={draft} setDraft={setDraft} stageID={selectedStage()} onChange={touch}
+                          onClose={() => setSelected(null)} onSaveAsTemplate={editTemplate} />
+            </Show>
+            <Show when={selectedEdge() >= 0}>
+              <EdgePanel draft={draft} setDraft={setDraft} index={selectedEdge()} onChange={touch}
+                         onDeleted={() => setSelected(null)} />
+            </Show>
+          </aside>
         </Show>
-        <button class="btn primary" onClick={save}>{t("common.save")}</button>
-      </div>
 
-      <Show when={saveError()}>
-        <div class="error"><pre>{saveError()}</pre></div>
-      </Show>
-
-      <Show when={unwritten().length > 0}>
-        <div class="warn-note">
-          {t("flows.unwritten", { properties: unwritten().map((n) => `«${propName(n)}»`).join(", ") })}
-        </div>
-      </Show>
-
-      <Show when={unresolved().length > 0}>
-        <div class="warn-note">
-          {t("flows.unresolved", { properties: unresolved().map((n) => `«${propName(n)}»`).join(", ") })}
-        </div>
-      </Show>
-
-      <div class="flow-editor">
-        <div class="flow-editor__canvas">
-          <FlowCanvas
-            flow={draft}
-            triggers={list(vocabulary().triggers)}
-            counts={counts()}
-            outcomeProperty={vocabulary().outcomeProperty}
-            outcomePassed={list(vocabulary().outcomeValues)[0]}
-            writesOf={writesOf}
-            selected={selected()}
-            onSelect={setSelected}
-            onChange={(nextStages, nextEdges) => {
-              setDraft((f) => { f.stages = nextStages; f.edges = nextEdges; });
-              touch();
-            }}
-          />
-          <div class="meta note">
-            {t("flows.canvasHint")}
+        <Show when={saveError() || unwritten().length > 0 || unresolved().length > 0}>
+          <div class="flowpage__notes">
+            <Show when={saveError()}>
+              <div class="error">
+                <pre>{saveError()}</pre>
+                <button class="btn quiet" onClick={() => setSaveError("")}>×</button>
+              </div>
+            </Show>
+            <Show when={unwritten().length > 0}>
+              <div class="warn-note">
+                {t("flows.unwritten", { properties: unwritten().map((n) => `«${propName(n)}»`).join(", ") })}
+              </div>
+            </Show>
+            <Show when={unresolved().length > 0}>
+              <div class="warn-note">
+                {t("flows.unresolved", { properties: unresolved().map((n) => `«${propName(n)}»`).join(", ") })}
+              </div>
+            </Show>
           </div>
-        </div>
-
-        <div class="flow-editor__side">
-          <Show when={selectedStage()}>
-            <StagePanel draft={draft} setDraft={setDraft} stageID={selectedStage()} onChange={touch}
-                        onDeleted={() => setSelected(null)} />
-          </Show>
-          <Show when={selectedEdge() >= 0}>
-            <EdgePanel draft={draft} setDraft={setDraft} index={selectedEdge()} onChange={touch}
-                       onDeleted={() => setSelected(null)} />
-          </Show>
-          <Show when={!selected()}>
-            <div class="panel"><div class="empty">{t("flows.selectHint")}</div></div>
-          </Show>
-
-          <Show when={cardsOn(selectedStage()).length > 0}>
-            <div class="panel">
-              <h3>{t("flows.cardsOnStage")}</h3>
-              <For each={cardsOn(selectedStage())}>
-                {(c) => (
-                  <div class="row list-item"
-                       onClick={() => openCardByID(c.card.id)}>
-                    <span>{c.card.title}</span>
-                    <div class="spacer" />
-                    <Show when={c.asking}><span class="tag warn"><span class="dot" /></span></Show>
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
-        </div>
+        </Show>
       </div>
-    </>
+    </div>
+  );
+}
+
+const PALETTE_KEY = "xxvi.flows.palette";
+
+// How much of the canvas the open palette covers: its width in styles.css and
+// the gap it floats at.
+const PALETTE_WIDTH = 292 + 14;
+const INSPECTOR_WIDTH = 380 + 14;
+
+function rememberedOpen(): boolean {
+  try { return localStorage.getItem(PALETTE_KEY) !== "0"; } catch { return true; }
+}
+
+/**
+ * Palette is what a flow is built from: one big card per template, with its
+ * logo, clicked to add or dragged to where it should stand. It floats over the
+ * canvas rather than beside it, so the canvas keeps the whole width, and folds
+ * away to a button once the flow is built. The templates are edited from here
+ * too: a pencil on a card, and a card of its own for a new one.
+ */
+function Palette(props: {
+  open: boolean; onToggle: () => void;
+  onAdd: (tpl: StageTemplate) => void; onEdit: (tpl: StageTemplate) => void; onNew: () => void;
+}) {
+  const toggle = () => props.onToggle();
+
+  return (
+    <Show when={props.open} fallback={
+      <button class="btn flowpage__paletteOpen" onClick={toggle}>{t("flows.addNode")}</button>
+    }>
+      <div class="palette">
+        <div class="palette__head">
+          <span class="caption">{t("flows.palette")}</span>
+          <div class="spacer" />
+          <button class="btn quiet palette__fold" onClick={toggle} aria-label={t("flows.paletteFold")}
+                  title={t("flows.paletteFold")}>‹</button>
+        </div>
+        <div class="palette__grid">
+          <For each={templates()}>
+            {(tpl) => (
+              <div class="kind-card" role="button" tabindex="0" draggable="true"
+                   title={templateNote(tpl)}
+                   style={{ "--kind": tpl.color || "#949aab" }}
+                   onClick={() => props.onAdd(tpl)}
+                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); props.onAdd(tpl); } }}
+                   onDragStart={(e) => {
+                     e.dataTransfer?.setData(DRAG_KIND, tpl.id);
+                     if (e.dataTransfer) e.dataTransfer.effectAllowed = "copy";
+                   }}>
+                <Tile tpl={tpl} />
+                <span class="kind-card__name">{templateName(tpl)}</span>
+                <span class="kind-card__note">{templateNote(tpl)}</span>
+                <button class="kind-card__edit" title={t("flows.editTemplate")} aria-label={t("flows.editTemplate")}
+                        onClick={(e) => { e.stopPropagation(); props.onEdit(tpl); }}>✎</button>
+              </div>
+            )}
+          </For>
+          <button class="kind-card kind-card--new" onClick={props.onNew}>
+            <span class="kind-card__plus">+</span>
+            <span class="kind-card__name">{t("flows.newTemplate")}</span>
+          </button>
+        </div>
+        <details class="palette__help">
+          <summary>{t("flows.howToConnect")}</summary>
+          <p>{t("flows.canvasHint")}</p>
+        </details>
+      </div>
+    </Show>
   );
 }
 
@@ -350,13 +436,33 @@ function upstreamWrites(flow: Flow, from: string): Array<{ property: string; fro
   return out;
 }
 
+
 function StagePanel(props: {
-  draft: Flow; setDraft: StoreSetter<Flow>; stageID: string; onChange: () => void; onDeleted: () => void;
+  draft: Flow; setDraft: StoreSetter<Flow>; stageID: string; onChange: () => void; onClose: () => void;
+  onSaveAsTemplate: (tpl: StageTemplate) => void;
 }) {
   const index = () => list(props.draft.stages).findIndex((s) => s.id === props.stageID);
   const stage = () => list(props.draft.stages)[index()];
+  const tpl = () => templateOf(stage(), templates());
+  const owns = () => ownsScreen(tpl());
+  const shape = () => shapeOf(stage(), owns());
 
-  const set = (patch: Partial<Stage>) => { props.setDraft(storePath("stages", index(), patch)); props.onChange(); };
+  const set = (patch: Partial<Stage>) => { props.setDraft((f) => { Object.assign(list(f.stages)[index()], patch); }); props.onChange(); };
+
+  const setTemplate = (next: StageTemplate) => {
+    if (next.id !== tpl()?.id) set(applyTemplate(stage(), next, tpl()));
+  };
+
+  // A stage somebody has shaped by hand is the best start for a template of
+  // their own: its action, brief and screens, under a name still to be given.
+  const saveAsTemplate = () => {
+    const st = stage();
+    props.onSaveAsTemplate({
+      id: "", name: "", icon: tpl()?.icon || "terminal", color: tpl()?.color || NODE_COLORS[0],
+      action: st.action || "none", work: st.work, prompt: st.prompt, crew: list(st.crew),
+      final: st.final, screens: list(st.screens).map((sc) => ({ ...sc })),
+    } as StageTemplate);
+  };
 
   const toggleCrew = (name: string) => {
     const crew = new Set(list(stage().crew));
@@ -372,7 +478,7 @@ function StagePanel(props: {
       if (f.entryStage === id) f.entryStage = list(f.stages)[0]?.id ?? "";
     });
     props.onChange();
-    props.onDeleted();
+    props.onClose();
   };
 
   // ---- what the stage leaves on the card ----
@@ -399,97 +505,164 @@ function StagePanel(props: {
     set({ reads: [...chosen] });
   };
 
-  // ---- what a person standing at this stage sees ----
+  // ---- the window the node is, and the ones beside it ----
   //
-  // Unlike writes and reads, screens are offered on every stage: an output is
-  // about the card and there is nobody to produce one where nothing runs, while
-  // a screen is about the person, and the review stage is exactly where the
-  // preview has to be open (docs/system.md §12.4).
+  // A terminal, a page, a diff or notes *is* its first screen, so that screen is
+  // edited as the node's own fields and the list below starts after it.
 
   const screens = () => list(stage().screens);
+  const own = () => (shape() === "screen" ? 1 : 0);
+  const primary = () => screens()[0];
+  const extra = () => screens().slice(own());
 
   const setScreens = (next: Screen[]) => set({ screens: next });
-
-  const addScreen = () =>
-    setScreens([...screens(), { kind: vocabulary().screenKinds?.[0] ?? "notes", ref: "" } as Screen]);
 
   const editScreen = (i: number, patch: Partial<Screen>) =>
     setScreens(screens().map((sc, at) => (at === i ? { ...sc, ...patch } : sc)));
 
+  const addScreen = () =>
+    setScreens([...screens(), { kind: vocabulary().screenKinds?.[0] ?? "notes", ref: "" } as Screen]);
+
   const removeScreen = (i: number) => setScreens(screens().filter((_, at) => at !== i));
 
-  const refHint = (kind: string) =>
-    kind === "notes" ? t("flows.refNotes")
-      : kind === "terminal" ? t("flows.refTerminal")
-      : kind === "diff" ? t("flows.refDiff")
-      : kind === "run" ? t("flows.refRun")
+  const refHint = (k: string) =>
+    k === "notes" ? t("flows.refNotes")
+      : k === "terminal" ? t("flows.refTerminal")
+      : k === "diff" ? t("flows.refDiff")
+      : k === "run" ? t("flows.refRun")
       : t("flows.refBrowser");
+
+  const note = () => t(`shapeHelp.${shape()}`);
 
   return (
     <Show when={stage()}>
-      <div class="panel">
-        <h3>{t("flows.stage")}</h3>
-        <label class="field">
-          <span>{t("projects.name")}</span>
-          <input type="text" value={stage().name} onInput={(e) => set({ name: e.currentTarget.value })} />
-        </label>
-
-        <label class="field">
-          <span>{t("flows.whatHappens")}</span>
-          <select value={stage().final ? "final" : stage().action}
-                  onChange={(e) => {
-                    const v = e.currentTarget.value;
-                    // A final stage is where the card stops: it runs nothing, so
-                    // choosing it and choosing an action are one control.
-                    v === "final"
-                      ? set({ final: true, action: "none", work: "" })
-                      : set({ final: false, action: v, work: v === "agent" ? (stage().work || "terminal") : "" });
-                  }}>
-            <For each={list(vocabulary().actions)}>
-              {(a) => <option value={a}>{actionLabel(a)}</option>}
-            </For>
-            <option value="final">{t("flows.finalOption")}</option>
-          </select>
-        </label>
-
-        <Show when={stage().action === "agent" && !stage().final}>
-          {/* Where the work happens, and it is a question only an agent stage
-              has: a terminal is where a person sits beside the agent and answers
-              it in its own interface, a session is a step nobody watches
-              (docs/system.md §4.1.1). */}
-          <label class="field">
-            <span>{t("flows.whereWork")}</span>
-            <select value={stage().work || "terminal"}
-                    onChange={(e) => set({ work: e.currentTarget.value })}>
-              <For each={list(vocabulary().works)}>
-                {(w) => <option value={w}>{label("work", w)}</option>}
-              </For>
-            </select>
+      <div class="inspector">
+        <div class="inspector__head">
+          <Tile tpl={tpl()} big />
+          <div class="inspector__title">
+            <input type="text" class="inspector__name" value={stage().name} aria-label={t("projects.name")}
+                   onInput={(e) => set({ name: e.currentTarget.value })} />
             <span class="meta">
-              {stage().work === "session"
-                ? t("flows.sessionNote")
-                : t("flows.terminalNote")}
+              {templateName(tpl())}
+              <Show when={props.draft.entryStage === props.stageID}>{` · ${t("flows.isEntry")}`}</Show>
             </span>
-          </label>
+          </div>
+          <button class="btn quiet inspector__close" onClick={props.onClose} aria-label={t("common.close")}>×</button>
+        </div>
+
+        {/* The template can be changed in place: a wait that turns out to need
+            a diff is the same stage with the same arrows, not a new one. */}
+        <div class="kind-strip" role="radiogroup" aria-label={t("flows.kind")}>
+          <For each={templates()}>
+            {(x) => (
+              <button class={`kind-strip__item ${x.id === tpl()?.id ? "on" : ""}`}
+                      style={{ "--kind": x.color || "#949aab" }}
+                      role="radio" aria-checked={x.id === tpl()?.id ? "true" : "false"}
+                      title={templateName(x)} aria-label={templateName(x)}
+                      onClick={() => setTemplate(x)}>
+                <NodeIcon icon={x.icon} />
+              </button>
+            )}
+          </For>
+        </div>
+
+        <p class="inspector__note">{note()}</p>
+
+        <Show when={shape() === "screen" && primary()?.kind === "terminal"}>
           <label class="field">
-            <span>{t("flows.stagePrompt")}</span>
-            <textarea value={stage().prompt ?? ""} onInput={(e) => set({ prompt: e.currentTarget.value })} />
+            <span>{t("flows.command")}</span>
+            <input type="text" class="mono" value={primary()?.ref ?? ""}
+                   placeholder={t("flows.refTerminal")}
+                   onInput={(e) => editScreen(0, { ref: e.currentTarget.value })} />
           </label>
+        </Show>
+
+        <Show when={shape() === "screen" && (primary()?.kind === "run" || primary()?.kind === "browser")}>
           <div class="field">
-            <span class="field-label">
-              {t("flows.crew")}
-            </span>
-            <div class="row wrap">
+            <span class="field-label">{t("flows.webWhat")}</span>
+            <div class="segmented">
+              <button class={primary()?.kind === "run" ? "on" : ""}
+                      onClick={() => editScreen(0, { kind: "run", ref: "web" })}>{t("flows.localFrontOption")}</button>
+              <button class={primary()?.kind === "browser" ? "on" : ""}
+                      onClick={() => editScreen(0, { kind: "browser", ref: primary()?.kind === "browser" ? primary()!.ref : "" })}>
+                {t("flows.addressOption")}
+              </button>
+            </div>
+          </div>
+          <Show when={primary()?.kind === "browser"} fallback={
+            <label class="field">
+              <span>{t("flows.launchAs")}</span>
+              <select value={primary()?.ref ?? ""} onChange={(e) => editScreen(0, { ref: e.currentTarget.value })}>
+                <For each={LAUNCHES}>
+                  {(l) => <option value={l}>{l ? label("launch", l) : t("flows.byProject")}</option>}
+                </For>
+              </select>
+              <span class="meta">{t("flows.localFrontNote")}</span>
+            </label>
+          }>
+            <label class="field">
+              <span>{t("flows.address")}</span>
+              <input type="text" class="mono" value={primary()?.ref ?? ""} placeholder={t("flows.refBrowser")}
+                     onInput={(e) => editScreen(0, { ref: e.currentTarget.value })} />
+              <span class="meta">{t("flows.refNote")}</span>
+            </label>
+          </Show>
+        </Show>
+
+        <Show when={shape() === "screen" && primary()?.kind === "diff"}>
+          <label class="field">
+            <span>{t("flows.revisions")}</span>
+            <input type="text" class="mono" value={primary()?.ref ?? ""} placeholder={t("flows.refDiff")}
+                   onInput={(e) => editScreen(0, { ref: e.currentTarget.value })} />
+          </label>
+        </Show>
+
+        <Show when={shape() === "screen" && primary()?.kind === "notes"}>
+          <label class="field">
+            <span>{t("flows.notesFile")}</span>
+            <input type="text" class="mono" value={primary()?.ref ?? ""} placeholder={t("flows.refNotes")}
+                   onInput={(e) => editScreen(0, { ref: e.currentTarget.value })} />
+          </label>
+        </Show>
+
+        <Show when={shape() === "agent"}>
+          <div class="field">
+            <span class="field-label">{t("flows.crew")}</span>
+            <div class="agent-picks">
               <For each={list(agents().agents)}>
                 {(a) => (
-                  <button class={`btn ${list(stage().crew).includes(a.name) ? "primary" : "quiet"}`}
+                  <button class={`agent-pick ${list(stage().crew).includes(a.name) ? "on" : ""}`}
                           onClick={() => toggleCrew(a.name)}>
-                    {a.name}
+                    <span class="agent-pick__name">{a.name}</span>
+                    <span class="agent-pick__kind">{label("kind", a.kind)}</span>
                   </button>
                 )}
               </For>
             </div>
           </div>
+
+          {/* Where the work happens: a terminal is where a person sits beside the
+              agent and answers it in its own interface, a session is a step
+              nobody watches (docs/system.md §4.1.1). */}
+          <div class="field">
+            <span class="field-label">{t("flows.whereWork")}</span>
+            <div class="segmented">
+              <For each={list(vocabulary().works)}>
+                {(w) => (
+                  <button class={(stage().work || "terminal") === w ? "on" : ""}
+                          onClick={() => set({ work: w })}>{label("work", w)}</button>
+                )}
+              </For>
+            </div>
+            <span class="meta">
+              {stage().work === "session" ? t("flows.sessionNote") : t("flows.terminalNote")}
+            </span>
+          </div>
+
+          <label class="field">
+            <span>{t("flows.stagePrompt")}</span>
+            <textarea value={stage().prompt ?? ""} onInput={(e) => set({ prompt: e.currentTarget.value })} />
+          </label>
           <label class="field">
             <span>{t("flows.maxRunning")}</span>
             <input type="text" value={String(stage().maxRunning ?? 0)}
@@ -559,49 +732,265 @@ function StagePanel(props: {
           </div>
         </Show>
 
-        {/* Screens are outside the agent-only block on purpose: a stage where
-            nothing runs is exactly where somebody is looking. */}
-        <div class="field">
-          <div class="row">
-            <span class="caption">{t("flows.screens")}</span>
-            <div class="spacer" />
-            <button class="btn quiet" onClick={addScreen}>{t("flows.addScreen")}</button>
-          </div>
-          <Show when={screens().length > 0} fallback={
-            <div class="meta">{t("flows.noScreens")}</div>
-          }>
-            <For each={screens()}>
-              {(sc, i) => (
-                <div class="row list-row">
-                  <select value={sc.kind} class="fit"
-                          onChange={(e) => editScreen(i(), { kind: e.currentTarget.value })}>
-                    <For each={list(vocabulary().screenKinds)}>
-                      {(k) => <option value={k}>{label("screen", k)}</option>}
-                    </For>
-                  </select>
-                  <input type="text" placeholder={refHint(sc.kind)} value={sc.ref ?? ""} class="grow"
-                         onInput={(e) => editScreen(i(), { ref: e.currentTarget.value })} />
-                  <button class="btn quiet" onClick={() => removeScreen(i())}>✕</button>
-                </div>
-              )}
-            </For>
-            <div class="meta note">
-              {t("flows.refNote")}
+        {/* Screens beside the node's own, on every kind but the final one: a
+            stage where nothing runs is exactly where somebody is looking. */}
+        <Show when={shape() !== "final"}>
+          <div class="field">
+            <div class="row">
+              <span class="caption">{own() ? t("flows.moreScreens") : t("flows.screens")}</span>
+              <div class="spacer" />
+              <button class="btn quiet" onClick={addScreen}>{t("flows.addScreen")}</button>
             </div>
-          </Show>
-        </div>
+            <Show when={extra().length > 0} fallback={
+              <div class="meta">{own() ? t("flows.noMoreScreens") : t("flows.noScreens")}</div>
+            }>
+              <For each={extra()}>
+                {(sc, i) => (
+                  <div class="row list-row">
+                    <select value={sc.kind} class="fit"
+                            onChange={(e) => editScreen(own() + i(), { kind: e.currentTarget.value })}>
+                      <For each={list(vocabulary().screenKinds)}>
+                        {(k) => <option value={k}>{label("screen", k)}</option>}
+                      </For>
+                    </select>
+                    <input type="text" placeholder={refHint(sc.kind)} value={sc.ref ?? ""} class="grow"
+                           onInput={(e) => editScreen(own() + i(), { ref: e.currentTarget.value })} />
+                    <button class="btn quiet" onClick={() => removeScreen(own() + i())}>✕</button>
+                  </div>
+                )}
+              </For>
+              <div class="meta note">
+                {t("flows.refNote")}
+              </div>
+            </Show>
+          </div>
+        </Show>
 
-        <div class="row">
+        <div class="row inspector__foot">
           <button class="btn quiet"
                   disabled={props.draft.entryStage === props.stageID}
-                  onClick={() => { props.setDraft(storePath("entryStage", props.stageID)); props.onChange(); }}>
+                  onClick={() => { props.setDraft((d) => { d.entryStage = props.stageID; }); props.onChange(); }}>
             {props.draft.entryStage === props.stageID ? t("flows.isEntry") : t("flows.makeEntry")}
+          </button>
+          <button class="btn quiet" onClick={saveAsTemplate} title={t("flows.saveAsTemplateTitle")}>
+            {t("flows.saveAsTemplate")}
           </button>
           <div class="spacer" />
           <button class="btn quiet" onClick={removeStage}>{t("common.delete")}</button>
         </div>
       </div>
     </Show>
+  );
+}
+
+
+// The ways the run screen can start a project (model.LaunchKinds), and empty
+// for «tell by the project's files».
+const LAUNCHES = ["web", "backend", "desktop", "mobile", "command", ""];
+
+const BEHAVIOURS = ["wait", "agent", "publish", "verdict", "final"] as const;
+type Behaviour = (typeof BEHAVIOURS)[number];
+
+function behaviourOf(tpl: StageTemplate): Behaviour {
+  if (tpl.final) return "final";
+  const a = tpl.action || "none";
+  return a === "none" ? "wait" : (a as Behaviour);
+}
+
+/**
+ * TemplatePanel edits one template of the palette: how its card and its boxes
+ * look, and the preset a node made from it starts with. Saved on its own, apart
+ * from the flow: a template is the palette's, not this flow's, and the stages
+ * already made from it keep what they were given.
+ */
+function TemplatePanel(props: {
+  tpl: StageTemplate; onClose: () => void; onSaved: (tpl: StageTemplate) => void;
+}) {
+  const [draft, setDraft] = createStore<StageTemplate>(JSON.parse(JSON.stringify(props.tpl)) as StageTemplate);
+  const [error, setError] = createSignal("");
+  const [confirming, setConfirming] = createSignal(false);
+
+  const set = (patch: Partial<StageTemplate>) => setDraft((d) => { Object.assign(d, patch); });
+
+  const setBehaviour = (b: Behaviour) =>
+    set(b === "final"
+      ? { final: true, action: "none", work: "", screens: [] }
+      : { final: false, action: b === "wait" ? "none" : b, work: b === "agent" ? (draft.work || "terminal") : "" });
+
+  const screens = () => list(draft.screens);
+  const editScreen = (i: number, patch: Partial<Screen>) =>
+    set({ screens: screens().map((sc, at) => (at === i ? { ...sc, ...patch } : sc)) });
+
+  const toggleCrew = (name: string) => {
+    const crew = new Set(list(draft.crew));
+    crew.has(name) ? crew.delete(name) : crew.add(name);
+    set({ crew: [...crew] });
+  };
+
+  const save = async () => {
+    setError("");
+    try {
+      const saved = await API.SaveStageTemplate(JSON.parse(JSON.stringify(draft)) as StageTemplate);
+      await loadTemplates();
+      props.onSaved(saved);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+
+  const remove = async () => {
+    setConfirming(false);
+    await guard(() => API.DeleteStageTemplate(draft.id));
+    await loadTemplates();
+    props.onClose();
+  };
+
+  return (
+    <div class="inspector">
+      <div class="inspector__head">
+        <Tile tpl={draft} big />
+        <div class="inspector__title">
+          <input type="text" class="inspector__name" value={draft.name ?? ""}
+                 placeholder={draft.builtin ? templateName({ ...draft, name: "" } as StageTemplate) : t("flows.templateNamePlaceholder")}
+                 aria-label={t("projects.name")}
+                 onInput={(e) => set({ name: e.currentTarget.value })} />
+          <span class="meta">{draft.id ? t("flows.template") : t("flows.newTemplate")}</span>
+        </div>
+        <button class="btn quiet inspector__close" onClick={props.onClose} aria-label={t("common.close")}>×</button>
+      </div>
+
+      <label class="field">
+        <span>{t("flows.description")}</span>
+        <input type="text" value={draft.description ?? ""}
+               placeholder={draft.builtin ? templateNote({ ...draft, description: "" } as StageTemplate) : ""}
+               onInput={(e) => set({ description: e.currentTarget.value })} />
+      </label>
+
+      <div class="field">
+        <span class="field-label">{t("flows.icon")}</span>
+        <div class="icon-grid" style={{ "--kind": draft.color || "#949aab" }}>
+          <For each={NODE_ICONS}>
+            {(icon) => (
+              <button class={`icon-grid__item ${draft.icon === icon ? "on" : ""}`} title={icon} aria-label={icon}
+                      onClick={() => set({ icon })}>
+                <NodeIcon icon={icon} />
+              </button>
+            )}
+          </For>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">{t("flows.color")}</span>
+        <div class="swatches">
+          <For each={NODE_COLORS}>
+            {(c) => (
+              <button class={`swatch ${draft.color === c ? "on" : ""}`} style={{ background: c }}
+                      aria-label={c} title={c} onClick={() => set({ color: c })} />
+            )}
+          </For>
+          <input type="color" class="swatch swatch--pick" value={draft.color || "#949aab"}
+                 aria-label={t("flows.color")} onInput={(e) => set({ color: e.currentTarget.value })} />
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="field-label">{t("flows.behaviour")}</span>
+        <div class="segmented segmented--wrap">
+          <For each={BEHAVIOURS}>
+            {(b) => (
+              <button class={behaviourOf(draft) === b ? "on" : ""} onClick={() => setBehaviour(b)}>
+                {t(`behaviour.${b}`)}
+              </button>
+            )}
+          </For>
+        </div>
+        <span class="meta">{t(`shapeHelp.${behaviourOf(draft) === "wait" && screens().length > 0 ? "screen" : behaviourOf(draft)}`)}</span>
+      </div>
+
+      <Show when={behaviourOf(draft) === "agent"}>
+        <div class="field">
+          <span class="field-label">{t("flows.crew")}</span>
+          <div class="agent-picks">
+            <For each={list(agents().agents)}>
+              {(a) => (
+                <button class={`agent-pick ${list(draft.crew).includes(a.name) ? "on" : ""}`}
+                        onClick={() => toggleCrew(a.name)}>
+                  <span class="agent-pick__name">{a.name}</span>
+                  <span class="agent-pick__kind">{label("kind", a.kind)}</span>
+                </button>
+              )}
+            </For>
+          </div>
+        </div>
+        <div class="field">
+          <span class="field-label">{t("flows.whereWork")}</span>
+          <div class="segmented">
+            <For each={list(vocabulary().works)}>
+              {(w) => (
+                <button class={(draft.work || "terminal") === w ? "on" : ""}
+                        onClick={() => set({ work: w })}>{label("work", w)}</button>
+              )}
+            </For>
+          </div>
+        </div>
+        <label class="field">
+          <span>{t("flows.stagePrompt")}</span>
+          <textarea value={draft.prompt ?? ""} onInput={(e) => set({ prompt: e.currentTarget.value })} />
+        </label>
+      </Show>
+
+      <Show when={behaviourOf(draft) !== "final"}>
+        <div class="field">
+          <div class="row">
+            <span class="caption">{t("flows.screens")}</span>
+            <div class="spacer" />
+            <button class="btn quiet"
+                    onClick={() => set({ screens: [...screens(), { kind: "terminal", ref: "" } as Screen] })}>
+              {t("flows.addScreen")}
+            </button>
+          </div>
+          <Show when={screens().length > 0} fallback={<div class="meta">{t("flows.noTemplateScreens")}</div>}>
+            <For each={screens()}>
+              {(sc, i) => (
+                <div class="row list-row">
+                  <select value={sc.kind} class="fit" onChange={(e) => editScreen(i(), { kind: e.currentTarget.value })}>
+                    <For each={list(vocabulary().screenKinds)}>
+                      {(k) => <option value={k}>{label("screen", k)}</option>}
+                    </For>
+                  </select>
+                  <input type="text" class="grow" value={sc.ref ?? ""}
+                         onInput={(e) => editScreen(i(), { ref: e.currentTarget.value })} />
+                  <button class="btn quiet"
+                          onClick={() => set({ screens: screens().filter((_, at) => at !== i()) })}>✕</button>
+                </div>
+              )}
+            </For>
+            <Show when={behaviourOf(draft) === "wait"}>
+              <div class="meta note">{t("flows.firstScreenNote")}</div>
+            </Show>
+          </Show>
+        </div>
+      </Show>
+
+      <Show when={error()}>
+        <div class="error"><pre>{error()}</pre></div>
+      </Show>
+
+      <div class="row inspector__foot">
+        <Show when={draft.id}>
+          <Show when={confirming()} fallback={
+            <button class="btn quiet" onClick={() => setConfirming(true)}>{t("common.delete")}</button>
+          }>
+            <button class="btn quiet" onClick={() => setConfirming(false)}>{t("common.cancel")}</button>
+            <button class="btn danger" onClick={remove}>{t("flows.deleteTemplate")}</button>
+          </Show>
+        </Show>
+        <div class="spacer" />
+        <button class="btn primary" onClick={save}>{t("common.save")}</button>
+      </div>
+      <p class="meta note">{t("flows.templateNote")}</p>
+    </div>
   );
 }
 
@@ -617,7 +1006,7 @@ function EdgePanel(props: {
   const stages = () => list(props.draft.stages);
   const nameOf = (id: string) => stages().find((s) => s.id === id)?.name ?? id;
 
-  const set = (patch: Partial<Edge>) => { props.setDraft(storePath("edges", props.index, patch)); props.onChange(); };
+  const set = (patch: Partial<Edge>) => { props.setDraft((f) => { Object.assign(list(f.edges)[props.index], patch); }); props.onChange(); };
 
   const removeEdge = () => {
     const at = props.index;

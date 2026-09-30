@@ -321,5 +321,45 @@ CREATE TABLE setting (
 		// sent to its agent with its title, so none of them is.
 		`
 ALTER TABLE card ADD COLUMN typed INTEGER NOT NULL DEFAULT 0;`,
+
+		// 19. Stage templates: the kinds of node the flow editor offers, as a
+		// registry a person edits, and the one a stage was made from. The
+		// builtin ones are written here rather than by the first-run seed, so
+		// a database that already exists gets them too — once: deleting one
+		// is an answer, and a startup rule putting it back would overrule it.
+		// An empty name on a builtin is the application's own words
+		// (model.StageTemplate); model.BuiltinTemplates is the same list, and
+		// a test holds the two together.
+		`
+ALTER TABLE stage ADD COLUMN template TEXT NOT NULL DEFAULT '';
+
+CREATE TABLE stage_template (
+	id           TEXT PRIMARY KEY,
+	ord          INTEGER NOT NULL DEFAULT 0,
+	name         TEXT    NOT NULL DEFAULT '',
+	description  TEXT    NOT NULL DEFAULT '',
+	icon         TEXT    NOT NULL DEFAULT '',
+	color        TEXT    NOT NULL DEFAULT '',
+	builtin      INTEGER NOT NULL DEFAULT 0,
+	action       TEXT    NOT NULL DEFAULT 'none',
+	work         TEXT    NOT NULL DEFAULT '',
+	prompt       TEXT    NOT NULL DEFAULT '',
+	crew_json    TEXT    NOT NULL DEFAULT '[]',
+	final        INTEGER NOT NULL DEFAULT 0,
+	screens_json TEXT    NOT NULL DEFAULT '[]',
+	updated_at   INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT INTO stage_template (id, ord, icon, color, builtin, action, work, final, screens_json) VALUES
+	('agent',    1,  'agent',    '#4fb8ad', 1, 'agent',   'terminal', 0, '[]'),
+	('terminal', 2,  'terminal', '#c9cdd6', 1, 'none',    '', 0, '[{"kind":"terminal"}]'),
+	('docker',   3,  'docker',   '#2496ed', 1, 'none',    '', 0, '[{"kind":"terminal","ref":"docker compose up"}]'),
+	('web',      4,  'web',      '#e0a458', 1, 'none',    '', 0, '[{"kind":"run","ref":"web"}]'),
+	('diff',     5,  'diff',     '#c38ee0', 1, 'none',    '', 0, '[{"kind":"diff"}]'),
+	('notes',    6,  'notes',    '#d9c36a', 1, 'none',    '', 0, '[{"kind":"notes","ref":"plan.md"}]'),
+	('wait',     7,  'wait',     '#949aab', 1, 'none',    '', 0, '[]'),
+	('publish',  8,  'publish',  '#6aa2e8', 1, 'publish', '', 0, '[]'),
+	('verdict',  9,  'verdict',  '#6aa2e8', 1, 'verdict', '', 0, '[]'),
+	('final',    10, 'final',    '#7bc47f', 1, 'none',    '', 1, '[]');`,
 	}
 }

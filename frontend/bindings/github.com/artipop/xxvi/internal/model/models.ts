@@ -541,6 +541,17 @@ export interface Stage {
      */
     "id": string;
     "name": string;
+
+    /**
+     * Template is the stage template the node was made from (StageTemplate),
+     * which is what the canvas draws it as: its icon, its colour, its name for
+     * the kind of thing this is. The engine does not read it — what a stage
+     * does is still its own action and screens, copied from the template when
+     * it was picked — so a template edited or deleted later changes how the box
+     * looks and nothing about how the card moves. Empty is read as
+     * BuiltinTemplateOf and settled on save.
+     */
+    "template"?: string;
     "action": string;
 
     /**
@@ -625,6 +636,62 @@ export interface Stage {
      */
     "x"?: number;
     "y"?: number;
+}
+
+/**
+ * A stage template is a kind of node the flow editor offers: «AI in the
+ * terminal», «Terminal», «Docker», «Web», «Diff». It is a registry like agents
+ * and projects — rows a person adds and edits — and the standard ones are rows
+ * too, put there by the migration that made the table, so there is one place to
+ * look for what the palette holds rather than a list in the code and a list in
+ * the database.
+ * 
+ * A template is a preset and nothing more: picking one copies its action, its
+ * work mode, its brief and its screens onto the stage, and from then on the
+ * stage owns them. The engine never reads a template. That is what keeps the
+ * set open without opening what a flow can do: a template can only combine the
+ * closed sets of actions and screens a stage already has, and it is checked
+ * against them the same way a stage is.
+ */
+export interface StageTemplate {
+    "id": string;
+
+    /**
+     * Name and Description are what the palette card says. Empty on a builtin
+     * template means «the application's own words», so the card follows the
+     * language; a person renaming it writes over that.
+     */
+    "name"?: string;
+    "description"?: string;
+
+    /**
+     * Icon names a file among the node icons the frontend ships
+     * (frontend/public/node-icons/<icon>.svg). A name rather than the picture:
+     * the icons are drawn as one set, and a template picks from it.
+     */
+    "icon"?: string;
+
+    /**
+     * Color is the node's accent, #rrggbb. Empty is the application's own.
+     */
+    "color"?: string;
+
+    /**
+     * Builtin marks the ones the application put there. Editable and
+     * deletable like any other; the mark only says whose words an empty name
+     * stands for.
+     */
+    "builtin"?: boolean;
+
+    /**
+     * The preset, in the stage's own terms.
+     */
+    "action": string;
+    "work"?: string;
+    "prompt"?: string;
+    "crew"?: string[] | null;
+    "final"?: boolean;
+    "screens"?: Screen[] | null;
 }
 
 /**

@@ -170,13 +170,6 @@ export function propValue(name: string, value: string): string {
   return value;
 }
 
-/** actionLabel names what a stage does, for the editor's select and its box. */
-export function actionLabel(action: string): string {
-  if (action === "agent") return t("flows.agentWorks");
-  if (!action || action === "none") return t("flows.waitsEvent");
-  return label("action", action);
-}
-
 // ---- messages ----
 
 /** say words a message from the backend: a refusal, a journal entry, why a card

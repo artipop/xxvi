@@ -27,10 +27,16 @@ export default function App(): JSX.Element {
   // The ribbon takes the whole window but the sidebar: the sidebar is narrow
   // enough to sit beside the job, and a way out that is always in sight beats
   // one folded behind a chevron. Esc still leads back to the inbox.
+  //
+  // So does the flow editor: its canvas is the page, and a column of padding
+  // around it was width taken from the one thing on it.
+  const whole = () => tab() === "ribbon" || tab() === "flows";
+  const cardBeside = () => Boolean(openCard()) && tab() === "inbox";
+
   return (
     <div class="shell">
       <Show
-        when={tab() !== "ribbon"}
+        when={!whole()}
         fallback={
           <div class="full">
             <Show when={error()}>
@@ -40,11 +46,13 @@ export default function App(): JSX.Element {
               </div>
             </Show>
             <BackgroundNotice floating />
-            <RibbonView />
+            <Show when={tab() === "ribbon"} fallback={<FlowsView />}>
+              <RibbonView />
+            </Show>
           </div>
         }
       >
-        <main class={`main ${openCard() ? "with-panel" : ""}`}>
+        <main class={`main ${cardBeside() ? "with-panel" : ""}`}>
           <div>
             <Show when={error()}>
               <div class="error">
@@ -56,17 +64,16 @@ export default function App(): JSX.Element {
 
             <Show when={tab() === "inbox"}><InboxView /></Show>
             <Show when={tab() === "attention"}><AttentionView /></Show>
-            <Show when={tab() === "flows"}><FlowsView /></Show>
             <Show when={tab() === "projects"}><ProjectsView /></Show>
             <Show when={tab() === "sources"}><SourcesView /></Show>
             <Show when={tab() === "agents"}><AgentsView /></Show>
             <Show when={tab() === "settings"}><SettingsView /></Show>
           </div>
 
-          {/* The card opens beside what you were looking at rather than instead
-              of it: taking a card into work and watching where it went are the
-              same moment. */}
-          <Show when={openCard()}>
+          {/* The card opens beside the inbox rather than instead of it: taking
+              a card into work and seeing what else is waiting are the same
+              moment. Only there — see openCard. */}
+          <Show when={cardBeside()}>
             <CardPanel />
           </Show>
         </main>

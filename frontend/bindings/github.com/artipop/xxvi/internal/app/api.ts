@@ -201,6 +201,13 @@ export function DeleteSource(name: string): $CancellablePromise<void> {
 }
 
 /**
+ * DeleteStageTemplate removes a template from the palette.
+ */
+export function DeleteStageTemplate(id: string): $CancellablePromise<void> {
+    return $Call.ByID(440779808, id);
+}
+
+/**
  * Diff is what changed in the card's working copy — the screen a review stage
  * stands on (docs/system.md §12.7).
  * 
@@ -241,13 +248,6 @@ export function DropCard(cardID: string): $CancellablePromise<void> {
  */
 export function EditCard(cardID: string, title: string, body: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(2223589865, cardID, title, body);
-}
-
-/**
- * FlowCards lists the cards travelling a flow, with the stage each stands on.
- */
-export function FlowCards(flowID: string): $CancellablePromise<$models.StageCard[] | null> {
-    return $Call.ByID(3466565678, flowID);
 }
 
 /**
@@ -543,6 +543,15 @@ export function SaveSource(src: model$0.Source): $CancellablePromise<model$0.Sou
 }
 
 /**
+ * SaveStageTemplate adds a template or edits one. The stages already made from
+ * it keep what they were given: a template is where a node starts, not a
+ * setting it goes on following.
+ */
+export function SaveStageTemplate(t: model$0.StageTemplate): $CancellablePromise<model$0.StageTemplate> {
+    return $Call.ByID(406235778, t);
+}
+
+/**
  * SendRequest makes one request to a started service on the screen's behalf.
  */
 export function SendRequest(r: launch$0.Request): $CancellablePromise<launch$0.Response> {
@@ -674,6 +683,13 @@ export function SkipUpdate(): $CancellablePromise<void> {
  */
 export function Sources(): $CancellablePromise<model$0.Source[] | null> {
     return $Call.ByID(3797444719);
+}
+
+/**
+ * StageTemplates is the flow editor's palette (model.StageTemplate).
+ */
+export function StageTemplates(): $CancellablePromise<model$0.StageTemplate[] | null> {
+    return $Call.ByID(1356522090);
 }
 
 /**
