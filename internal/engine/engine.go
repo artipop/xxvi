@@ -171,6 +171,18 @@ const continueWords = "Continue where you left off."
 // conversation it resumes holds the brief already, and a second copy reads as a
 // second task.
 func (e *Engine) Continue(cardID, text string) error {
+	return e.resume(cardID, text, false)
+}
+
+// Reopen picks up a paused stage the way Continue does, but tells the agent
+// nothing: its CLI comes back in the conversation it stopped in, showing it, and
+// waits for the person. What went wrong may need a look before anything goes
+// on, and a word sent on the person's behalf would spend tokens on a guess.
+func (e *Engine) Reopen(cardID string) error {
+	return e.resume(cardID, "", true)
+}
+
+func (e *Engine) resume(cardID, text string, quiet bool) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -194,13 +206,16 @@ func (e *Engine) Continue(cardID, text string) error {
 		return msg.Err("stage.notInFlow", "stage", st.StageID, "flow", flow.Name)
 	}
 	text = strings.TrimSpace(text)
-	if text == "" {
+	switch {
+	case quiet:
+		e.record(cardID, model.EntryMove, msg.New("journal.reopened"))
+	case text == "":
 		text = continueWords
 		e.record(cardID, model.EntryMove, msg.New("journal.continued"))
-	} else {
+	default:
 		e.record(cardID, model.EntryMove, msg.New("journal.continuedSaying", "text", text))
 	}
-	e.runStageSaying(card, flow, stage, text)
+	e.runStageSaying(card, flow, stage, text, quiet)
 	e.emitCard(cardID)
 	return nil
 }
@@ -533,13 +548,14 @@ func (e *Engine) enterStage(card model.Card, flow model.Flow, stage model.Stage,
 // counts as a failed one, so the flow can carry the card to its failure branch
 // instead of silently stalling.
 func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
-	e.runStageSaying(card, flow, stage, "")
+	e.runStageSaying(card, flow, stage, "", false)
 }
 
 // runStageSaying is runStage with what the agent is told given rather than
 // composed: a stage continued (Continue) resumes a conversation that already
 // holds its brief.
-func (e *Engine) runStageSaying(card model.Card, flow model.Flow, stage model.Stage, said string) {
+// Quiet is a stage reopened (Reopen): the agent is told nothing at all.
+func (e *Engine) runStageSaying(card model.Card, flow model.Flow, stage model.Stage, said string, quiet bool) {
 	// A final stage is where the card stops. Nothing runs, nothing waits.
 	if stage.Final {
 		if err := e.store.LeaveFlow(card.ID, model.StateDone); err != nil {
@@ -611,7 +627,7 @@ func (e *Engine) runStageSaying(card model.Card, flow model.Flow, stage model.St
 		prompt = TerminalOpening(card, e.arrival(card.ID, flow, stage))
 		brief = TerminalBrief(card, flow, stage, agent, lang)
 	}
-	if said != "" {
+	if said != "" || quiet {
 		prompt = said
 	}
 	job := Job{Card: card, Flow: flow, Stage: stage, Agent: agent, Prompt: prompt, Brief: brief}

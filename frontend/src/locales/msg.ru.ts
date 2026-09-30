@@ -283,6 +283,7 @@ export const msgRu: Dict = {
   "msg.journal.terminalPaused": "Шаг приостановлен: приложение закрылось. Разговор агента сохранён — продолжить можно с экрана стадии.",
   "msg.journal.continued": "Шаг продолжен.",
   "msg.journal.continuedSaying": "Шаг продолжен: «{text}».",
+  "msg.journal.reopened": "Разговор шага открыт снова.",
   "msg.journal.asked": (a) => {
     const what = questionText(String(a.kind ?? ""), String(a.tool ?? ""), String(a.text ?? ""));
     return `Агент ${a.agent} спрашивает:\n\n${what}${a.options ? `\n${a.options}` : ""}`;

@@ -346,6 +346,8 @@ export const en: Dict = {
   "ribbon.continuePlaceholder": "What to tell the agent (optional)",
   "ribbon.continue": "Continue",
   "ribbon.continueTitle": "Continue the agent's conversation — ⌘↵",
+  "ribbon.reopen": "Open the conversation",
+  "ribbon.reopenTitle": "Bring the agent's CLI back in the same conversation, telling it nothing",
   "toolStatus.pending": "waiting",
   "toolStatus.in_progress": "running",
   "toolStatus.completed": "done",

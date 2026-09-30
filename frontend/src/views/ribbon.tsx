@@ -800,6 +800,7 @@ function Pane(props: {
 // A stage the application closed on waits here for a person: it goes on only
 // when somebody says so, in the conversation it stopped in. What is typed is
 // the next thing the agent reads; nothing typed means «go on».
+// Reopening brings the CLI back with nothing said, for a look first.
 function ContinueBar(props: { cardId: string }): JSX.Element {
   const [text, setText] = createSignal("");
   const [busy, setBusy] = createSignal(false);
@@ -812,6 +813,12 @@ function ContinueBar(props: { cardId: string }): JSX.Element {
       await loadRibbons();
     }
   };
+  const reopen = async () => {
+    setBusy(true);
+    const done = await guard(() => API.ReopenStage(props.cardId));
+    setBusy(false);
+    if (done) await loadRibbons();
+  };
   return (
     <div class="screen-continue">
       <span class="meta" title={t("ribbon.pausedTitle")}>{t("ribbon.paused")}</span>
@@ -823,6 +830,9 @@ function ContinueBar(props: { cardId: string }): JSX.Element {
           onInput={(e) => setText(e.currentTarget.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void go(); }}
         />
+        <button class="btn tiny" disabled={busy()} onClick={() => void reopen()} title={t("ribbon.reopenTitle")}>
+          {t("ribbon.reopen")}
+        </button>
         <button class="btn primary tiny" disabled={busy()} onClick={() => void go()} title={t("ribbon.continueTitle")}>
           {t("ribbon.continue")}
         </button>

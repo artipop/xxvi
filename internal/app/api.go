@@ -210,6 +210,15 @@ func (s *API) ContinueStage(cardID, text string) (CardView, error) {
 	return s.Card(cardID)
 }
 
+// ReopenStage brings a paused stage's CLI back in the conversation it stopped
+// in, telling the agent nothing: the person looks, then decides.
+func (s *API) ReopenStage(cardID string) (CardView, error) {
+	if err := s.app.Engine.Reopen(cardID); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(cardID)
+}
+
 // MoveTo puts a card on a stage by hand. A person is always above the graph.
 func (s *API) MoveTo(cardID, stageID string) (CardView, error) {
 	if err := s.app.Engine.MoveTo(cardID, stageID); err != nil {

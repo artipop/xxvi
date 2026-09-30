@@ -351,6 +351,8 @@ export const ru: Dict = {
   "ribbon.continuePlaceholder": "Что сказать агенту (необязательно)",
   "ribbon.continue": "Продолжить",
   "ribbon.continueTitle": "Продолжить разговор агента — ⌘↵",
+  "ribbon.reopen": "Открыть разговор",
+  "ribbon.reopenTitle": "Поднять CLI агента в том же разговоре, ничего ему не говоря",
   "toolStatus.pending": "ждёт",
   "toolStatus.in_progress": "идёт",
   "toolStatus.completed": "готово",

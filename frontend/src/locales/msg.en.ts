@@ -284,6 +284,7 @@ export const msgEn: Dict = {
   "msg.journal.terminalPaused": "The step was paused: the application closed. The agent's conversation is saved — continue it from the stage's screen.",
   "msg.journal.continued": "The step was continued.",
   "msg.journal.continuedSaying": "The step was continued: «{text}».",
+  "msg.journal.reopened": "The step's conversation was opened again.",
   "msg.journal.asked": (a) => {
     const what = questionText(String(a.kind ?? ""), String(a.tool ?? ""), String(a.text ?? ""));
     return `Agent ${a.agent} asks:\n\n${what}${a.options ? `\n${a.options}` : ""}`;

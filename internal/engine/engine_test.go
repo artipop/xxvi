@@ -914,6 +914,23 @@ func TestAPausedStageContinuesWithWhatThePersonSaid(t *testing.T) {
 	}
 }
 
+// Reopened, the stage comes back in its conversation with nothing said: not
+// «go on», and not the opening again.
+func TestAReopenedStageSaysNothing(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Задача")
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+	f.pause(t, card.ID)
+
+	if err := f.engine.Reopen(card.ID); err != nil {
+		t.Fatalf("открыть снова: %v", err)
+	}
+	job := f.runner.lastJob(t)
+	if job.Prompt != "" || job.Stage.ID != "work" {
+		t.Fatalf("агенту ничего не говорят, стадия та же: %q на %s", job.Prompt, job.Stage.ID)
+	}
+}
+
 // Only a paused stage can be continued: one running, finished or never paused
 // has nothing to pick up, and continuing it would start a second run.
 func TestOnlyAPausedStageContinues(t *testing.T) {

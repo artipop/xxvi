@@ -477,6 +477,14 @@ export function RemoveFromFlow(cardID: string): $CancellablePromise<$models.Card
 }
 
 /**
+ * ReopenStage brings a paused stage's CLI back in the conversation it stopped
+ * in, telling the agent nothing: the person looks, then decides.
+ */
+export function ReopenStage(cardID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(4096095204, cardID);
+}
+
+/**
  * ResetNativeTerminals closes every native terminal view. The page calls it as
  * it starts: views a page before it laid out — reloaded since — would
  * otherwise stay over the new one.
