@@ -213,15 +213,17 @@ function InboxCard(props: { card: Card }) {
         {/* An MR under review is in its own repository, on its own branch:
             where it is worked is not a question. */}
         <Show when={projects().length > 0 && props.card.workMode !== "review"}>
-          <select value={projectID()} onChange={(e) => { setProjectID(e.currentTarget.value); setFolderID(""); }}
+          <select onChange={(e) => { setProjectID(e.currentTarget.value); setFolderID(""); }}
                   class="fit" title={t("inbox.where")}>
-            <option value="">{t("common.ownFolder")}</option>
-            <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
+            {/* selected on each option rather than value on the select: the list is
+                rebuilt when a project is added, and the select would fall to another row. */}
+            <option value="" selected={projectID() === ""}>{t("common.ownFolder")}</option>
+            <For each={projects()}>{(p) => <option value={p.id} selected={p.id === projectID()}>{p.name}</option>}</For>
           </select>
           <Show when={projectFolders(projectID()).length > 1}>
-            <select value={folderID() || projectFolders(projectID())[0]?.id} onChange={(e) => setFolderID(e.currentTarget.value)}
+            <select onChange={(e) => setFolderID(e.currentTarget.value)}
                     class="fit" title={t("compose.folder")}>
-              <For each={projectFolders(projectID())}>{(f) => <option value={f.id}>{folderName(f)}</option>}</For>
+              <For each={projectFolders(projectID())}>{(f) => <option value={f.id} selected={f.id === (folderID() || projectFolders(projectID())[0]?.id)}>{folderName(f)}</option>}</For>
             </select>
           </Show>
         </Show>
