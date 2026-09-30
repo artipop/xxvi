@@ -5,6 +5,7 @@ import { label, propName, propValue, t, waitText } from "../i18n";
 import { QuestionForm, WorktreeForm } from "./attention";
 import { JournalList } from "./journal";
 import { Marks } from "./marks";
+import Markdown from "./markdown";
 
 // One card, in full: where it stands, what it is waiting for, and who works it.
 // What happened to it along the way is the ribbon's to show; the journal is the
@@ -31,8 +32,10 @@ export default function CardPanel() {
           <button class="btn quiet" onClick={closeCard}>{t("common.close")}</button>
         </div>
 
-        <div class="title card-title">{card().title}</div>
-        <Show when={card().body}><div class="body">{card().body}</div></Show>
+        <Show when={!card().describing} fallback={<Describing />}>
+          <div class="title card-title">{card().title}</div>
+          <Show when={card().body}><Markdown text={card().body!} /></Show>
+        </Show>
         <Show when={card().url}>
           <div class="meta mono note">{card().url}</div>
         </Show>
@@ -308,4 +311,15 @@ function Journal() {
 
 function sameName(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** Describing stands where the card's title and text will be while its agent
+ *  is still writing them: the old ones are what the task was, not what it is. */
+export function Describing() {
+  return (
+    <div class="describing">
+      <span class="spinner" />
+      <span>{t("card.describing")}</span>
+    </div>
+  );
 }

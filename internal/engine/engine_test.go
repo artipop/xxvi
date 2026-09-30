@@ -22,6 +22,7 @@ type fakeRunner struct {
 	busy    map[string]bool
 	fail    error // when set, Start refuses
 	engine  *Engine
+	asks    bool // Leave asks the agent for a description
 }
 
 func newRunner() *fakeRunner {
@@ -68,7 +69,10 @@ func (r *fakeRunner) Cancel(cardID string, reason msg.Msg) {
 	delete(r.running, cardID)
 }
 
-func (r *fakeRunner) Leave(cardID string, reason msg.Msg) { r.Cancel(cardID, reason) }
+func (r *fakeRunner) Leave(cardID string, reason msg.Msg) bool {
+	r.Cancel(cardID, reason)
+	return r.asks
+}
 
 // finish ends the card's session the way a real one would: release the place,
 // then report the outcome.
@@ -643,21 +647,41 @@ func TestReturnRefusesACardNeverInWork(t *testing.T) {
 	}
 }
 
-// What the agent says the task has become is the card's text from then on.
-func TestDescribedReplacesTheCardText(t *testing.T) {
+// What the agent says the task has become is the card from then on — its
+// title too: the conversation may have gone somewhere else than it started.
+func TestDescribedReplacesTheCard(t *testing.T) {
 	f := setup(t, devFlow())
 	card := f.card(t, "Т")
-	f.engine.Described(card.ID, "  Схема готова, осталось перенести запросы.  ")
+	f.engine.Described(card.ID, " Переезд на ORM ", "  Схема готова, осталось перенести запросы.  ")
 	got, err := f.store.Card(card.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Body != "Схема готова, осталось перенести запросы." {
-		t.Fatalf("описание карточки: %q", got.Body)
+	if got.Title != "Переезд на ORM" || got.Body != "Схема готова, осталось перенести запросы." {
+		t.Fatalf("карточка: %q / %q", got.Title, got.Body)
 	}
-	f.engine.Described(card.ID, "   ")
-	if got, _ := f.store.Card(card.ID); got.Body == "" {
-		t.Fatal("пустое описание не стирает написанное")
+	f.engine.Described(card.ID, "", "   ")
+	if got, _ := f.store.Card(card.ID); got.Body == "" || got.Title == "" {
+		t.Fatal("пустой ответ не стирает написанное")
+	}
+}
+
+// Until the agent has answered, the card in the inbox is one being written,
+// and an answer — or the word that none came — ends that.
+func TestLeavingCardIsDescribingUntilAnswered(t *testing.T) {
+	f := setup(t, devFlow())
+	f.runner.asks = true
+	card := f.card(t, "Т")
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+	if err := f.engine.RemoveFromFlow(card.ID); err != nil {
+		t.Fatalf("снять с флоу: %v", err)
+	}
+	if !f.engine.Describing(card.ID) {
+		t.Fatal("пока агент пишет, карточка формулируется")
+	}
+	f.engine.Described(card.ID, "", "")
+	if f.engine.Describing(card.ID) {
+		t.Fatal("ответ без текста тоже заканчивает ожидание")
 	}
 }
 

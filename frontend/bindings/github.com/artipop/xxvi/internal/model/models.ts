@@ -138,6 +138,13 @@ export interface Card {
      * and a person answers a waiting stage by setting one.
      */
     "props"?: { [_ in string]?: string } | null;
+
+    /**
+     * Describing is a card whose agent is still putting into words what the
+     * task has become (engine.Described). Not stored: it lasts as long as the
+     * conversation that is writing it.
+     */
+    "describing"?: boolean;
     "createdAt": string;
     "updatedAt": string;
 }

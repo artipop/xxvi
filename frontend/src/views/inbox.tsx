@@ -3,6 +3,8 @@ import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Card, InboxGroup } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import { applyCard, flows, folderName, guard, inbox, workspace, list, loadInbox, openCardByID, projectFolders, projects, setInbox, showRibbon, sources, openOutside } from "../state";
 import { propName, propValue, t } from "../i18n";
+import Markdown from "./markdown";
+import { Describing } from "./card";
 
 // The inbox: what the sources brought, grouped by what brought it. A card here
 // does nothing until somebody takes it into work — that decision is the whole
@@ -183,6 +185,7 @@ function InboxCard(props: { card: Card }) {
   };
 
   return (
+    <Show when={!props.card.describing} fallback={<div class="card"><Describing /></div>}>
     <div class="card">
       <div class="row">
         <span class="title clickable" onClick={() => openCardByID(props.card.id)}>{props.card.title}</span>
@@ -200,7 +203,7 @@ function InboxCard(props: { card: Card }) {
       </div>
 
       <Show when={props.card.body}>
-        <div class="body">{shorten(props.card.body!)}</div>
+        <Markdown text={props.card.body!} class="preview" />
       </Show>
 
       <div class="row wrap actions">
@@ -230,6 +233,7 @@ function InboxCard(props: { card: Card }) {
         <button class="btn quiet" onClick={drop}>{t("common.drop")}</button>
       </div>
     </div>
+    </Show>
   );
 }
 
@@ -237,9 +241,4 @@ function mrNumber(externalId: string | undefined, url: string): string {
   if (externalId?.startsWith("!")) return externalId;
   const m = url.match(/merge_requests\/(\d+)/);
   return m ? `!${m[1]}` : "MR";
-}
-
-function shorten(text: string): string {
-  const limit = 240;
-  return text.length > limit ? text.slice(0, limit) + "…" : text;
 }

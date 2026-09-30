@@ -115,7 +115,7 @@ type finishedRecorder struct {
 
 func (r finishedRecorder) Finished(_, outcome string, _ msg.Msg, _ string) { r.done <- outcome }
 func (r finishedRecorder) Abandoned(string)                                {}
-func (r finishedRecorder) Described(string, string)                        {}
+func (r finishedRecorder) Described(string, string, string)                {}
 
 type reviveCase struct {
 	m     *Manager

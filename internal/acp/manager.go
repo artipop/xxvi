@@ -74,8 +74,8 @@ type Reporter interface {
 	// before it reported. Nothing on the stage can pick it up again.
 	Abandoned(cardID string)
 	// Described is the task as the agent of a card leaving its flow put it
-	// (Manager.Leave).
-	Described(cardID, text string)
+	// (Manager.Leave). Both empty: the run ended and nothing came.
+	Described(cardID, title, text string)
 }
 
 // Emitter pushes events to the UI.
@@ -257,19 +257,20 @@ func (m *Manager) Cancel(cardID string, reason msg.Msg) {
 // conversation in a terminal is asked first to describe the task for whoever
 // picks the card up (watchTerminal); anything else has nobody to ask and is
 // cancelled.
-func (m *Manager) Leave(cardID string, reason msg.Msg) {
+func (m *Manager) Leave(cardID string, reason msg.Msg) bool {
 	m.mu.Lock()
 	s := m.byCard[cardID]
 	m.mu.Unlock()
 	if s == nil {
-		return
+		return false
 	}
 	if s.work != model.WorkTerminal || s.currentStatus() != store.StatusRunning {
 		m.Cancel(cardID, reason)
-		return
+		return false
 	}
 	m.log.Info("card leaving its flow, asking for a description", "session", s.id, "card", cardID)
 	s.leave()
+	return true
 }
 
 // ---- the session lifecycle ----
@@ -329,6 +330,12 @@ func (m *Manager) release(s *session) {
 
 	if m.to == nil {
 		return
+	}
+	// Whatever ended the run, a card waiting for its description stops
+	// waiting here: after the answer this says nothing new, and without one
+	// it is the only word that nothing came.
+	if s.isLeaving() {
+		m.to.Described(s.card.ID, "", "")
 	}
 	if s.wasAbandoned() {
 		m.to.Abandoned(s.card.ID)

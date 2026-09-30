@@ -131,6 +131,7 @@ export const ru: Dict = {
   "card.stageWaits": "Стадия ждёт: {what}",
   "card.stopAgent": "Остановить агента",
   "card.removeFromFlow": "Перенести во входящие",
+  "card.describing": "Формулирую задачу…",
   "card.props": "Свойства",
   "card.propName": "свойство",
   "card.propValue": "значение",

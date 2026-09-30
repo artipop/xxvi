@@ -219,20 +219,39 @@ func content(res *mcp.CallToolResult) string {
 // the words reach the step as they were written.
 func TestDescriptionReachesItsStep(t *testing.T) {
 	s := serve(t)
-	got := make(chan string, 1)
+	got := make(chan Description, 1)
 	token := s.Grant(Step{
 		Report:   func(Report) error { return nil },
-		Describe: func(text string) error { got <- text; return nil },
+		Describe: func(d Description) error { got <- d; return nil },
 	})
-	res, err := callTool(t, s, token, "describe_task", map[string]any{"description": "  Переезд на ORM: схема готова, миграции — нет.  "})
+	res, err := callTool(t, s, token, "describe_task", map[string]any{
+		"title": " Переезд на ORM ", "description": "  Схема готова, миграции — нет.  ",
+	})
 	if err != nil {
 		t.Fatalf("вызвать инструмент: %v", err)
 	}
 	if res.IsError {
 		t.Fatalf("вызов не должен быть отказом: %+v", res.Content)
 	}
-	if text := <-got; text != "Переезд на ORM: схема готова, миграции — нет." {
-		t.Fatalf("описание доехало не тем: %q", text)
+	if d := <-got; d.Title != "Переезд на ORM" || d.Text != "Схема готова, миграции — нет." {
+		t.Fatalf("описание доехало не тем: %+v", d)
+	}
+}
+
+// Without a title the card would keep the one it was opened with, which is
+// the point of asking: the conversation may have gone elsewhere.
+func TestDescriptionWithoutTitleIsRefused(t *testing.T) {
+	s := serve(t)
+	token := s.Grant(Step{
+		Report: func(Report) error { return nil },
+		Describe: func(Description) error {
+			t.Error("без заголовка описание не принимается")
+			return nil
+		},
+	})
+	res, err := callTool(t, s, token, "describe_task", map[string]any{"description": "что-то"})
+	if err == nil && !res.IsError {
+		t.Fatal("без заголовка вызов должен быть отказом")
 	}
 }
 

@@ -144,7 +144,7 @@ func (m *Manager) runTerminal(s *session) {
 	// Buffered generously and never blocked on: a hook holds the CLI's turn
 	// until it is answered, and the watcher is the only reader.
 	hooked := make(chan stagemcp.HookEvent, 64)
-	described := make(chan string, 1)
+	described := make(chan stagemcp.Description, 1)
 	token := tools.Grant(stagemcp.Step{
 		CardTitle: s.card.Title,
 		StageName: s.stage.Name,
@@ -162,12 +162,12 @@ func (m *Manager) runTerminal(s *session) {
 				return errors.New("this step is already finished")
 			}
 		},
-		Describe: func(text string) error {
+		Describe: func(d stagemcp.Description) error {
 			if !s.isLeaving() {
 				return errors.New("nobody asked for a description: the task is still in work")
 			}
 			select {
-			case described <- text:
+			case described <- d:
 				return nil
 			default:
 				return errors.New("the description is already saved")
@@ -304,7 +304,7 @@ func (m *Manager) runTerminal(s *session) {
 // nothing, as its silence does.
 func (m *Manager) watchTerminal(
 	ctx context.Context, s *session, sess *term.Session,
-	reported <-chan stagemcp.Report, hooked <-chan stagemcp.HookEvent, described <-chan string,
+	reported <-chan stagemcp.Report, hooked <-chan stagemcp.HookEvent, described <-chan stagemcp.Description,
 ) (stagemcp.Report, error) {
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
@@ -338,9 +338,9 @@ func (m *Manager) watchTerminal(
 			leaveBy = time.After(leaveWait)
 			go askToDescribe(m, s, sess, state == cliAsking)
 
-		case text := <-described:
+		case d := <-described:
 			if m.to != nil {
-				m.to.Described(s.card.ID, text)
+				m.to.Described(s.card.ID, d.Title, d.Text)
 			}
 			s.cancel()
 
@@ -662,9 +662,10 @@ func deliverPrompt(m *Manager, s *session, sess *term.Session) {
 const leaveWait = 3 * time.Minute
 
 const leaveRequest = "The person has taken this task off its flow and put it back in the inbox. " +
-	"Call describe_task once with a description of the task as it stands, drawn from this conversation: " +
-	"what it is about, what has been done, what is left and what was decided — for somebody who was not here. " +
-	"Write it in the language of this conversation. Do nothing else: the session is closed right after."
+	"Call describe_task once with a title and a description of the task as it stands now, drawn from this conversation. " +
+	"The title names the task it has become: if the conversation moved on from what it started with, name where it went, not where it began. " +
+	"The description says what it is about, what has been done, what is left and what was decided — for somebody who was not here. " +
+	"Write both in the language of this conversation. Do nothing else: the session is closed right after."
 
 // askToDescribe types the request into the terminal. A CLI asking for
 // permission would take the Enter after it as the answer, so the question is

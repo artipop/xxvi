@@ -87,6 +87,11 @@ type Card struct {
 	// and a person answers a waiting stage by setting one.
 	Props map[string]string `json:"props,omitempty"`
 
+	// Describing is a card whose agent is still putting into words what the
+	// task has become (engine.Described). Not stored: it lasts as long as the
+	// conversation that is writing it.
+	Describing bool `json:"describing,omitempty"`
+
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }

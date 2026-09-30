@@ -66,10 +66,17 @@ type Step struct {
 	// Hook takes what the CLI says about itself (hook.go). Optional: a CLI
 	// without hooks is watched by its silence instead.
 	Hook func(HookEvent)
-	// Describe takes the card's description, written when the card leaves its
-	// flow for the inbox. Optional. The tool is there from the start rather
-	// than added when it is needed: a CLI reads the list of tools once.
-	Describe func(text string) error
+	// Describe takes the card's title and description, written when the card
+	// leaves its flow for the inbox. Optional. The tool is there from the
+	// start rather than added when it is needed: a CLI reads the list of tools
+	// once.
+	Describe func(Description) error
+}
+
+// Description is the task as its conversation left it.
+type Description struct {
+	Title string
+	Text  string
 }
 
 // Server is the loopback listener and the grants open on it.
@@ -239,11 +246,11 @@ func newServer(step Step) *mcp.Server {
 			Name:        "describe_task",
 			Description: describeCard,
 		}, func(_ context.Context, _ *mcp.CallToolRequest, in describeInput) (*mcp.CallToolResult, any, error) {
-			text := strings.TrimSpace(in.Description)
-			if text == "" {
-				return errorResult("The description is empty."), nil, nil
+			d := Description{Title: strings.TrimSpace(in.Title), Text: strings.TrimSpace(in.Description)}
+			if d.Title == "" || d.Text == "" {
+				return errorResult("Both the title and the description are needed."), nil, nil
 			}
-			if err := step.Describe(text); err != nil {
+			if err := step.Describe(d); err != nil {
 				return errorResult("%v", err), nil, nil
 			}
 			return textResult("Description saved. The session is being closed."), nil, nil
@@ -253,7 +260,8 @@ func newServer(step Step) *mcp.Server {
 }
 
 type describeInput struct {
-	Description string `json:"description" jsonschema:"the task as it stands now, in the language of the conversation"`
+	Title       string `json:"title" jsonschema:"a short title for the task as it stands now — one line, no Markdown"`
+	Description string `json:"description" jsonschema:"the task as it stands now, in Markdown, in the language of the conversation"`
 }
 
 // describeCard keeps the tool out of the agent's own initiative: it is the
@@ -261,7 +269,7 @@ type describeInput struct {
 // description written mid-task would overwrite the person's own words.
 const describeCard = "Only when the application asks for it in this conversation: the task is going back to the inbox, " +
 	"and this writes its description — what the task is, what has been done, what is left and what was decided, " +
-	"so that somebody who was not in this conversation can pick it up. It replaces the task's text. " +
+	"so that somebody who was not in this conversation can pick it up. It replaces the task's title and text. " +
 	"Never call it on your own, and never instead of finish_step."
 
 // whenToFinish is said in both places for the same reason as lastCall. Left to

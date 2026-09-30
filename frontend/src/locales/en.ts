@@ -132,6 +132,7 @@ export const en: Dict = {
   "card.stageWaits": "The stage waits for: {what}",
   "card.stopAgent": "Stop the agent",
   "card.removeFromFlow": "Move to inbox",
+  "card.describing": "Writing up the task…",
   "card.props": "Properties",
   "card.propName": "property",
   "card.propValue": "value",

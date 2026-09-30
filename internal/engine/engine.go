@@ -63,8 +63,10 @@ type Runner interface {
 	Cancel(cardID string, reason msg.Msg)
 	// Leave is Cancel for a card going back to the inbox: a conversation in a
 	// terminal is first asked to describe the task as it stands (Described),
-	// then closed. Returns at once, like Start.
-	Leave(cardID string, reason msg.Msg)
+	// then closed. Returns at once, like Start, and says whether it asked — a
+	// runner that did always answers with Described, if only to say nothing
+	// came.
+	Leave(cardID string, reason msg.Msg) (asked bool)
 }
 
 // Emitter pushes events to the UI. Implementations must be safe to call before
@@ -95,6 +97,11 @@ type Engine struct {
 	// it is read while the view is built, and a step reports under mu.
 	pubMu      sync.Mutex
 	publishing map[string]bool
+
+	// describing is the cards back in the inbox whose agent is still writing
+	// what they are. Its own lock, like publishing: the inbox reads it.
+	descMu     sync.Mutex
+	describing map[string]bool
 
 	// mu serializes deciding about one card. Every path here is a short
 	// sequence of database reads and writes ending in a non-blocking Start, so
@@ -279,8 +286,8 @@ func (e *Engine) RemoveFromFlow(cardID string) error {
 	if err := e.store.LeaveFlow(cardID, model.StateInbox); err != nil {
 		return err
 	}
-	if e.runner != nil {
-		e.runner.Leave(cardID, msg.New("cancel.leftFlow"))
+	if e.runner != nil && e.runner.Leave(cardID, msg.New("cancel.leftFlow")) {
+		e.setDescribing(cardID, true)
 	}
 	e.record(cardID, model.EntryMove, msg.New("journal.leftFlow"))
 	e.emitCard(cardID)
@@ -288,20 +295,47 @@ func (e *Engine) RemoveFromFlow(cardID string) error {
 }
 
 // Described is what a runner calls when the agent of a card leaving its flow
-// has said what the task now is (Runner.Leave). It becomes the card's text:
-// the card waits in the inbox for somebody who was not in that conversation.
-func (e *Engine) Described(cardID, text string) {
-	text = strings.TrimSpace(text)
-	if text == "" {
+// has said what the task now is (Runner.Leave). The title and the text replace
+// the card's: the conversation may have drifted far from what the card was
+// opened for, and the card waits in the inbox for somebody who was not in it.
+// Both empty is the runner saying nothing came, and the card stops waiting.
+func (e *Engine) Described(cardID, title, text string) {
+	title, text = strings.TrimSpace(title), strings.TrimSpace(text)
+	defer e.setDescribing(cardID, false)
+	if title == "" && text == "" {
 		return
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if _, err := e.store.UpdateCard(cardID, store.CardEdit{Body: &text}); err != nil {
+	edit := store.CardEdit{Body: &text}
+	if title != "" {
+		edit.Title = &title
+	}
+	if _, err := e.store.UpdateCard(cardID, edit); err != nil {
 		e.log.Warn("could not write the card's description", "card", cardID, "err", err)
 		return
 	}
 	e.record(cardID, model.EntryMove, msg.New("journal.described"))
+}
+
+// Describing reports whether the card's agent is still writing what it is.
+func (e *Engine) Describing(cardID string) bool {
+	e.descMu.Lock()
+	defer e.descMu.Unlock()
+	return e.describing[cardID]
+}
+
+func (e *Engine) setDescribing(cardID string, on bool) {
+	e.descMu.Lock()
+	if on {
+		if e.describing == nil {
+			e.describing = map[string]bool{}
+		}
+		e.describing[cardID] = true
+	} else {
+		delete(e.describing, cardID)
+	}
+	e.descMu.Unlock()
 	e.emitCard(cardID)
 }
 

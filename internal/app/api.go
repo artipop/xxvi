@@ -38,6 +38,9 @@ func (s *API) Inbox() ([]model.InboxGroup, error) {
 	if err != nil {
 		return nil, err
 	}
+	for i := range cards {
+		cards[i].Describing = s.app.Engine.Describing(cards[i].ID)
+	}
 	groups := model.GroupBySource(cards)
 	// What kind of source a group is decides how the screen words it: a review
 	// queue is named after its project, and «review» is the screen's word.
@@ -103,6 +106,7 @@ func (s *API) Card(cardID string) (CardView, error) {
 	if err != nil {
 		return CardView{}, err
 	}
+	card.Describing = s.app.Engine.Describing(cardID)
 	view := CardView{Card: card}
 	if flow, err := s.app.Engine.CardFlowFor(cardID); err == nil {
 		view.Flow = flow
