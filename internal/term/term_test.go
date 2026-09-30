@@ -812,3 +812,27 @@ func TestKnownIsLiveOrKept(t *testing.T) {
 		t.Fatal("закончившийся терминал с хвостом известен")
 	}
 }
+
+// The tail is on disk while the step still runs: an application that goes down
+// together with the holder leaves nobody to write it at the end.
+func TestRunningTerminalKeepsItsTailOnDisk(t *testing.T) {
+	m := manager(t)
+	m.KeepIn(t.TempDir())
+
+	s, err := m.Attach("run-live", "card-1", t.TempDir(), []string{"sh", "-c", "echo на лету; sleep 30"}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	t.Cleanup(s.Close)
+	deadline := time.After(3 * tailEvery)
+	for !strings.Contains(string(m.transcript("run-live")), "на лету") {
+		select {
+		case <-deadline:
+			t.Fatal("хвост идущего терминала должен появиться на диске, пока он идёт")
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	if !s.Alive() {
+		t.Fatal("терминал должен быть ещё жив — хвост записан по ходу, а не в конце")
+	}
+}

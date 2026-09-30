@@ -74,6 +74,10 @@ type Session struct {
 	// one worth keeping: a screen's shell is started afresh when its screen is
 	// opened again, so its tail would be a file nobody ever reads.
 	keepTail bool
+	// tailMu orders the writes of the tail: a save still running when the
+	// process ends must not land after the final one and put an older screen
+	// back.
+	tailMu sync.Mutex
 	// forgotten closes once the registry has let go of a dead terminal and its
 	// tail, if any, is on disk — what Close waits for.
 	forgotten chan struct{}
@@ -244,6 +248,9 @@ func (m *Manager) register(s *Session) {
 		m.byScreen[s.ScreenID] = s
 	}
 	m.mu.Unlock()
+	if s.keepTail {
+		go m.keepSaving(s)
+	}
 	go func() {
 		<-s.Done()
 		m.forget(s.ID, s)
@@ -389,7 +396,7 @@ func (m *Manager) forget(id string, s *Session) {
 	dir := m.keep
 	m.mu.Unlock()
 	if dir != "" && s.keepTail {
-		m.writeTail(dir, id, s)
+		m.writeTail(dir, id, s, true)
 	}
 
 	m.mu.Lock()
@@ -402,12 +409,66 @@ func (m *Manager) forget(id string, s *Session) {
 	m.mu.Unlock()
 }
 
-func (m *Manager) writeTail(dir, id string, s *Session) {
+// keepSaving writes the tail of a running terminal while it draws. The write at
+// the end is not enough on its own: when the application and the holder go
+// down together — a crash, a kill, a reboot — the process ends with nobody left
+// to write it, and a step the person watched would have no screen at all.
+func (m *Manager) keepSaving(s *Session) {
+	tick := time.NewTicker(tailEvery)
+	defer tick.Stop()
+	var saved time.Time
+	for {
+		select {
+		case <-s.Done():
+			return
+		case <-tick.C:
+		}
+		s.mu.Lock()
+		spoke := s.spoke
+		s.mu.Unlock()
+		m.mu.Lock()
+		dir := m.keep
+		m.mu.Unlock()
+		if dir == "" || !spoke.After(saved) {
+			continue
+		}
+		saved = spoke
+		m.writeTail(dir, s.ID, s, false)
+	}
+}
+
+// tailEvery is how often a drawing terminal's screen goes to disk: what can be
+// lost to a crash, against a snapshot of the screen on every tick.
+const tailEvery = 2 * time.Second
+
+// writeTail puts the screen on disk whole or not at all — through a file
+// renamed into place, so a crash mid-write leaves the previous tail rather than
+// half of one. A save made while running gives way to the final one.
+func (m *Manager) writeTail(dir, id string, s *Session, final bool) {
+	s.tailMu.Lock()
+	defer s.tailMu.Unlock()
+	if !final && !s.Alive() {
+		return
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		m.log.Warn("could not save the terminal tail", "terminal", id, "err", err)
 		return
 	}
-	if err := os.WriteFile(transcriptPath(dir, id), s.History(), 0o600); err != nil {
+	path := transcriptPath(dir, id)
+	tmp, err := os.CreateTemp(dir, ".tail-*")
+	if err == nil {
+		_, err = tmp.Write(s.History())
+		if cerr := tmp.Close(); err == nil {
+			err = cerr
+		}
+		if err == nil {
+			err = os.Rename(tmp.Name(), path)
+		}
+		if err != nil {
+			_ = os.Remove(tmp.Name())
+		}
+	}
+	if err != nil {
 		m.log.Warn("could not save the terminal tail", "terminal", id, "err", err)
 	}
 }
