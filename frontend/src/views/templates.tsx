@@ -1,7 +1,7 @@
 import type { JSX } from "@solidjs/web";
 import type { Screen, Stage, StageTemplate } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import { list } from "../state";
-import { label, t } from "../i18n";
+import { label, propName, t } from "../i18n";
 
 // Stage templates on this side: the palette's cards, and what picking one does
 // to a stage (model.StageTemplate). A template is a preset — its action, brief
@@ -128,10 +128,11 @@ export function applyTemplate(stage: Stage, tpl: StageTemplate, from: StageTempl
 }
 
 /** newStage is a node as the palette drops it: the template's preset and its
- *  name, which is the first thing anybody renames. */
-export function newStage(tpl: StageTemplate, name: string, at: { x: number; y: number }): Stage {
+ *  name, which is the first thing anybody renames. No position: where a stage
+ *  stands is the layout's. */
+export function newStage(tpl: StageTemplate, name: string): Stage {
   const id = `stage-${Math.random().toString(36).slice(2, 9)}`;
-  const base = { id, name, action: "none", x: at.x, y: at.y } as Stage;
+  const base = { id, name, action: "none" } as Stage;
   return { ...base, ...applyTemplate(base, tpl, undefined) } as Stage;
 }
 
@@ -139,7 +140,9 @@ export function newStage(tpl: StageTemplate, name: string, at: { x: number; y: n
  *  opens, so a flow reads off the canvas without opening every box. */
 export function nodeDetail(stage: Stage, owns: boolean): string {
   const sc = list(stage.screens)[0];
-  const ref = (sc?.ref ?? "").trim();
+  // A property named in the reference is worded like everywhere else it is
+  // shown: «{Page}» reads «{Страница}».
+  const ref = (sc?.ref ?? "").trim().replace(/\{([^}]+)\}/g, (_, name: string) => `{${propName(name.trim())}}`);
   switch (shapeOf(stage, owns)) {
     case "agent": {
       const who = list(stage.crew).join(", ") || t("flows.anyAgent");

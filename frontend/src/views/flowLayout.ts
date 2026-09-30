@@ -11,9 +11,11 @@ import type { ElkExtendedEdge, ElkNode, ElkPoint } from "elkjs/lib/elk-api";
 // arrows back to an earlier stage gathered under the graph into one bus that
 // joins at a marked point — and hands back the bends, which the canvas draws.
 //
-// The ports are stated, not left to ELK, and they are the same points the
-// canvas' handles stand at, so a route starts and ends exactly where the box
-// says it does.
+// The ports are stated, not left to ELK. Arrows that share a port are drawn
+// sharing a line, so a port is given to each *meaning*: into a box, the ways
+// forward come in at the middle, the ways back and each hosting event beside it;
+// out of a box, each event leaves by its own point on the bottom. Two arrows run
+// together only where they say the same thing.
 
 export type Point = { x: number; y: number };
 
@@ -29,6 +31,8 @@ export type LayoutEdge = {
   to: string;
   // Which of the source's ports the arrow leaves by.
   port: "success" | "failure" | "event";
+  // The event, for an arrow that leaves by the event port.
+  trigger?: string;
   // The caption and its size. A forward arrow's caption is laid out by ELK,
   // which leaves room for it between the columns. A way back and a hosting
   // event are captioned by the canvas instead (see Route.label): ELK makes room
@@ -85,40 +89,90 @@ const OPTIONS: Record<string, string> = {
 
 const elk = new ELK();
 
-/** layoutFlow lays out one flow. `baseHeight` is where the side ports are
- *  measured from — the box without its row of outputs. */
-export async function layoutFlow(
-  key: string,
-  nodes: LayoutNode[],
-  edges: LayoutEdge[],
-  baseHeight: number,
-): Promise<Layout> {
+// How far apart two ports of one kind stand on a side of a box.
+const PORT_STEP = 12;
+const EVENT_STEP = 20;
+
+// inGroup is which way into a box an arrow takes: its meaning, as far as
+// sharing a line goes.
+function inGroup(e: LayoutEdge): string {
+  if (e.port === "event") return `event:${e.trigger ?? ""}`;
+  return `${e.back ? "back" : "fwd"}:${e.port}`;
+}
+
+// The order ways in are handed the slots in: forward «passed» takes the middle,
+// which keeps the main row straight, and the rest stand beside it.
+function inRank(group: string): number {
+  if (group === "fwd:success") return 0;
+  if (group.startsWith("fwd:")) return 1;
+  if (group.startsWith("back:")) return 2;
+  return 3;
+}
+
+// slotY is the height of the i-th way in: the middle, then alternately below
+// and above it, kept inside the box.
+function slotY(i: number, baseHeight: number): number {
+  const step = Math.ceil(i / 2) * PORT_STEP * (i % 2 === 1 ? 1 : -1);
+  const y = baseHeight * PORT_IN + step;
+  return Math.min(baseHeight - 6, Math.max(6, y));
+}
+
+/** buildGraph is the graph handed to ELK — apart from layoutFlow so it can be
+ *  looked at on its own. */
+export function buildGraph(nodes: LayoutNode[], edges: LayoutEdge[], baseHeight: number): ElkNode {
   const known = new Set(nodes.map((n) => n.id));
-  const graph: ElkNode = {
+  const kept = edges.filter((e) => known.has(e.from) && known.has(e.to));
+
+  const ins = new Map<string, string[]>();
+  const events = new Map<string, string[]>();
+  for (const e of kept) {
+    const into = ins.get(e.to) ?? [];
+    if (!into.includes(inGroup(e))) into.push(inGroup(e));
+    ins.set(e.to, into);
+    if (e.port === "event") {
+      const out = events.get(e.from) ?? [];
+      if (!out.includes(e.trigger ?? "")) out.push(e.trigger ?? "");
+      events.set(e.from, out);
+    }
+  }
+  for (const list of ins.values()) list.sort((a, b) => inRank(a) - inRank(b));
+
+  // A stage nothing leads to or from yet is put in a column of its own after
+  // the last: that is where the next step of a flow is added, and ELK's own
+  // choice — the first column, under the entry — broke the row it joined.
+  const linked = new Set(kept.flatMap((e) => [e.from, e.to]));
+
+  return {
     id: "root",
     layoutOptions: OPTIONS,
-    children: nodes.map((n) => ({
-      id: n.id,
-      width: n.width,
-      height: n.height,
-      layoutOptions: { "elk.portConstraints": "FIXED_POS" },
-      ports: [
-        port(n.id, "in", 0, baseHeight * PORT_IN, "WEST"),
-        port(n.id, "success", n.width, baseHeight * PORT_SUCCESS, "EAST"),
-        port(n.id, "failure", n.width, baseHeight * PORT_FAILURE, "EAST"),
-        port(n.id, "event", n.width / 2, n.height, "SOUTH"),
-      ],
-    })),
-    edges: edges
-      .filter((e) => known.has(e.from) && known.has(e.to))
-      .map((e): ElkExtendedEdge => {
+    children: nodes.map((n) => {
+      const into = ins.get(n.id) ?? [];
+      const out = events.get(n.id) ?? [];
+      return {
+        id: n.id,
+        width: n.width,
+        height: n.height,
+        layoutOptions: {
+          "elk.portConstraints": "FIXED_POS",
+          ...(nodes.length > 1 && !linked.has(n.id) ? { "elk.layered.layering.layerConstraint": "LAST_SEPARATE" } : {}),
+        },
+        ports: [
+          ...(into.length > 0 ? into : ["fwd:success"]).map((g, i) => port(n.id, `in:${g}`, 0, slotY(i, baseHeight), "WEST")),
+          port(n.id, "success", n.width, baseHeight * PORT_SUCCESS, "EAST"),
+          port(n.id, "failure", n.width, baseHeight * PORT_FAILURE, "EAST"),
+          ...out.map((t, i) =>
+            port(n.id, `event:${t}`, n.width / 2 + (i - (out.length - 1) / 2) * EVENT_STEP, n.height, "SOUTH")),
+        ],
+      };
+    }),
+    edges: kept.map((e): ElkExtendedEdge => {
         // The way a card goes is what stays straight: everything else bends
         // around it.
         const main = e.port === "success" && !e.back;
         return {
           id: e.id,
-          sources: [`${e.from}:${e.port}`],
-          targets: [`${e.to}:in`],
+          sources: [e.port === "event" ? `${e.from}:event:${e.trigger ?? ""}` : `${e.from}:${e.port}`],
+          targets: [`${e.to}:in:${inGroup(e)}`],
           layoutOptions: {
             "elk.layered.priority.straightness": main ? "10" : "0",
             "elk.layered.priority.direction": main ? "10" : "0",
@@ -130,8 +184,17 @@ export async function layoutFlow(
         };
       }),
   };
+}
 
-  const laid = await elk.layout(graph);
+/** layoutFlow lays out one flow. `baseHeight` is where the side ports are
+ *  measured from — the box without its row of outputs. */
+export async function layoutFlow(
+  key: string,
+  nodes: LayoutNode[],
+  edges: LayoutEdge[],
+  baseHeight: number,
+): Promise<Layout> {
+  const laid = await elk.layout(buildGraph(nodes, edges, baseHeight));
   const out: Layout = { key, nodes: new Map(), routes: new Map() };
   for (const c of laid.children ?? []) out.nodes.set(c.id, { x: c.x ?? 0, y: c.y ?? 0 });
   for (const e of (laid.edges ?? []) as ElkExtendedEdge[]) {

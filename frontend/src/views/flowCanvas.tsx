@@ -72,10 +72,11 @@ export type StageWrite = {
 };
 
 export type CanvasApi = {
-  // right overrides the right inset: a box added by a click is selected, and
-  // the inspector that opens for it covers the right whether or not it is open
-  // yet.
-  visibleCentre: (right?: number) => { x: number; y: number } | undefined;
+  // reveal brings a box into sight once the layout has placed it: a stage just
+  // added goes to the end of the flow, which may be off the picture. `right` is
+  // how much of the right edge will be covered — by the inspector that opens
+  // for the new stage, open or not yet.
+  reveal: (stageId: string, right?: number) => void;
 };
 
 export type Selection = { kind: "stage" | "edge"; id: string } | null;
@@ -105,8 +106,9 @@ type Props = {
   selected?: Selection;
   onSelect?: (selection: Selection) => void;
 
-  // A template dropped from the palette, at the point of the flow it landed on.
-  onDropKind?: (template: string, at: { x: number; y: number }) => void;
+  // A template dropped from the palette onto the canvas. Where it lands is
+  // not handed over: the layout places it.
+  onDropKind?: (template: string) => void;
 
   // How much of the canvas' left edge something floats over, in pixels. The
   // picture is fitted clear of it, and the zoom plate moves out from under it.
@@ -114,8 +116,8 @@ type Props = {
   // …and of its right edge, which only a fit made while it is covered minds.
   insetRight?: number;
 
-  // Hands out what the editor needs of the canvas: where a box added by a
-  // click should stand to be seen.
+  // Hands out what the editor needs of the canvas: bringing a new box into
+  // sight.
   onApi?: (api: CanvasApi) => void;
 };
 
@@ -334,9 +336,9 @@ const StageBox = (props: NodeProps) => {
             {(w) => (
               <span
                 class={`flowbox__write${w.branchable ? " flowbox__write--branchable" : ""}`}
-                title={t(w.branchable ? "flows.writeBranchable" : "flows.writeCarried", { name: w.name })}
+                title={t(w.branchable ? "flows.writeBranchable" : "flows.writeCarried", { name: propName(w.name) })}
               >
-                {w.name}
+                {propName(w.name)}
                 <Show when={w.branchable && data().editable}>
                   <Handle
                     id={HANDLE_WRITE + w.name} type="source" position="bottom"
@@ -374,16 +376,6 @@ const MARK = 9;
 // rest of it, or the outline thins away as the picture is zoomed out.
 const MARK_RING = 2;
 
-// NEAR is how far, in flow units, a route's end may stand from the handle it
-// belongs to and still be the route for it. The library finds a handle by
-// measuring the dot it drew, whose centre sits a few pixels off the box's edge
-// where ELK's port is; further than that means the route is the previous
-// layout's — ELK has not answered this change yet — and the arrow follows the
-// boxes with the library's own path for that moment.
-const NEAR = 6;
-
-const near = (p: Point, x: number, y: number) => Math.abs(p.x - x) <= NEAR && Math.abs(p.y - y) <= NEAR;
-
 type EdgeData = {
   route?: Route;
   back?: boolean;
@@ -403,10 +395,9 @@ const RoutedEdge = (props: EdgeProps) => {
   const path = createMemo(() => {
     const route = data().route;
     const pts = route?.points;
-    if (pts && pts.length >= 2
-        && near(pts[0], props.sourceX, props.sourceY) && near(pts[pts.length - 1], props.targetX, props.targetY)) {
-      // Drawn as ELK laid it, ends included. Pulling the ends onto the
-      // measured dots tilted every straight run by the dot's few pixels.
+    if (pts && pts.length >= 2) {
+      // Drawn as ELK laid it, ends included: its ports are where the lines
+      // meet the boxes, and the library's measured dots only mark them.
       const points = pts;
       const width = data().captionWidth ?? 0;
       const at = data().captionAt;
@@ -503,8 +494,14 @@ type FitOptions = {
 
 type FlowHandle = {
   screenToFlowPosition?: (at: { x: number; y: number }) => { x: number; y: number };
+  setCenter?: (x: number, y: number, options?: { zoom?: number; duration?: number }) => Promise<boolean>;
   fitView?: (options?: FitOptions) => Promise<boolean> | void;
-  internalNodes?: Record<string, { measured?: { width?: number; height?: number } } | undefined>;
+  // The read surface. Solid Flow 1.0 keeps it under `flow` and spreads only
+  // the commands at the top; read at the top, both of these were undefined.
+  flow?: {
+    internalNodes?: Record<string, { measured?: { width?: number; height?: number } } | undefined>;
+    viewport?: { x: number; y: number; zoom: number };
+  };
 };
 
 // How the graph sits in the canvas: the whole picture, with a margin small
@@ -542,7 +539,7 @@ function fitOptions(inset: Inset): FitOptions {
 const FIT_FRAMES = 30;
 
 const fitWhenMeasured = (handle: FlowHandle, ids: string[], inset: Inset, frame: number) => {
-  const measured = ids.every((id) => (handle.internalNodes?.[id]?.measured?.width || 0) > 0);
+  const measured = ids.every((id) => (handle.flow?.internalNodes?.[id]?.measured?.width || 0) > 0);
   if (!measured && frame < FIT_FRAMES) {
     requestAnimationFrame(() => fitWhenMeasured(handle, ids, inset, frame + 1));
     return;
@@ -719,6 +716,7 @@ export default function FlowCanvas(props: Props) {
         from: a.edge.from,
         to: a.edge.to,
         port: a.kind === "event" ? "event" : (a.kind as "success" | "failure"),
+        trigger: a.kind === "event" ? a.edge.on : undefined,
         label: a.caption ? { width: captionWidth(a.caption), height: CAPTION_HEIGHT, text: a.caption } : undefined,
         back: a.back,
       }));
@@ -737,6 +735,10 @@ export default function FlowCanvas(props: Props) {
     const tallest = stages().reduce((at, s) => Math.max(at, stageHeight(props.writesOf?.(s))), NODE_HEIGHT);
     const fallback = layout(stages(), edges(), tallest);
     const done = laid();
+    // A route is only as good as the layout it came from: one laid for the
+    // graph before this change joins boxes that may since have moved. Until
+    // ELK answers, the library's own path stands in for it.
+    const fresh = done !== null && done.key === layoutInput().key;
 
     const drawnNodes: FlowNode[] = stages().map((stage) => {
       const writes = props.writesOf?.(stage);
@@ -824,7 +826,7 @@ export default function FlowCanvas(props: Props) {
           },
           markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color },
           data: {
-            route: done?.routes.get(id),
+            route: fresh ? done!.routes.get(id) : undefined,
             back,
             captionAt: back ? "back" : elkCaptions({ back, port: kind === "event" ? "event" : "success" }) ? "elk" : "entry",
             captionWidth: caption ? captionWidth(caption) : 0,
@@ -924,23 +926,42 @@ export default function FlowCanvas(props: Props) {
     },
   );
 
-  // Where a new box should go to be seen: the middle of the part of the canvas
-  // no panel covers, in the flow's own coordinates, less half a box so the box
-  // and not its corner lands there.
+  // A box to bring into sight when the layout has placed it — asked for before
+  // ELK has answered, so kept until it does.
+  const [revealing, setRevealing] = createSignal<{ id: string; right: number } | null>(null);
   createEffect(flowHandle, (handle) => {
-    if (!handle?.screenToFlowPosition || !props.onApi) return;
-    const toFlow = handle.screenToFlowPosition;
-    props.onApi({
-      visibleCentre: (rightInset?: number) => {
-        const box = pane()?.getBoundingClientRect();
-        if (!box) return undefined;
-        const left = box.left + (props.insetLeft ?? 0);
-        const right = box.right - (rightInset ?? props.insetRight ?? 0);
-        const at = toFlow({ x: (left + right) / 2, y: box.top + box.height / 2 });
-        return { x: Math.round(at.x - NODE_WIDTH / 2), y: Math.round(at.y - NODE_HEIGHT / 2) };
-      },
-    });
+    if (!props.onApi) return;
+    props.onApi({ reveal: (id, right) => setRevealing({ id, right: right ?? props.insetRight ?? 0 }) });
+    void handle;
   });
+  createEffect(
+    () => {
+      const want = revealing();
+      const done = laid();
+      return want && done?.nodes.has(want.id) ? { want, at: done.nodes.get(want.id)! } : null;
+    },
+    (found) => {
+      if (!found) return;
+      setRevealing(null);
+      const handle = flowHandle();
+      const box = pane()?.getBoundingClientRect();
+      const vp = handle?.flow?.viewport;
+      if (!handle?.setCenter || !box || !vp) return;
+      // What of the pane no panel covers, in screen pixels from its corner.
+      const left = props.insetLeft ?? 0;
+      const right = box.width - found.want.right;
+      const height = stageHeight(props.writesOf?.(stages().find((s) => s.id === found.want.id) ?? ({} as Stage)));
+      const sx = found.at.x * vp.zoom + vp.x;
+      const sy = found.at.y * vp.zoom + vp.y;
+      const inside = sx >= left && sx + NODE_WIDTH * vp.zoom <= right && sy >= 0 && sy + height * vp.zoom <= box.height;
+      if (inside) return;
+      // Centred in the uncovered part rather than in the pane: setCenter
+      // centres in the whole pane, so the point handed to it is shifted by how
+      // far the uncovered part's middle stands from the pane's.
+      const shift = (box.width / 2 - (left + right) / 2) / vp.zoom;
+      void handle.setCenter(found.at.x + NODE_WIDTH / 2 + shift, found.at.y + height / 2, { zoom: vp.zoom, duration: 300 });
+    },
+  );
 
   // …and when the canvas itself changes size. A window resized leaves the
   // picture where it was: correct for the box it was fitted to and off centre in
@@ -960,9 +981,7 @@ export default function FlowCanvas(props: Props) {
     return () => observer.disconnect();
   });
 
-  // A card from the palette dragged onto the canvas becomes a node where it was
-  // let go — the box's corner under the pointer, less half a box so the pointer
-  // ends up on the middle of it rather than on its edge.
+  // A card from the palette dragged onto the canvas becomes a node.
   const onDragOver = (e: DragEvent) => {
     if (!props.onDropKind || !e.dataTransfer?.types.includes(DRAG_KIND)) return;
     e.preventDefault();
@@ -970,12 +989,11 @@ export default function FlowCanvas(props: Props) {
   };
   const onDrop = (e: DragEvent) => {
     const kind = e.dataTransfer?.getData(DRAG_KIND);
-    const toFlow = flowHandle()?.screenToFlowPosition;
-    if (!kind || !props.onDropKind || !toFlow) return;
+    if (!kind || !props.onDropKind) return;
     e.preventDefault();
-    const at = toFlow({ x: e.clientX, y: e.clientY });
-    props.onDropKind(kind, { x: Math.round(at.x - NODE_WIDTH / 2), y: Math.round(at.y - NODE_HEIGHT / 2) });
+    props.onDropKind(kind);
   };
+
 
   return (
     <div ref={setPane} class={`canvas${editable() ? " canvas--editable" : ""}`} data-testid="flow-canvas"

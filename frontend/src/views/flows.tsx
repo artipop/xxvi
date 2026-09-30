@@ -2,7 +2,7 @@ import { createEffect, createMemo, createSignal, createStore, For, Show, type St
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Edge, Flow, PropertyWrite, Screen, Stage, StageTemplate } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import { agents, flows, guard, list, loadFlows, loadTemplates, templates, vocabulary } from "../state";
-import FlowCanvas, { type CanvasApi, DRAG_KIND, NODE_HEIGHT, NODE_WIDTH, type Selection, type StageWrite, condLabel, edgeIndexOf } from "./flowCanvas";
+import FlowCanvas, { type CanvasApi, DRAG_KIND, type Selection, type StageWrite, condLabel, edgeIndexOf } from "./flowCanvas";
 import {
   KIND_FALLBACK, NODE_COLORS, NODE_ICONS, NodeIcon, PICKER_FALLBACK, Tile, applyTemplate, newStage, ownsScreen, shapeOf, templateName, templateNote,
   templateOf,
@@ -143,22 +143,12 @@ function Editor(props: {
     props.onRemoved();
   };
 
-  // A node clicked in the palette goes to the middle of what can be seen of the
-  // canvas, stepped down past any box already standing there — the canvas is
-  // not refitted for it, so a place off screen would be a box nobody sees
-  // arrive. Dragged, it goes where it was let go.
+  // Where a new stage goes is the layout's: after the last column, since
+  // nothing leads to it yet. The canvas then brings it into sight.
   let canvas: CanvasApi | undefined;
-  const nextSpot = () => {
-    const at = canvas?.visibleCentre(INSPECTOR_WIDTH) ?? { x: 80, y: 120 };
-    const clear = (y: number) =>
-      stages().every((s) => Math.abs((s.x ?? 0) - at.x) >= NODE_WIDTH || Math.abs((s.y ?? 0) - y) >= NODE_HEIGHT + 16);
-    let y = at.y;
-    for (let tries = 0; tries < 20 && !clear(y); tries++) y += NODE_HEIGHT + 24;
-    return { x: at.x, y };
-  };
 
-  const addStage = (tpl: StageTemplate, at = nextSpot()) => {
-    const stage = newStage(tpl, freeName(stages(), templateName(tpl)), at);
+  const addStage = (tpl: StageTemplate) => {
+    const stage = newStage(tpl, freeName(stages(), templateName(tpl)));
     setDraft((f) => {
       const list = f.stages || (f.stages = []);
       list.push(stage);
@@ -166,6 +156,7 @@ function Editor(props: {
     });
     select({ kind: "stage", id: stage.id });
     touch();
+    canvas?.reveal(stage.id, INSPECTOR_WIDTH);
   };
 
   // What a stage leaves on the card, for the chips on its box. Branchable is
@@ -266,9 +257,9 @@ function Editor(props: {
           onApi={(api) => { canvas = api; }}
           insetLeft={paletteOpen() ? PALETTE_WIDTH : 0}
           insetRight={selected() || editing() ? INSPECTOR_WIDTH : 0}
-          onDropKind={(id, at) => {
+          onDropKind={(id) => {
             const tpl = templates().find((x) => x.id === id);
-            if (tpl) addStage(tpl, at);
+            if (tpl) addStage(tpl);
           }}
           onChange={(nextStages, nextEdges) => {
             setDraft((f) => { f.stages = nextStages; f.edges = nextEdges; });
