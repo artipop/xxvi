@@ -311,17 +311,18 @@ func TestLiveTerminalTrustQuestionClaude(t *testing.T) {
 	l := newLiveStage(t, model.KindClaude, "haiku")
 	run := l.start("Reply with just OK.")
 	opened := time.Now()
+	const within = 45 * time.Second
 	for {
 		select {
 		case a := <-l.ui.waits:
 			if a.Awaiting && a.Terminal == waitAsking {
 				t.Logf("asking after %v", time.Since(opened).Round(time.Second))
-				if time.Since(opened) >= terminalQuietFor {
+				if time.Since(opened) >= within {
 					t.Fatal("the question should be seen on the screen, not waited out")
 				}
 				return
 			}
-		case <-time.After(terminalQuietFor):
+		case <-time.After(within):
 			t.Fatalf("the trust question was not seen; screen:\n%s", l.screen(run))
 		}
 	}

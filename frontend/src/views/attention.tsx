@@ -64,7 +64,7 @@ function Ask(props: { a: Attention }) {
         when={props.a.questionId}
         fallback={
           <div class="question">
-            <div class="ask">{t(terminalWait(props.a))}</div>
+            <div class="ask">{t("attention.terminalAsking")}</div>
           </div>
         }
       >
@@ -89,13 +89,6 @@ function standingText(why: string | undefined): string {
     case "answer": return "attention.standAnswer";
     case "paused": return "attention.standPaused";
     default: return "attention.standStopped";
-  }
-}
-
-function terminalWait(a: Attention): string {
-  switch (a.terminal) {
-    case "asking": return "attention.terminalAsking";
-    default: return "attention.quiet";
   }
 }
 

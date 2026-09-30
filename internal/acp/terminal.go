@@ -47,13 +47,6 @@ func trustAsked(screen string) bool {
 	return strings.Contains(strings.ToLower(screen), trustPrompt)
 }
 
-// terminalQuietFor is how long a stage's CLI whose hooks have said nothing —
-// none for its kind, none on Windows — must draw nothing before the card says
-// it is waiting for a person. Generous on purpose: a model thinking between
-// tool calls is silent for a while, and a card that cries out early is a card
-// nobody believes.
-const terminalQuietFor = 45 * time.Second
-
 // promptSettle is how quiet the CLI must be before a brief is typed into it,
 // and promptWait is how long that is waited for. Only for the case where the
 // brief could not go on the command line: writing into a CLI that has not
@@ -188,8 +181,8 @@ func (m *Manager) runTerminal(s *session) {
 		m.failTerminal(s, msg.Of(err))
 		return
 	}
-	// Without hooks the step still works — it is watched by its silence, as
-	// it was before there were any — so a failure here is a note, not a stop.
+	// Without hooks the step still works — it just cannot tell when the CLI
+	// asks — so a failure here is a note, not a stop.
 	if env, ok := hookEnv(tools.HookURL(), token); ok && cli.cliHooks != nil && hooksPossible() {
 		if hooks, err := cli.cliHooks(); err != nil {
 			m.log.Warn("terminal hooks not registered", "session", s.id, "err", err)
@@ -300,8 +293,7 @@ func (m *Manager) runTerminal(s *session) {
 
 // watchTerminal waits for whichever comes first: the report, the CLI ending, or
 // somebody stepping in. On the way it keeps the card's mark — whether the CLI
-// is waiting for a person — as its hooks say, or, while they have said
-// nothing, as its silence does.
+// is waiting for a person — as its hooks say.
 func (m *Manager) watchTerminal(
 	ctx context.Context, s *session, sess *term.Session,
 	reported <-chan stagemcp.Report, hooked <-chan stagemcp.HookEvent, described <-chan stagemcp.Description,
@@ -397,14 +389,11 @@ func (m *Manager) watchTerminal(
 			}
 			// Before the first hook the CLI may be asking something that no
 			// hook reports — «do you trust this folder?» comes before any —
-			// and the screen says so plainly. Silence is left for a CLI whose
-			// hooks never speak at all.
-			switch {
-			case trustAsked(sess.Text()):
+			// and the screen says so plainly. Silence says nothing: a model
+			// thinking between tool calls is quiet for minutes.
+			if trustAsked(sess.Text()) {
 				wait(waitAsking)
-			case sess.Quiet() >= terminalQuietFor:
-				wait(waitQuiet)
-			default:
+			} else {
 				wait("")
 			}
 		}

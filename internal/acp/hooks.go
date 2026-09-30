@@ -34,7 +34,6 @@ const (
 
 // Why a terminal's row is in the attention list. The UI words each one.
 const (
-	waitQuiet  = "quiet"
 	waitAsking = "asking"
 )
 
@@ -88,7 +87,7 @@ const hookTimeout = 10
 
 // hooksPossible reports whether this machine can run the hook command at all.
 // It is spelled for a POSIX shell, which is what both CLIs run hooks through
-// everywhere but Windows; there the terminal is watched by its silence alone.
+// everywhere but Windows; there the card is never marked as asking.
 func hooksPossible() bool { return runtime.GOOS != "windows" }
 
 // claudeHookEvents are what claude is asked to report. PreToolUse only for the
@@ -154,7 +153,7 @@ var codexHookEvents = []struct{ event, key string }{
 // handler came from, which for `-c` is a synthetic «<session-flags>» file. Not
 // a documented contract; read off codex's source and checked against 0.157
 // and 0.158 (docs/system.md §4.1.1). If a later codex hashes differently, its
-// hooks go quiet and the step falls back to watching the silence.
+// hooks go quiet and the step stops marking questions.
 func codexHooks() (toolsHandoff, error) {
 	var events, state []string
 	for _, e := range codexHookEvents {
