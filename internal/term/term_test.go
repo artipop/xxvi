@@ -786,3 +786,29 @@ func TestStopAllEndsWhatWouldOutliveTheApplication(t *testing.T) {
 		t.Fatal("после «остановить всё» шелл не живёт")
 	}
 }
+
+// A run whose process went down with the application left no tail, and the
+// ribbon must say so rather than open a socket that answers 404.
+func TestKnownIsLiveOrKept(t *testing.T) {
+	m := manager(t)
+	m.KeepIn(t.TempDir())
+
+	if m.Known("run-lost") {
+		t.Fatal("терминал, которого не было и чей хвост не записан, не должен считаться известным")
+	}
+	s, err := m.Attach("run-k", "card-1", t.TempDir(), []string{"echo", "было"}, nil)
+	if err != nil {
+		t.Fatalf("открыть терминал шага: %v", err)
+	}
+	if !m.Known("run-k") {
+		t.Fatal("идущий терминал известен")
+	}
+	select {
+	case <-s.forgotten:
+	case <-time.After(15 * time.Second):
+		t.Fatal("echo должен был закончиться")
+	}
+	if !m.Known("run-k") {
+		t.Fatal("закончившийся терминал с хвостом известен")
+	}
+}

@@ -408,6 +408,11 @@ func (s *API) AgentTerminal(sessionID string) (TerminalHandle, error) {
 	if sessionID == "" {
 		return TerminalHandle{}, errors.New("no session named")
 	}
+	// Only a finished run is refused: one just starting has no terminal yet
+	// either, and its terminal is a moment away.
+	if run, err := s.app.Store.Session(sessionID); err == nil && run.Status.Terminal() && !s.app.Terminals.Known(sessionID) {
+		return TerminalHandle{}, msg.Err("terminal.lost")
+	}
 	return TerminalHandle{ID: sessionID, URL: endpoint + sessionID}, nil
 }
 

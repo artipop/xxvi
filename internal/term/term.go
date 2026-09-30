@@ -428,6 +428,13 @@ func (m *Manager) transcript(id string) []byte {
 	return data
 }
 
+// Known reports whether id can be shown: a terminal still running, or one that
+// ended and left its tail. A run whose process went down with the application
+// has neither — nobody was there to write the tail.
+func (m *Manager) Known(id string) bool {
+	return m.Get(id) != nil || m.transcript(id) != nil
+}
+
 // transcriptPath keeps an id from naming a file outside the folder: ids here are
 // generated, but a path built from one is a path built from data.
 func transcriptPath(dir, id string) string {

@@ -135,6 +135,19 @@ func (s *Store) UpdateSession(id string, u SessionUpdate) error {
 	return err
 }
 
+// Session is one run by its id.
+func (s *Store) Session(id string) (Session, error) {
+	var r sessionRow
+	err := s.db.Get(&r, `SELECT * FROM agent_session WHERE id = ?`, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Session{}, fmt.Errorf("session %s: %w", id, ErrNotFound)
+	}
+	if err != nil {
+		return Session{}, err
+	}
+	return r.session(), nil
+}
+
 // SessionsForCard is a card's runs, newest first.
 func (s *Store) SessionsForCard(cardID string) ([]Session, error) {
 	var rows []sessionRow
