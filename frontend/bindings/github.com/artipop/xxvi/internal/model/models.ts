@@ -34,10 +34,11 @@ export interface Agent {
     "prompt"?: string;
 
     /**
-     * Proxy names an entry of the proxy registry this agent's traffic goes
-     * through. Empty means the app's own network.
+     * ProxyID is the entry of the proxy registry this agent's traffic goes
+     * through. Empty means the app's own network. It is the id, not the name:
+     * renaming a configuration touches no agent.
      */
-    "proxy"?: string;
+    "proxyId"?: string;
     "env"?: { [_ in string]?: string } | null;
     "args"?: string[] | null;
 
@@ -512,6 +513,7 @@ export interface PropertyWrite {
  * own, so one configuration serves several of them and is changed in one place.
  */
 export interface Proxy {
+    "id": string;
     "name": string;
 
     /**

@@ -70,7 +70,7 @@ export default function AgentsView() {
                 <span class="title">{a.name}</span>
                 <span class="tag">{a.kind}</span>
                 <Show when={a.model}><span class="tag">{a.model}</span></Show>
-                <Show when={a.proxy}><span class="tag">{t("proxies.via", { proxy: a.proxy! })}</span></Show>
+                <Show when={proxyName(a.proxyId)}>{(n) => <span class="tag">{t("proxies.via", { proxy: n() })}</span>}</Show>
                 <div class="spacer" />
                 <CheckButton name={a.name} />
                 <button class="btn quiet"
@@ -93,32 +93,35 @@ export default function AgentsView() {
   );
 }
 
-type EditingProxy = { proxy: Proxy; original: string };
+const proxyName = (id?: string) => (agents().proxies ?? []).find((p) => p.id === id)?.name;
+
+// "" is a new one: the id is what says which entry a form edits.
+type EditingProxy = { proxy: Proxy; id: string };
 
 // Named network paths. An agent picks one by name, so a proxy is described
 // once and shared; a rename carries the agents that use it along.
 function ProxiesSection(): JSX.Element {
   const [editing, setEditing] = createSignal<EditingProxy | null>(null);
-  const blank = (): Proxy => ({ name: "", url: "", noProxy: "", caCert: "", username: "", password: "" } as Proxy);
+  const blank = (): Proxy => ({ id: "", name: "", url: "", noProxy: "", caCert: "", username: "", password: "" } as Proxy);
   return (
     <>
       <div class="list-head">
         <h2>{t("proxies.title")}</h2>
         <div class="spacer" />
-        <button class="btn" disabled={Boolean(editing())} onClick={() => setEditing({ proxy: blank(), original: "" })}>
+        <button class="btn" disabled={Boolean(editing())} onClick={() => setEditing({ proxy: blank(), id: "" })}>
           {t("proxies.new")}
         </button>
       </div>
       <div class="meta">{t("proxies.note")}</div>
 
-      <Show when={editing() && editing()!.original === ""}>
-        <ProxyForm proxy={editing()!.proxy} original="" onDone={() => setEditing(null)} />
+      <Show when={editing() && editing()!.id === ""}>
+        <ProxyForm proxy={editing()!.proxy} onDone={() => setEditing(null)} />
       </Show>
 
       <For each={agents().proxies}>
         {(p) => (
-          <Show when={editing()?.original !== p.name}
-                fallback={<ProxyForm proxy={editing()!.proxy} original={p.name} onDone={() => setEditing(null)} />}>
+          <Show when={editing()?.id !== p.id}
+                fallback={<ProxyForm proxy={editing()!.proxy} onDone={() => setEditing(null)} />}>
             <div class="card">
               <div class="row wrap">
                 <span class="title">{p.name}</span>
@@ -127,10 +130,10 @@ function ProxiesSection(): JSX.Element {
                 <Show when={p.caCert}><span class="tag">{t("proxies.hasCA")}</span></Show>
                 <div class="spacer" />
                 <button class="btn quiet"
-                        onClick={() => setEditing({ proxy: JSON.parse(JSON.stringify(p)), original: p.name })}>
+                        onClick={() => setEditing({ proxy: JSON.parse(JSON.stringify(p)), id: p.id })}>
                   {t("common.edit")}
                 </button>
-                <button class="btn quiet" onClick={async () => { await guard(() => API.DeleteProxy(p.name)); await loadAgents(); }}>
+                <button class="btn quiet" onClick={async () => { await guard(() => API.DeleteProxy(p.id)); await loadAgents(); }}>
                   {t("common.delete")}
                 </button>
               </div>
@@ -143,11 +146,11 @@ function ProxiesSection(): JSX.Element {
   );
 }
 
-function ProxyForm(props: { proxy: Proxy; original: string; onDone: () => void }): JSX.Element {
+function ProxyForm(props: { proxy: Proxy; onDone: () => void }): JSX.Element {
   const [p, setP] = createSignal<Proxy>(props.proxy);
   const patch = (x: Partial<Proxy>) => setP({ ...p(), ...x });
   const save = async () => {
-    const saved = await guard(() => API.SaveProxy(props.original, p()));
+    const saved = await guard(() => API.SaveProxy(p()));
     if (saved) { await loadAgents(); props.onDone(); }
   };
   return (
@@ -173,7 +176,7 @@ function ProxyForm(props: { proxy: Proxy; original: string; onDone: () => void }
         <label class="field">
           <span>{t("proxies.password")}</span>
           <input type="password" autocomplete="new-password" value={p().password ?? ""}
-                 placeholder={props.original ? t("proxies.passwordKept") : ""}
+                 placeholder={p().id ? t("proxies.passwordKept") : ""}
                  onInput={(e) => patch({ password: e.currentTarget.value })} />
         </label>
       </div>
@@ -276,9 +279,9 @@ function AgentForm(props: { agent: Agent; onDone: () => void }) {
 
       <label class="field">
         <span>{t("proxies.agentProxy")}</span>
-        <select value={a().proxy ?? ""} onChange={(e) => patch({ proxy: e.currentTarget.value })}>
+        <select value={a().proxyId ?? ""} onChange={(e) => patch({ proxyId: e.currentTarget.value })}>
           <option value="">{t("proxies.none")}</option>
-          <For each={agents().proxies}>{(p) => <option value={p.name}>{p.name}</option>}</For>
+          <For each={agents().proxies}>{(p) => <option value={p.id}>{p.name}</option>}</For>
         </select>
       </label>
 

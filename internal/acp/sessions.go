@@ -108,7 +108,7 @@ func dial(ctx context.Context, a model.Agent, cwd string) (*acpsdk.ClientSideCon
 	})
 	if err != nil {
 		hangUp()
-		return nil, acpsdk.InitializeResponse{}, nil, fmt.Errorf("initialize: %w", err)
+		return nil, acpsdk.InitializeResponse{}, nil, clipped(a, fmt.Errorf("initialize: %w", err))
 	}
 	return conn, init, hangUp, nil
 }

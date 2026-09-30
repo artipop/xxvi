@@ -212,7 +212,7 @@ func (m *Manager) runTerminal(s *session) {
 
 	sess, err := terms.Attach(s.id, s.card.ID, s.cwd, argv, append(terminalEnv(s, cli), handoff.env...))
 	if err != nil {
-		m.failTerminal(s, msg.Of(clipped(err)))
+		m.failTerminal(s, msg.Of(clipped(s.agent, err)))
 		return
 	}
 	opened := time.Now()
@@ -263,7 +263,7 @@ func (m *Manager) runTerminal(s *session) {
 		m.record(s, model.EntryProblem, msg.New("journal.terminalCancelled"))
 	case resumeFailed(resumed, err, time.Since(opened)):
 		why := msg.Err("terminal.resumeFailed", "id", open.id)
-		m.finish(s, store.StatusFailed, failure(why))
+		m.finish(s, store.StatusFailed, failure(s.agent, why))
 		m.record(s, model.EntryProblem, msg.New("journal.terminalFailed").Because(why))
 	case closedByPerson(err, time.Since(opened)):
 		// Somebody ended the conversation. That is not an outcome the flow
@@ -274,8 +274,8 @@ func (m *Manager) runTerminal(s *session) {
 		m.finish(s, store.StatusCancelled, msg.New("terminal.closedWithoutReport"))
 		m.record(s, model.EntryProblem, msg.New("journal.terminalClosedByPerson"))
 	case err != nil:
-		m.finish(s, store.StatusFailed, failure(err))
-		m.record(s, model.EntryProblem, msg.New("journal.terminalFailed").Because(clipped(err)))
+		m.finish(s, store.StatusFailed, failure(s.agent, err))
+		m.record(s, model.EntryProblem, msg.New("journal.terminalFailed").Because(clipped(s.agent, err)))
 	default:
 		// The report is handed to the engine in the shape a session's closing
 		// words would have had: the summary, then one «Property: value» line

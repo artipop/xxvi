@@ -86,7 +86,7 @@ func TestDatabaseAtTheBaselineTakesTheStepsAfterIt(t *testing.T) {
 		`DROP TABLE project_folder`,
 		`ALTER TABLE card DROP COLUMN folder`,
 		`ALTER TABLE agent_session DROP COLUMN revivable`,
-		`ALTER TABLE agent DROP COLUMN proxy`,
+		`ALTER TABLE agent DROP COLUMN proxy_id`,
 		`DROP TABLE proxy`,
 		`CREATE TABLE stage_agent (stage_id TEXT NOT NULL, ord INTEGER NOT NULL, agent_name TEXT NOT NULL, agent_key TEXT NOT NULL, PRIMARY KEY (stage_id, ord))`,
 		`INSERT INTO project (id, name, name_key, kind, path, created_at) VALUES ('p1', 'Сайт', 'сайт', 'folder', '/tmp/сайт', 0)`,
@@ -723,44 +723,53 @@ func TestProjectFolders(t *testing.T) {
 	}
 }
 
-// An agent's proxy is resolved into what it spawns with, a rename carries the
-// agents that use it, and a proxy in use cannot be deleted.
+// An agent's proxy is resolved into what it spawns with, the password comes
+// from the keychain and never the database, a rename touches no agent, and a
+// proxy in use cannot be deleted.
 func TestProxyRegistry(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "p.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if _, err := s.SaveProxy("", model.Proxy{Name: "Corp", URL: "http://proxy:3128", Username: "me", Password: "p@ss:w/rd"}); err != nil {
-		t.Fatal(err)
+	corp, err := s.SaveProxy(model.Proxy{Name: "Corp", URL: "http://proxy:3128", Username: "me", Password: "p@ss:w/rd"})
+	if err != nil || corp.ID == "" {
+		t.Fatalf("прокси не сохранён: %+v, %v", corp, err)
 	}
-	if _, err := s.SaveAgent(model.Agent{Name: "a", Kind: model.KindCodex, Proxy: "corp"}); err != nil {
+	if _, err := s.SaveProxy(model.Proxy{Name: "corp", URL: "http://other:1"}); err == nil {
+		t.Fatal("два прокси с одним именем")
+	}
+	if _, err := s.SaveAgent(model.Agent{Name: "a", Kind: model.KindCodex, ProxyID: corp.ID}); err != nil {
 		t.Fatal(err)
 	}
 	a, err := s.Agent("a")
-	if err == nil && (a.Network == nil || a.Network.Password != "p@ss:w/rd") {
-		t.Fatalf("пароль не пришёл из связки ключей: %+v", a.Network)
+	if err != nil || a.Network == nil || a.Network.Password != "p@ss:w/rd" {
+		t.Fatalf("прокси агента не разрешён или пароль не пришёл из связки ключей: %+v, %v", a.Network, err)
 	}
 	var inDB string
 	if err := s.db.Get(&inDB, `SELECT COALESCE(group_concat(name||url||username||ca_cert||no_proxy), '') FROM proxy`); err != nil || strings.Contains(inDB, "p@ss") {
 		t.Fatalf("пароль попал в базу: %q, %v", inDB, err)
 	}
-	if err != nil || a.Network == nil || a.Network.URL != "http://proxy:3128" {
-		t.Fatalf("прокси агента не разрешён: %+v, %v", a.Network, err)
-	}
-	if err := s.DeleteProxy("Corp"); err == nil {
+	if err := s.DeleteProxy(corp.ID); err == nil {
 		t.Fatal("прокси, которым пользуется агент, удалён")
 	}
-	if _, err := s.SaveProxy("Corp", model.Proxy{Name: "Office", URL: "http://proxy:3128"}); err != nil {
-		t.Fatal(err)
-	}
-	if a, _ = s.Agent("a"); a.Proxy != "Office" || a.Network == nil {
-		t.Fatalf("переименование не дошло до агента: %+v", a)
-	}
-	if _, err := s.SaveProxy("Office", model.Proxy{Name: "Office", URL: "socks5://proxy:1080"}); err != nil {
+	corp.Name, corp.URL = "Office", "socks5://proxy:1080"
+	if _, err := s.SaveProxy(corp); err != nil {
 		t.Fatal(err) // codex takes SOCKS
 	}
-	if _, err := s.SaveAgent(model.Agent{Name: "c", Kind: model.KindClaude, Proxy: "Office"}); err == nil {
+	if a, _ = s.Agent("a"); a.ProxyID != corp.ID || a.Network == nil || a.Network.Name != "Office" {
+		t.Fatalf("переименование должно дойти до агента само, через id: %+v", a)
+	}
+	if _, err := s.SaveAgent(model.Agent{Name: "c", Kind: model.KindClaude, ProxyID: corp.ID}); err == nil {
 		t.Fatal("claude принял SOCKS")
+	}
+	if _, err := s.SaveAgent(model.Agent{Name: "a", Kind: model.KindCodex}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteProxy(corp.ID); err != nil {
+		t.Fatalf("свободный прокси не удалился: %v", err)
+	}
+	if pw, _ := s.secrets.Token(proxySecretKey(corp.ID)); pw != "" {
+		t.Fatal("секрет удалённого прокси остался в связке ключей")
 	}
 }

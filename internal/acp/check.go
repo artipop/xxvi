@@ -65,7 +65,7 @@ func CheckAgent(ctx context.Context, a model.Agent) (AgentCheck, error) {
 
 	sess, err := conn.NewSession(ctx, acpsdk.NewSessionRequest{Cwd: dir, McpServers: []acpsdk.McpServer{}})
 	if err != nil {
-		problem := msg.New("check.sessionRefused").Because(clipped(err))
+		problem := msg.New("check.sessionRefused").Because(clipped(a, err))
 		out.Problem = &problem
 		return out, nil
 	}

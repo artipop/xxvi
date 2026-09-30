@@ -202,8 +202,8 @@ export function DeleteProject(id: string): $CancellablePromise<void> {
 /**
  * DeleteProxy removes an entry no agent uses.
  */
-export function DeleteProxy(name: string): $CancellablePromise<void> {
-    return $Call.ByID(2638986944, name);
+export function DeleteProxy(id: string): $CancellablePromise<void> {
+    return $Call.ByID(2638986944, id);
 }
 
 /**
@@ -583,12 +583,12 @@ export function SaveProject(p: model$0.Project): $CancellablePromise<model$0.Pro
 }
 
 /**
- * SaveProxy adds or replaces an entry. oldName is the name it was opened
- * under, empty for a new one, so renaming is an edit. A blank password on an
- * existing entry means "unchanged".
+ * SaveProxy adds an entry, or replaces the one p.ID names. A blank password on
+ * an existing entry means "unchanged" — the window never has it to send back —
+ * unless the username changed, which asks for a new one.
  */
-export function SaveProxy(oldName: string, p: model$0.Proxy): $CancellablePromise<model$0.Proxy> {
-    return $Call.ByID(2185562538, oldName, p);
+export function SaveProxy(p: model$0.Proxy): $CancellablePromise<model$0.Proxy> {
+    return $Call.ByID(2185562538, p);
 }
 
 /**

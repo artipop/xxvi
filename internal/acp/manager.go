@@ -287,8 +287,8 @@ func (m *Manager) run(s *session) {
 
 	conn, acpSessionID, cleanup, err := m.connect(s)
 	if err != nil {
-		m.finish(s, store.StatusFailed, failure(err))
-		m.record(s, model.EntryProblem, msg.New("journal.sessionNotStarted").Because(clipped(err)))
+		m.finish(s, store.StatusFailed, failure(s.agent, err))
+		m.record(s, model.EntryProblem, msg.New("journal.sessionNotStarted").Because(clipped(s.agent, err)))
 		return
 	}
 	defer cleanup()
@@ -308,8 +308,8 @@ func (m *Manager) run(s *session) {
 		m.finish(s, store.StatusCancelled, msg.New("session.cancelled"))
 		m.record(s, model.EntryProblem, msg.New("journal.sessionCancelled"))
 	case err != nil:
-		m.finish(s, store.StatusFailed, failure(err))
-		m.record(s, model.EntryProblem, msg.New("journal.sessionFailed").Because(clipped(err)))
+		m.finish(s, store.StatusFailed, failure(s.agent, err))
+		m.record(s, model.EntryProblem, msg.New("journal.sessionFailed").Because(clipped(s.agent, err)))
 	default:
 		m.finish(s, store.StatusDone, msg.Msg{})
 		m.record(s, model.EntryReport, doneReport(final))
@@ -377,7 +377,7 @@ func (m *Manager) connect(s *session) (*acpsdk.ClientSideConnection, acpsdk.Sess
 	})
 	if err != nil {
 		cleanup()
-		return nil, "", nil, scrub(s.agent, fmt.Errorf("initialize: %w", err))
+		return nil, "", nil, fmt.Errorf("initialize: %w", err)
 	}
 	caps := init.AgentCapabilities
 	s.revivable = reviveBy(s.agent.Kind, caps) != ""
@@ -397,7 +397,7 @@ func (m *Manager) connect(s *session) (*acpsdk.ClientSideConnection, acpsdk.Sess
 	}
 	if err != nil {
 		cleanup()
-		return nil, "", nil, scrub(s.agent, err)
+		return nil, "", nil, err
 	}
 	// Mode and model are asked for again on a revived conversation too:
 	// claude-agent-acp and codex-acp both open it in their defaults, whatever
@@ -410,16 +410,6 @@ func (m *Manager) connect(s *session) (*acpsdk.ClientSideConnection, acpsdk.Sess
 		m.log.Warn("could not record the ACP session id", "session", s.id, "err", err)
 	}
 	return conn, sess.id, cleanup, nil
-}
-
-// scrub hides the proxy password in an error: a CLI that cannot reach its proxy
-// may echo the URL back, and the text goes on to a comment and the log. An
-// error with a message code is left as it is — it carries no CLI text.
-func scrub(a model.Agent, err error) error {
-	if a.Network == nil || a.Network.Password == "" || err == nil || msg.Of(err).Code != msg.CodeInternal {
-		return err
-	}
-	return errors.New(a.Network.Redact(err.Error()))
 }
 
 // agentSession is what session/new, session/resume and session/load have in
@@ -692,14 +682,20 @@ func (m *Manager) record(s *session, kind model.EntryKind, what msg.Msg) {
 }
 
 // failure is why a run failed, as its session keeps it.
-func failure(err error) msg.Msg { return msg.Of(clipped(err)) }
+func failure(a model.Agent, err error) msg.Msg { return msg.Of(clipped(a, err)) }
 
 // clipped keeps a failure nobody wrote a code for to a length a journal entry
 // can carry: a CLI that printed its whole stack trace is still one line of
 // history.
-func clipped(err error) error {
+func clipped(a model.Agent, err error) error {
 	if m := msg.Of(err); m.Code == msg.CodeInternal {
-		return errors.New(truncate(m.Arg("text"), 1500))
+		// A CLI that cannot reach its proxy may echo the proxy URL back, and
+		// this text goes on to a comment and the log.
+		text := m.Arg("text")
+		if a.Network != nil {
+			text = a.Network.Redact(text)
+		}
+		return errors.New(truncate(text, 1500))
 	}
 	return err
 }

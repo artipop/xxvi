@@ -1,6 +1,8 @@
 package acp
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	acpsdk "github.com/coder/acp-go-sdk"
@@ -298,5 +300,16 @@ func TestAgentPolicyOverridesTheMachineOne(t *testing.T) {
 	}
 	if policyFor(model.Agent{}, machine).Allows("Write", nil) {
 		t.Fatal("без собственного списка действует машинный")
+	}
+}
+
+// A CLI that cannot reach its proxy echoes the URL, password included; that
+// text goes to a comment and the log, so it is scrubbed on the way out.
+func TestClippedHidesTheProxyPassword(t *testing.T) {
+	a := model.Agent{Network: &model.Proxy{URL: "http://h:1", Username: "u", Password: "s3cr:et/"}}
+	addr, _ := a.Network.Address()
+	got := clipped(a, errors.New("connect to "+addr+" refused")).Error()
+	if strings.Contains(got, "s3cr") || strings.Contains(got, "et%2F") {
+		t.Fatalf("пароль остался в тексте ошибки: %q", got)
 	}
 }

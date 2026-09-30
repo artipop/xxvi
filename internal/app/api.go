@@ -1097,30 +1097,30 @@ func (s *API) SaveAgent(a model.Agent) (model.Agent, error) {
 	return saved, nil
 }
 
-// SaveProxy adds or replaces an entry. oldName is the name it was opened
-// under, empty for a new one, so renaming is an edit. A blank password on an
-// existing entry means "unchanged".
-func (s *API) SaveProxy(oldName string, p model.Proxy) (model.Proxy, error) {
-	if p.Password == "" && strings.TrimSpace(oldName) != "" {
-		if prev, err := s.app.Store.Proxy(oldName); err == nil && strings.TrimSpace(prev.Username) == strings.TrimSpace(p.Username) {
+// SaveProxy adds an entry, or replaces the one p.ID names. A blank password on
+// an existing entry means "unchanged" — the window never has it to send back —
+// unless the username changed, which asks for a new one.
+func (s *API) SaveProxy(p model.Proxy) (model.Proxy, error) {
+	if p.Password == "" && strings.TrimSpace(p.ID) != "" {
+		if prev, err := s.app.Store.Proxy(p.ID); err == nil && prev.Username == strings.TrimSpace(p.Username) {
 			p.Password = prev.Password
 		}
 	}
-	saved, err := s.app.Store.SaveProxy(oldName, p)
+	saved, err := s.app.Store.SaveProxy(p)
 	if err != nil {
 		return model.Proxy{}, err
 	}
-	s.app.Emit(EventAgents, map[string]any{"proxy": saved.Name})
+	s.app.Emit(EventAgents, map[string]any{"proxy": saved.ID})
 	saved.Password = ""
 	return saved, nil
 }
 
 // DeleteProxy removes an entry no agent uses.
-func (s *API) DeleteProxy(name string) error {
-	if err := s.app.Store.DeleteProxy(name); err != nil {
+func (s *API) DeleteProxy(id string) error {
+	if err := s.app.Store.DeleteProxy(id); err != nil {
 		return err
 	}
-	s.app.Emit(EventAgents, map[string]any{"proxy": name})
+	s.app.Emit(EventAgents, map[string]any{"proxy": id})
 	return nil
 }
 

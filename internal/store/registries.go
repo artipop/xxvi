@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"slices"
 	"strings"
 	"time"
@@ -31,12 +32,12 @@ type agentRow struct {
 	ArgsJSON      string `db:"args_json"`
 	CommandJSON   string `db:"command_json"`
 	AutoAllowJSON string `db:"auto_allow_json"`
-	Proxy         string `db:"proxy"`
+	ProxyID       string `db:"proxy_id"`
 	CreatedAt     int64  `db:"created_at"`
 }
 
 func (r agentRow) agent() model.Agent {
-	a := model.Agent{Name: r.Name, Kind: r.Kind, BinPath: r.BinPath, Model: r.Model, Prompt: r.Prompt, Proxy: r.Proxy}
+	a := model.Agent{Name: r.Name, Kind: r.Kind, BinPath: r.BinPath, Model: r.Model, Prompt: r.Prompt, ProxyID: r.ProxyID}
 	decodeJSON(r.EnvJSON, &a.Env)
 	decodeJSON(r.ArgsJSON, &a.Args)
 	decodeJSON(r.CommandJSON, &a.Command)
@@ -50,14 +51,20 @@ func (s *Store) Agents() ([]model.Agent, error) {
 	if err := s.db.Select(&rows, `SELECT * FROM agent ORDER BY name_key`); err != nil {
 		return nil, fmt.Errorf("read agents: %w", err)
 	}
-	proxies, err := s.proxyIndex()
+	registry, err := s.Proxies()
 	if err != nil {
 		return nil, err
+	}
+	proxies := make(map[string]model.Proxy, len(registry))
+	for _, p := range registry {
+		proxies[p.ID] = p
 	}
 	out := make([]model.Agent, 0, len(rows))
 	for _, r := range rows {
 		a := r.agent()
-		a.Network = proxies.of(a)
+		if p, ok := proxies[a.ProxyID]; ok {
+			a.Network = &p
+		}
 		out = append(out, a)
 	}
 	return out, nil
@@ -75,8 +82,8 @@ func (s *Store) Agent(name string) (model.Agent, error) {
 		return model.Agent{}, err
 	}
 	a := r.agent()
-	if a.Proxy != "" {
-		p, err := s.Proxy(a.Proxy)
+	if a.ProxyID != "" {
+		p, err := s.Proxy(a.ProxyID)
 		if err != nil {
 			return model.Agent{}, err
 		}
@@ -91,28 +98,27 @@ func (s *Store) SaveAgent(a model.Agent) (model.Agent, error) {
 	if err != nil {
 		return model.Agent{}, err
 	}
-	if a.Proxy != "" {
+	if a.ProxyID != "" {
 		// Checked against the kind too: an edit cannot leave an agent with a
 		// configuration its CLI cannot use.
-		p, err := s.Proxy(a.Proxy)
+		p, err := s.Proxy(a.ProxyID)
 		if err != nil {
 			return model.Agent{}, err
 		}
 		if _, err := p.Validate(a.Kind); err != nil {
 			return model.Agent{}, msg.Wrap(err, "proxy.unusable", "agent", a.Name, "kind", a.Kind)
 		}
-		a.Proxy = p.Name
 	}
 	_, err = s.db.Exec(`
-		INSERT INTO agent (name, name_key, kind, bin_path, model, prompt, env_json, args_json, command_json, auto_allow_json, proxy, created_at)
+		INSERT INTO agent (name, name_key, kind, bin_path, model, prompt, env_json, args_json, command_json, auto_allow_json, proxy_id, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(name) DO UPDATE SET
 			kind = excluded.kind, bin_path = excluded.bin_path, model = excluded.model,
 			prompt = excluded.prompt, env_json = excluded.env_json, args_json = excluded.args_json,
 			command_json = excluded.command_json, auto_allow_json = excluded.auto_allow_json,
-			proxy = excluded.proxy`,
+			proxy_id = excluded.proxy_id`,
 		a.Name, model.Username(a.Name), a.Kind, a.BinPath, a.Model, a.Prompt,
-		encodeJSON(a.Env), encodeJSON(a.Args), encodeJSON(a.Command), encodeJSON(a.AutoAllowTools), a.Proxy,
+		encodeJSON(a.Env), encodeJSON(a.Args), encodeJSON(a.Command), encodeJSON(a.AutoAllowTools), a.ProxyID,
 		millis(time.Now()))
 	if err != nil {
 		return model.Agent{}, fmt.Errorf("save agent: %w", err)
@@ -165,6 +171,7 @@ func validateAgent(a model.Agent) (model.Agent, error) {
 // ---- proxies ----
 
 type proxyRow struct {
+	ID        string `db:"id"`
 	Name      string `db:"name"`
 	NameKey   string `db:"name_key"`
 	URL       string `db:"url"`
@@ -175,7 +182,19 @@ type proxyRow struct {
 }
 
 func (r proxyRow) proxy() model.Proxy {
-	return model.Proxy{Name: r.Name, URL: r.URL, NoProxy: r.NoProxy, CACert: r.CACert, Username: r.Username}
+	return model.Proxy{ID: r.ID, Name: r.Name, URL: r.URL, NoProxy: r.NoProxy, CACert: r.CACert, Username: r.Username}
+}
+
+// The password lives in the keychain, under the id of the entry.
+func proxySecretKey(id string) string { return "proxy:" + id }
+
+func (s *Store) withPassword(p model.Proxy) (model.Proxy, error) {
+	pw, err := s.secrets.Token(proxySecretKey(p.ID))
+	if err != nil {
+		return p, fmt.Errorf("read the password of the proxy %q: %w", p.Name, err)
+	}
+	p.Password = pw
+	return p, nil
 }
 
 // Proxies returns the registry, by name.
@@ -186,175 +205,114 @@ func (s *Store) Proxies() ([]model.Proxy, error) {
 	}
 	out := make([]model.Proxy, 0, len(rows))
 	for _, r := range rows {
-		p := r.proxy()
-		pw, err := s.proxyPassword(p.Name)
+		p, err := s.withPassword(r.proxy())
 		if err != nil {
 			return nil, err
 		}
-		p.Password = pw
 		out = append(out, p)
 	}
 	return out, nil
 }
 
-// Proxy returns one entry by name.
-func (s *Store) Proxy(name string) (model.Proxy, error) {
+// Proxy returns one entry by id.
+func (s *Store) Proxy(id string) (model.Proxy, error) {
 	var r proxyRow
-	err := s.db.Get(&r, `SELECT * FROM proxy WHERE name_key = ?`, nameKey(name))
+	err := s.db.Get(&r, `SELECT * FROM proxy WHERE id = ?`, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.Proxy{}, msg.Tag(ErrNotFound, "proxy.notFound", "proxy", name)
+		return model.Proxy{}, msg.Tag(ErrNotFound, "proxy.notFound", "proxy", id)
 	}
 	if err != nil {
 		return model.Proxy{}, err
 	}
-	p := r.proxy()
-	pw, err := s.proxyPassword(p.Name)
-	if err != nil {
-		return model.Proxy{}, err
-	}
-	p.Password = pw
-	return p, nil
+	return s.withPassword(r.proxy())
 }
 
-// The password lives in the keychain, under the name the entry is found by.
-func proxySecretKey(name string) string { return "proxy:" + nameKey(name) }
-
-func (s *Store) proxyPassword(name string) (string, error) {
-	pw, err := s.secrets.Token(proxySecretKey(name))
-	if err != nil {
-		return "", fmt.Errorf("read the password of the proxy %q: %w", name, err)
-	}
-	return pw, nil
-}
-
-// proxySet is the registry indexed for resolving several agents at once.
-type proxySet map[string]model.Proxy
-
-func (s *Store) proxyIndex() (proxySet, error) {
-	list, err := s.Proxies()
-	if err != nil {
+// proxyUsers names the agents that go through a proxy.
+func (s *Store) proxyUsers(id string) ([]model.Agent, error) {
+	var rows []agentRow
+	if err := s.db.Select(&rows, `SELECT * FROM agent WHERE proxy_id = ? ORDER BY name_key`, id); err != nil {
 		return nil, err
 	}
-	set := make(proxySet, len(list))
-	for _, p := range list {
-		set[nameKey(p.Name)] = p
+	out := make([]model.Agent, len(rows))
+	for i, r := range rows {
+		out[i] = r.agent()
 	}
-	return set, nil
+	return out, nil
 }
 
-func (ps proxySet) of(a model.Agent) *model.Proxy {
-	if a.Proxy == "" {
-		return nil
-	}
-	p, ok := ps[nameKey(a.Proxy)]
-	if !ok {
-		return nil
-	}
-	return &p
-}
-
-// SaveProxy adds or replaces an entry. oldName is the name it had when the
-// form was opened, so a rename is an edit rather than a second entry; agents
-// that named it follow. Agents using it are re-checked against the new
-// settings.
-func (s *Store) SaveProxy(oldName string, p model.Proxy) (model.Proxy, error) {
+// SaveProxy adds an entry, or — when p.ID names one — replaces it, under a new
+// name if it has one. Agents that use it are re-checked against the new
+// settings: an edit cannot leave one with a configuration its CLI refuses.
+func (s *Store) SaveProxy(p model.Proxy) (model.Proxy, error) {
 	p, err := p.Validate("")
 	if err != nil {
 		return model.Proxy{}, err
 	}
-	agents, err := s.Agents()
-	if err != nil {
+	key := nameKey(p.Name)
+	var taken string
+	switch err := s.db.Get(&taken, `SELECT id FROM proxy WHERE name_key = ?`, key); {
+	case err == nil && taken != p.ID:
+		return model.Proxy{}, msg.Err("proxy.exists", "proxy", p.Name)
+	case err != nil && !errors.Is(err, sql.ErrNoRows):
 		return model.Proxy{}, err
 	}
-	key := nameKey(p.Name)
-	prev := nameKey(oldName)
-	if prev == "" {
-		prev = key
-	}
-	var users []string
-	for _, a := range agents {
-		if a.Proxy == "" || nameKey(a.Proxy) != prev {
-			continue
+	if p.ID == "" {
+		p.ID = uuid.NewString()
+	} else {
+		users, err := s.proxyUsers(p.ID)
+		if err != nil {
+			return model.Proxy{}, err
 		}
-		if _, err := p.Validate(a.Kind); err != nil {
-			return model.Proxy{}, msg.Wrap(err, "proxy.unusable", "agent", a.Name, "kind", a.Kind)
-		}
-		users = append(users, a.Name)
-	}
-	if key != prev {
-		if _, err := s.Proxy(p.Name); err == nil {
-			return model.Proxy{}, msg.Err("proxy.exists", "proxy", p.Name)
+		for _, a := range users {
+			if _, err := p.Validate(a.Kind); err != nil {
+				return model.Proxy{}, msg.Wrap(err, "proxy.unusable", "agent", a.Name, "kind", a.Kind)
+			}
 		}
 	}
 	// The keychain first: a row whose password did not get stored would start
 	// agents without it. A failure after this leaves a stray secret, which the
-	// next save of the same name replaces.
+	// next save of the same id replaces.
 	if p.Password != "" {
-		if err := s.secrets.SetToken(proxySecretKey(p.Name), p.Password); err != nil {
+		if err := s.secrets.SetToken(proxySecretKey(p.ID), p.Password); err != nil {
 			return model.Proxy{}, fmt.Errorf("store the proxy password: %w", err)
 		}
-	} else if err := s.secrets.DeleteToken(proxySecretKey(p.Name)); err != nil {
+	} else if err := s.secrets.DeleteToken(proxySecretKey(p.ID)); err != nil {
 		return model.Proxy{}, fmt.Errorf("store the proxy password: %w", err)
 	}
-	tx, err := s.db.Beginx()
-	if err != nil {
-		return model.Proxy{}, err
-	}
-	defer tx.Rollback()
-	if key != prev {
-		// Renamed: the row moves and the agents that named it follow.
-		if _, err := tx.Exec(`DELETE FROM proxy WHERE name_key = ?`, prev); err != nil {
-			return model.Proxy{}, err
-		}
-		// By agent name, not lower(): SQLite's is ASCII-only.
-		for _, agent := range users {
-			if _, err := tx.Exec(`UPDATE agent SET proxy = ? WHERE name = ?`, p.Name, agent); err != nil {
-				return model.Proxy{}, err
-			}
-		}
-	}
-	if _, err := tx.Exec(`
-		INSERT INTO proxy (name, name_key, url, no_proxy, ca_cert, username, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(name) DO UPDATE SET
-			name_key = excluded.name_key, url = excluded.url, no_proxy = excluded.no_proxy,
-			ca_cert = excluded.ca_cert, username = excluded.username`,
-		p.Name, key, p.URL, p.NoProxy, p.CACert, p.Username, millis(time.Now())); err != nil {
+	if _, err := s.db.Exec(`
+		INSERT INTO proxy (id, name, name_key, url, no_proxy, ca_cert, username, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			name = excluded.name, name_key = excluded.name_key, url = excluded.url,
+			no_proxy = excluded.no_proxy, ca_cert = excluded.ca_cert, username = excluded.username`,
+		p.ID, p.Name, key, p.URL, p.NoProxy, p.CACert, p.Username, millis(time.Now())); err != nil {
 		return model.Proxy{}, fmt.Errorf("save proxy: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return model.Proxy{}, err
-	}
-	if key != prev {
-		_ = s.secrets.DeleteToken(proxySecretKey(oldName))
 	}
 	return p, nil
 }
 
-// DeleteProxy removes an entry, refusing while agents still name it: they
-// would quietly fall back to the app's own network.
-func (s *Store) DeleteProxy(name string) error {
-	agents, err := s.Agents()
+// DeleteProxy removes an entry, refusing while agents still use it: they would
+// quietly fall back to the app's own network.
+func (s *Store) DeleteProxy(id string) error {
+	p, err := s.Proxy(id)
 	if err != nil {
 		return err
 	}
-	var used []string
-	for _, a := range agents {
-		if a.Proxy != "" && nameKey(a.Proxy) == nameKey(name) {
-			used = append(used, a.Name)
+	users, err := s.proxyUsers(id)
+	if err != nil {
+		return err
+	}
+	if len(users) > 0 {
+		names := make([]string, len(users))
+		for i, a := range users {
+			names[i] = a.Name
 		}
+		return msg.Err("proxy.inUse", "proxy", p.Name, "agents", strings.Join(names, ", "))
 	}
-	if len(used) > 0 {
-		return msg.Err("proxy.inUse", "proxy", name, "agents", strings.Join(used, ", "))
-	}
-	res, err := s.db.Exec(`DELETE FROM proxy WHERE name_key = ?`, nameKey(name))
-	if err != nil {
+	if _, err := s.db.Exec(`DELETE FROM proxy WHERE id = ?`, id); err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return msg.Tag(ErrNotFound, "proxy.notFound", "proxy", name)
-	}
-	_ = s.secrets.DeleteToken(proxySecretKey(name))
+	_ = s.secrets.DeleteToken(proxySecretKey(id))
 	return nil
 }
 

@@ -36,9 +36,10 @@ type Agent struct {
 	// what the stage and the card ask of it.
 	Prompt string `json:"prompt,omitempty"`
 
-	// Proxy names an entry of the proxy registry this agent's traffic goes
-	// through. Empty means the app's own network.
-	Proxy string `json:"proxy,omitempty"`
+	// ProxyID is the entry of the proxy registry this agent's traffic goes
+	// through. Empty means the app's own network. It is the id, not the name:
+	// renaming a configuration touches no agent.
+	ProxyID string `json:"proxyId,omitempty"`
 	// Network is that entry resolved by the store, for spawning. Not sent to
 	// the window: it carries the password.
 	Network *Proxy `json:"-"`

@@ -391,9 +391,10 @@ ALTER TABLE card ADD COLUMN folder TEXT NOT NULL DEFAULT '';`,
 ALTER TABLE stage_template DROP COLUMN crew_json;`,
 
 		// Proxies: named network paths an agent goes through. An agent names
-		// one by its name. The password is not here: it is in the keychain. Deleting one an agent uses is refused in Go.
+		// one by its id, so a rename moves nothing. The password is not here: it is in the keychain. Deleting one an agent uses is refused in Go.
 		`CREATE TABLE proxy (
-	name       TEXT PRIMARY KEY,
+	id         TEXT PRIMARY KEY,
+	name       TEXT NOT NULL,
 	name_key   TEXT NOT NULL,
 	url        TEXT NOT NULL DEFAULT '',
 	no_proxy   TEXT NOT NULL DEFAULT '',
@@ -402,6 +403,6 @@ ALTER TABLE stage_template DROP COLUMN crew_json;`,
 	created_at INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX idx_proxy_key ON proxy(name_key);
-ALTER TABLE agent ADD COLUMN proxy TEXT NOT NULL DEFAULT '';`,
+ALTER TABLE agent ADD COLUMN proxy_id TEXT NOT NULL DEFAULT '';`,
 	}
 }

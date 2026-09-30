@@ -11,6 +11,7 @@ import (
 // material that goes with it. Agents name an entry instead of carrying their
 // own, so one configuration serves several of them and is changed in one place.
 type Proxy struct {
+	ID      string `json:"id"`
 	Name    string `json:"name"`
 	URL     string `json:"url,omitempty"`     // http(s)/socks5 → HTTP(S)_PROXY, ALL_PROXY
 	NoProxy string `json:"noProxy,omitempty"` // comma-separated hosts → NO_PROXY
