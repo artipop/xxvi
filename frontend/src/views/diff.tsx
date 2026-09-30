@@ -107,7 +107,7 @@ export default function DiffPane(props: { cardId: string; rev: string }): JSX.El
 
       <div class="diff-body">
         <Show when={failed() !== null}>
-          <div class="screen-note">{errorText(failed())}</div>
+          <div class="screen-error">{errorText(failed())}</div>
         </Show>
         <Show when={!busy() || diff()} fallback={<div class="screen-note">{t("diff.reading")}</div>}>
           <Show when={files().length > 0} fallback={<Show when={failed() === null}><div class="screen-note">{t("diff.none")}</div></Show>}>

@@ -96,7 +96,7 @@ export default function Terminal(props: {
   return (
     <div class="terminal">
       <Show when={error()}>
-        <div class="screen-note">{error()}</div>
+        <div class="screen-error">{error()}</div>
       </Show>
       {/* A click that reaches the pane rather than the view over it — the view
           was catching up with a sliding ribbon — still means «type here». */}
