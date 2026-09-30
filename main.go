@@ -68,6 +68,7 @@ func main() {
 	// first process is started — its setup and a fork running at once deadlock
 	// the whole application (internal/nativeterm).
 	nativeterm.Init()
+	adoptShellPath()
 	app.HoldTerminals = func(socket string) *exec.Cmd {
 		self, err := os.Executable()
 		if err != nil {
