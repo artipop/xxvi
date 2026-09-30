@@ -23,6 +23,13 @@ export interface Session {
      */
     "work"?: string;
     "acpSessionId"?: string;
+
+    /**
+     * Revivable marks a session run whose agent can open its conversation
+     * again (session/resume or session/load). A terminal run does not need
+     * it: its CLI always can.
+     */
+    "revivable"?: boolean;
     "status": SessionStatus;
     "cwd"?: string;
     "startedAt": string;
@@ -65,8 +72,8 @@ export enum SessionStatus {
     StatusCancelled = "cancelled",
 
     /**
-     * StatusPaused is a terminal run the application closed on. Its CLI saved
-     * the conversation, and the stage waits for a person to continue it
+     * StatusPaused is a run the application closed on. Its agent saved the
+     * conversation, and the stage waits for a person to continue it
      * (Engine.Continue) rather than being over.
      */
     StatusPaused = "paused",

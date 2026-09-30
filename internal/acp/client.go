@@ -203,6 +203,9 @@ func (c *sessionClient) recalledToolName(id string) string {
 // session's stream and, for its final message, into the buffer a comment
 // condition on an edge is asked about.
 func (c *sessionClient) SessionUpdate(ctx context.Context, params acpsdk.SessionNotification) error {
+	if c.s.replaying.Load() {
+		return nil
+	}
 	u := params.Update
 	switch {
 	case u.AgentMessageChunk != nil:

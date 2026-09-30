@@ -117,6 +117,15 @@ export function Card(cardID: string): $CancellablePromise<$models.CardView> {
 }
 
 /**
+ * CheckAgent asks a registered agent what it is and what it can do. The
+ * timeout is the listing's: an adapter run through npx or uvx for the first
+ * time downloads itself before it answers.
+ */
+export function CheckAgent(name: string): $CancellablePromise<acp$0.AgentCheck> {
+    return $Call.ByID(971528406, name);
+}
+
+/**
  * CheckForUpdate asks the release feed. The answer arrives as the update event,
  * so the screen draws the checking state from the same place it draws
  * everything else rather than from a promise.

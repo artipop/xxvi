@@ -1043,6 +1043,19 @@ func (s *API) PastSessions(agentName, projectID, folderID string) ([]acp.PastSes
 	return acp.PastSessions(ctx, agent, project.Path)
 }
 
+// CheckAgent asks a registered agent what it is and what it can do. The
+// timeout is the listing's: an adapter run through npx or uvx for the first
+// time downloads itself before it answers.
+func (s *API) CheckAgent(name string) (acp.AgentCheck, error) {
+	agent, err := s.app.Store.Agent(name)
+	if err != nil {
+		return acp.AgentCheck{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), pastSessionsTimeout)
+	defer cancel()
+	return acp.CheckAgent(ctx, agent)
+}
+
 // AgentsView is the registry and what this machine can actually run.
 type AgentsView struct {
 	Agents   []model.Agent       `json:"agents"`

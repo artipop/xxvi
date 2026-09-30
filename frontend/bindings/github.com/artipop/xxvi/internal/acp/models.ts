@@ -17,7 +17,7 @@ export interface AdapterStatus {
     "kind": string;
 
     /**
-     * Package is the npm package that provides the adapter, empty for a kind
+     * Package is the package that provides the adapter, empty for a kind
      * whose CLI is installed some other way.
      */
     "package"?: string;
@@ -33,10 +33,11 @@ export interface AdapterStatus {
     "ready": boolean;
 
     /**
-     * ViaNPX marks a kind that is not installed but will be run through npx —
-     * it works, only the first run pays for the download.
+     * Via names the runner — npx, uvx — of a kind that is not installed but
+     * will be run through it: it works, only the first run pays for the
+     * download.
      */
-    "viaNpx"?: boolean;
+    "via"?: string;
 
     /**
      * Detail says what is missing, with what a person needs to act on.
@@ -55,6 +56,46 @@ export interface AdapterStatus {
      * TerminalDetail says why not, or what it will run.
      */
     "terminalDetail"?: msg$0.Msg | null;
+}
+
+/**
+ * AgentCheck is what an agent says about itself when asked over ACP. It is the
+ * same question for every agent, a preset or a command somebody typed: which
+ * program answered, and whether it can do what the application leans on.
+ * 
+ * Asked in the agents dialog rather than found out on a card: an agent that
+ * needs a login or a key otherwise fails its first stage, minutes after it was
+ * registered.
+ */
+export interface AgentCheck {
+    "title"?: string;
+    "version"?: string;
+
+    /**
+     * Revive is how a paused conversation of this agent is opened again:
+     * resume, load, or empty when it cannot be, and a stage of it that the
+     * application closed on is cancelled rather than paused.
+     */
+    "revive"?: string;
+
+    /**
+     * Lists reports that its past conversations can be listed, which is what
+     * starting a card «from a session» needs.
+     */
+    "lists": boolean;
+
+    /**
+     * Models are what its model option offers, and Model the one it starts on.
+     * Empty for an agent that has no such option.
+     */
+    "models"?: string[] | null;
+    "model"?: string;
+
+    /**
+     * Problem is why it would not open a session: no key, not signed in. The
+     * agent started and answered, so the rest of the check still stands.
+     */
+    "problem"?: msg$0.Msg | null;
 }
 
 /**

@@ -85,6 +85,7 @@ func TestDatabaseAtTheBaselineTakesTheStepsAfterIt(t *testing.T) {
 		`DROP TABLE stage_template`,
 		`DROP TABLE project_folder`,
 		`ALTER TABLE card DROP COLUMN folder`,
+		`ALTER TABLE agent_session DROP COLUMN revivable`,
 		`INSERT INTO project (id, name, name_key, kind, path, created_at) VALUES ('p1', 'Сайт', 'сайт', 'folder', '/tmp/сайт', 0)`,
 		`DELETE FROM schema_migration WHERE version > ` + strconv.Itoa(Baseline),
 	} {
@@ -559,9 +560,11 @@ func TestAbandonRunningSessionsOnStart(t *testing.T) {
 	}
 }
 
-// A terminal run whose conversation is known is paused rather than cancelled,
-// whether the application closed properly or not: its CLI keeps the
-// conversation on disk either way. A run with nothing to resume is cancelled.
+// A run whose conversation is known and can be opened again is paused rather
+// than cancelled, whether the application closed properly or not: the agent
+// keeps the conversation on disk either way. A terminal run's CLI always can; a
+// session's agent only if it said so. A run with nothing to resume is
+// cancelled.
 func TestAbandonPausesATerminalRunWithAConversation(t *testing.T) {
 	s := open(t)
 	card, _ := s.CreateCard(model.Card{Title: "Т"})
@@ -571,12 +574,18 @@ func TestAbandonPausesATerminalRunWithAConversation(t *testing.T) {
 	s.InsertSession(Session{ID: "term-new", CardID: card.ID, Work: model.WorkTerminal, Status: StatusRunning, StartedAt: time.Now()})
 	s.InsertSession(Session{ID: "acp", CardID: card.ID, Work: model.WorkSession, Status: StatusRunning, StartedAt: time.Now()})
 	s.UpdateSession("acp", SessionUpdate{ACPSessionID: &id})
+	s.InsertSession(Session{ID: "acp-revivable", CardID: card.ID, Work: model.WorkSession, Status: StatusRunning, StartedAt: time.Now()})
+	yes := true
+	s.UpdateSession("acp-revivable", SessionUpdate{ACPSessionID: &id, Revivable: &yes})
 
 	if _, err := s.AbandonRunningSessions(); err != nil {
 		t.Fatalf("уборка: %v", err)
 	}
 	got, _ := s.SessionsForCard(card.ID)
-	want := map[string]SessionStatus{"term": StatusPaused, "term-new": StatusCancelled, "acp": StatusCancelled}
+	want := map[string]SessionStatus{
+		"term": StatusPaused, "term-new": StatusCancelled,
+		"acp": StatusCancelled, "acp-revivable": StatusPaused,
+	}
 	for _, sess := range got {
 		if sess.Status != want[sess.ID] {
 			t.Errorf("%s: %s, ждали %s", sess.ID, sess.Status, want[sess.ID])

@@ -190,8 +190,17 @@ func (e *Engine) resume(cardID, text string, quiet bool) error {
 	if err != nil {
 		return err
 	}
-	if !ok || !e.pausedOn(cardID, st.StageID) {
+	if !ok {
 		return msg.Err("stage.notPaused")
+	}
+	paused, ok := e.pausedOn(cardID, st.StageID)
+	if !ok {
+		return msg.Err("stage.notPaused")
+	}
+	// A session has no CLI to come back in and show its conversation: the
+	// stream on the ribbon is all it ever showed, and it is there already.
+	if quiet && paused.Work == model.WorkSession {
+		return msg.Err("stage.reopenSession")
 	}
 	card, err := e.store.Card(cardID)
 	if err != nil {
@@ -223,17 +232,17 @@ func (e *Engine) resume(cardID, text string, quiet bool) error {
 // pausedOn reports whether the last run on the card's stage is one the
 // application closed on. Only the last: a paused run followed by another is
 // history, not a stage waiting.
-func (e *Engine) pausedOn(cardID, stageID string) bool {
+func (e *Engine) pausedOn(cardID, stageID string) (store.Session, bool) {
 	sessions, err := e.store.SessionsForCard(cardID)
 	if err != nil {
-		return false
+		return store.Session{}, false
 	}
 	for _, s := range sessions {
 		if s.StageID == stageID {
-			return s.Status == store.StatusPaused
+			return s, s.Status == store.StatusPaused
 		}
 	}
-	return false
+	return store.Session{}, false
 }
 
 // MoveTo puts a card on a stage by hand. A person is always above the graph:

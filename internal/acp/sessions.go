@@ -46,32 +46,11 @@ const pastSessionPagesMax = 50
 // agent that does not list its sessions says so as an error rather than as an
 // empty list: «none» and «cannot tell» are different answers.
 func PastSessions(ctx context.Context, a model.Agent, cwd string) ([]PastSession, error) {
-	l, err := launchFor(a)
+	conn, init, hangUp, err := dial(ctx, a, cwd)
 	if err != nil {
 		return nil, err
 	}
-	argv := resolveArgv0(l.argv)
-	if len(argv) == 0 {
-		return nil, msg.Err("agent.emptyCommand")
-	}
-	env := append(append([]string{}, l.env...), spawnEnv(a)...)
-	proc, err := spawn(ctx, argv, cwd, env, l.dropEnv...)
-	if err != nil {
-		return nil, msg.Wrap(err, "agent.startFailed", "command", argv[0])
-	}
-	defer func() {
-		proc.killGroup(2 * time.Second)
-		_ = proc.wait()
-	}()
-
-	conn := acpsdk.NewClientSideConnection(listingClient{}, proc.stdin, proc.stdout)
-	init, err := conn.Initialize(ctx, acpsdk.InitializeRequest{
-		ProtocolVersion:    acpsdk.ProtocolVersionNumber,
-		ClientCapabilities: acpsdk.ClientCapabilities{},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("initialize: %w", err)
-	}
+	defer hangUp()
 	if init.AgentCapabilities.SessionCapabilities.List == nil {
 		return nil, msg.Err("sessions.notListed", "agent", a.Name)
 	}
@@ -100,6 +79,38 @@ func PastSessions(ctx context.Context, a model.Agent, cwd string) ([]PastSession
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
 	return out, nil
+}
+
+// dial starts an agent only to ask it things, and initializes it. Nothing is
+// worked over the connection, which is why it has no session of ours behind it.
+func dial(ctx context.Context, a model.Agent, cwd string) (*acpsdk.ClientSideConnection, acpsdk.InitializeResponse, func(), error) {
+	l, err := launchFor(a)
+	if err != nil {
+		return nil, acpsdk.InitializeResponse{}, nil, err
+	}
+	argv := resolveArgv0(l.argv)
+	if len(argv) == 0 {
+		return nil, acpsdk.InitializeResponse{}, nil, msg.Err("agent.emptyCommand")
+	}
+	env := append(append([]string{}, l.env...), spawnEnv(a)...)
+	proc, err := spawn(ctx, argv, cwd, env, l.dropEnv...)
+	if err != nil {
+		return nil, acpsdk.InitializeResponse{}, nil, msg.Wrap(err, "agent.startFailed", "command", argv[0])
+	}
+	hangUp := func() {
+		proc.killGroup(2 * time.Second)
+		_ = proc.wait()
+	}
+	conn := acpsdk.NewClientSideConnection(listingClient{}, proc.stdin, proc.stdout)
+	init, err := conn.Initialize(ctx, acpsdk.InitializeRequest{
+		ProtocolVersion:    acpsdk.ProtocolVersionNumber,
+		ClientCapabilities: acpsdk.ClientCapabilities{},
+	})
+	if err != nil {
+		hangUp()
+		return nil, acpsdk.InitializeResponse{}, nil, fmt.Errorf("initialize: %w", err)
+	}
+	return conn, init, hangUp, nil
 }
 
 // listingClient is the client side of a connection that only asks. An agent

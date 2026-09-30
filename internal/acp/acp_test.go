@@ -254,14 +254,23 @@ func TestLaunchForRefusesAnAgentItCannotStart(t *testing.T) {
 	}
 }
 
-// Codex asks for its model over the protocol rather than on the command line,
-// so the table has to say so — otherwise the model would be silently dropped.
-func TestCodexAsksForItsModelOverTheProtocol(t *testing.T) {
-	if adapters[model.KindCodex].modelConfig == "" {
-		t.Fatal("у codex модель — это опция сессии")
+// The model is found by its category, whatever the agent calls the option:
+// that is what lets any ACP agent be told its model without a row saying how.
+func TestModelOptionIsFoundByItsCategory(t *testing.T) {
+	category := acpsdk.SessionConfigOptionCategoryModel
+	sel := func(id string, cat *acpsdk.SessionConfigOptionCategory) acpsdk.SessionConfigOption {
+		return acpsdk.SessionConfigOption{Select: &acpsdk.SessionConfigOptionSelect{Id: acpsdk.SessionConfigId(id), Category: cat}}
 	}
-	if adapters[model.KindClaude].modelEnv == "" {
-		t.Fatal("у claude модель — это переменная окружения")
+	got := modelOption([]acpsdk.SessionConfigOption{sel("model", nil), sel("llm", &category)})
+	if got == nil || got.Id != "llm" {
+		t.Fatalf("опция с категорией model важнее имени: %+v", got)
+	}
+	got = modelOption([]acpsdk.SessionConfigOption{sel("effort", nil), sel("model", nil)})
+	if got == nil || got.Id != "model" {
+		t.Fatalf("без категорий модель ищется по имени: %+v", got)
+	}
+	if modelOption([]acpsdk.SessionConfigOption{sel("effort", nil)}) != nil {
+		t.Fatal("чужая опция за модель не принимается")
 	}
 }
 

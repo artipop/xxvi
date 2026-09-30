@@ -379,5 +379,10 @@ CREATE INDEX idx_project_folder_project ON project_folder(project_id, ord);
 INSERT INTO project_folder (id, project_id, ord, name, path) SELECT id, id, 0, '', path FROM project;
 
 ALTER TABLE card ADD COLUMN folder TEXT NOT NULL DEFAULT '';`,
+
+		// A session run's conversation outlives its process only when the
+		// agent said at initialize that it can open one again; a terminal
+		// run's CLI always can, so the column matters for sessions alone.
+		`ALTER TABLE agent_session ADD COLUMN revivable INTEGER NOT NULL DEFAULT 0;`,
 	}
 }

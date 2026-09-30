@@ -25,8 +25,8 @@ const (
 	StatusDone      SessionStatus = "done"
 	StatusFailed    SessionStatus = "failed"
 	StatusCancelled SessionStatus = "cancelled"
-	// StatusPaused is a terminal run the application closed on. Its CLI saved
-	// the conversation, and the stage waits for a person to continue it
+	// StatusPaused is a run the application closed on. Its agent saved the
+	// conversation, and the stage waits for a person to continue it
 	// (Engine.Continue) rather than being over.
 	StatusPaused SessionStatus = "paused"
 )
@@ -48,12 +48,16 @@ type Session struct {
 	// Work is how this run was worked — the stage's mode as it stood when the
 	// card entered (docs/system.md §4.1.1). Recorded rather than looked up: the
 	// ribbon reads it long after the stage may have been edited.
-	Work         string        `json:"work,omitempty"`
-	ACPSessionID string        `json:"acpSessionId,omitempty"`
-	Status       SessionStatus `json:"status"`
-	Cwd          string        `json:"cwd,omitempty"`
-	StartedAt    time.Time     `json:"startedAt"`
-	FinishedAt   time.Time     `json:"finishedAt,omitempty"`
+	Work         string `json:"work,omitempty"`
+	ACPSessionID string `json:"acpSessionId,omitempty"`
+	// Revivable marks a session run whose agent can open its conversation
+	// again (session/resume or session/load). A terminal run does not need
+	// it: its CLI always can.
+	Revivable  bool          `json:"revivable,omitempty"`
+	Status     SessionStatus `json:"status"`
+	Cwd        string        `json:"cwd,omitempty"`
+	StartedAt  time.Time     `json:"startedAt"`
+	FinishedAt time.Time     `json:"finishedAt,omitempty"`
 	// Error is why the run ended the way it did, when it did not simply finish.
 	Error *msg.Msg `json:"error,omitempty"`
 }
@@ -67,6 +71,7 @@ type sessionRow struct {
 	AgentKind    string        `db:"agent_kind"`
 	Work         string        `db:"work"`
 	ACPSessionID string        `db:"acp_session_id"`
+	Revivable    bool          `db:"revivable"`
 	Status       string        `db:"status"`
 	Cwd          string        `db:"cwd"`
 	StartedAt    int64         `db:"started_at"`
@@ -78,7 +83,7 @@ func (r sessionRow) session() Session {
 	return Session{
 		ID: r.ID, CardID: r.CardID, FlowID: r.FlowID, StageID: r.StageID,
 		AgentName: r.AgentName, AgentKind: r.AgentKind, Work: r.Work, ACPSessionID: r.ACPSessionID,
-		Status: SessionStatus(r.Status), Cwd: r.Cwd,
+		Revivable: r.Revivable, Status: SessionStatus(r.Status), Cwd: r.Cwd,
 		StartedAt: fromMillis(r.StartedAt), FinishedAt: fromNullMillis(r.FinishedAt),
 		Error: parsedMsg(r.ErrorText),
 	}
@@ -98,6 +103,7 @@ func (s *Store) InsertSession(sess Session) error {
 type SessionUpdate struct {
 	Status       *SessionStatus
 	ACPSessionID *string
+	Revivable    *bool
 	Cwd          *string
 	Error        *msg.Msg
 	FinishedAt   *time.Time
@@ -114,6 +120,10 @@ func (s *Store) UpdateSession(id string, u SessionUpdate) error {
 	if u.ACPSessionID != nil {
 		set = append(set, "acp_session_id = ?")
 		args = append(args, *u.ACPSessionID)
+	}
+	if u.Revivable != nil {
+		set = append(set, "revivable = ?")
+		args = append(args, *u.Revivable)
 	}
 	if u.Cwd != nil {
 		set = append(set, "cwd = ?")
@@ -165,15 +175,16 @@ func (s *Store) SessionsForCard(cardID string) ([]Session, error) {
 // the application. A process that is gone is not still working: a row that says
 // otherwise would make a card look busy forever.
 //
-// A terminal run whose conversation is known is paused, as it would have been
-// had the application closed properly: the CLI keeps its conversation on disk
-// whichever way it went. Anything else is cancelled.
+// A run whose conversation is known and can be opened again is paused, as it
+// would have been had the application closed properly: the agent keeps its
+// conversation on disk whichever way it went. Anything else is cancelled.
 func (s *Store) AbandonRunningSessions() (int, error) {
+	const revivable = `acp_session_id != '' AND (work = ? OR revivable != 0)`
 	res, err := s.db.Exec(`
 		UPDATE agent_session
-		SET status = CASE WHEN work = ? AND acp_session_id != '' THEN ? ELSE ? END,
+		SET status = CASE WHEN `+revivable+` THEN ? ELSE ? END,
 		    finished_at = ?,
-		    error_text = CASE WHEN work = ? AND acp_session_id != '' THEN ? ELSE ? END
+		    error_text = CASE WHEN `+revivable+` THEN ? ELSE ? END
 		WHERE status IN (?, ?, ?)`,
 		model.WorkTerminal, string(StatusPaused), string(StatusCancelled),
 		millis(time.Now()),

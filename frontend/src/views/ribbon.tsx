@@ -806,7 +806,7 @@ function Pane(props: {
         <Report report={props.screen!.report!} />
       </Show>
       <Show when={props.screen?.paused}>
-        <ContinueBar cardId={props.cardId ?? ""} />
+        <ContinueBar cardId={props.cardId ?? ""} canReopen={props.screen!.kind === "agentTerminal"} />
       </Show>
     </section>
   );
@@ -815,8 +815,9 @@ function Pane(props: {
 // A stage the application closed on waits here for a person: it goes on only
 // when somebody says so, in the conversation it stopped in. What is typed is
 // the next thing the agent reads; nothing typed means «go on».
-// Reopening brings the CLI back with nothing said, for a look first.
-function ContinueBar(props: { cardId: string }): JSX.Element {
+// Reopening brings the CLI back with nothing said, for a look first — which a
+// session has no CLI for: its conversation is the stream already on screen.
+function ContinueBar(props: { cardId: string; canReopen: boolean }): JSX.Element {
   const [text, setText] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const go = async () => {
@@ -845,9 +846,11 @@ function ContinueBar(props: { cardId: string }): JSX.Element {
           onInput={(e) => setText(e.currentTarget.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void go(); }}
         />
-        <button class="btn tiny" disabled={busy()} onClick={() => void reopen()} title={t("ribbon.reopenTitle")}>
-          {t("ribbon.reopen")}
-        </button>
+        <Show when={props.canReopen}>
+          <button class="btn tiny" disabled={busy()} onClick={() => void reopen()} title={t("ribbon.reopenTitle")}>
+            {t("ribbon.reopen")}
+          </button>
+        </Show>
         <button class="btn primary tiny" disabled={busy()} onClick={() => void go()} title={t("ribbon.continueTitle")}>
           {t("ribbon.continue")}
         </button>

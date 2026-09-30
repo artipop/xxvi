@@ -175,6 +175,9 @@ func (m *Manager) Start(job engine.Job) error {
 		policy: policyFor(job.Agent, m.opts.Policy), status: store.StatusQueued,
 		work: workOf(job.Stage),
 	}
+	if s.work == model.WorkSession {
+		s.revive = m.pausedConversation(s)
+	}
 	if err := m.store.InsertSession(store.Session{
 		ID: s.id, CardID: s.card.ID, FlowID: s.flow.ID, StageID: s.stage.ID,
 		AgentName: s.agent.Name, AgentKind: s.agent.Kind, Work: s.work,
@@ -293,6 +296,11 @@ func (m *Manager) run(s *session) {
 	s.setFinal(final)
 
 	switch {
+	case m.rootCtx.Err() != nil && s.revivable:
+		// The same as a terminal closed with the application: the agent kept
+		// the conversation, and a person continues it (engine.Continue).
+		m.finish(s, store.StatusPaused, msg.New("session.paused"))
+		m.record(s, model.EntryProblem, msg.New("journal.sessionPaused"))
 	case m.rootCtx.Err() != nil:
 		m.finish(s, store.StatusCancelled, msg.New("session.appQuitting"))
 	case s.wasCancelled():
@@ -356,26 +364,127 @@ func (m *Manager) connect(s *session) (*acpsdk.ClientSideConnection, acpsdk.Sess
 	ctx, cancel := context.WithTimeout(m.rootCtx, 60*time.Second)
 	defer cancel()
 
-	if _, err := conn.Initialize(ctx, acpsdk.InitializeRequest{
+	init, err := conn.Initialize(ctx, acpsdk.InitializeRequest{
 		ProtocolVersion:    acpsdk.ProtocolVersionNumber,
 		ClientCapabilities: clientCapabilities(),
-	}); err != nil {
+	})
+	if err != nil {
 		cleanup()
 		return nil, "", nil, fmt.Errorf("initialize: %w", err)
 	}
-	sess, err := conn.NewSession(ctx, acpsdk.NewSessionRequest{Cwd: s.cwd})
+	caps := init.AgentCapabilities
+	s.revivable = reviveBy(s.agent.Kind, caps) != ""
+
+	var sess agentSession
+	if s.revive != "" {
+		sess, err = m.reviveSession(ctx, s, conn, caps)
+	} else {
+		var created acpsdk.NewSessionResponse
+		// mcpServers is required even when there are none: claude and codex
+		// take null for empty, Junie refuses the request.
+		created, err = conn.NewSession(ctx, acpsdk.NewSessionRequest{Cwd: s.cwd, McpServers: []acpsdk.McpServer{}})
+		if err != nil {
+			err = fmt.Errorf("session/new: %w", err)
+		}
+		sess = agentSession{id: created.SessionId, modes: created.Modes, config: created.ConfigOptions}
+	}
 	if err != nil {
 		cleanup()
-		return nil, "", nil, fmt.Errorf("session/new: %w", err)
+		return nil, "", nil, err
 	}
+	// Mode and model are asked for again on a revived conversation too:
+	// claude-agent-acp and codex-acp both open it in their defaults, whatever
+	// the run before had selected.
 	m.selectMode(ctx, s, conn, sess)
 	m.selectModel(ctx, s, conn, sess)
 
-	acpID := string(sess.SessionId)
-	if err := m.store.UpdateSession(s.id, store.SessionUpdate{ACPSessionID: &acpID}); err != nil {
+	acpID := string(sess.id)
+	if err := m.store.UpdateSession(s.id, store.SessionUpdate{ACPSessionID: &acpID, Revivable: &s.revivable}); err != nil {
 		m.log.Warn("could not record the ACP session id", "session", s.id, "err", err)
 	}
-	return conn, sess.SessionId, cleanup, nil
+	return conn, sess.id, cleanup, nil
+}
+
+// agentSession is what session/new, session/resume and session/load have in
+// common: the conversation, and the mode and options it opened in.
+type agentSession struct {
+	id     acpsdk.SessionId
+	modes  *acpsdk.SessionModeState
+	config []acpsdk.SessionConfigOption
+}
+
+// reviveSession opens the conversation a paused run stopped in. Resume is
+// preferred: it hands the conversation back without a word, where load
+// replays all of it as session/update — and every one of those is already in
+// the paused run's stream, where the ribbon shows it. A replay is therefore
+// dropped rather than recorded twice.
+func (m *Manager) reviveSession(ctx context.Context, s *session, conn *acpsdk.ClientSideConnection, caps acpsdk.AgentCapabilities) (agentSession, error) {
+	id := acpsdk.SessionId(s.revive)
+	if !s.revivable {
+		return agentSession{}, msg.Err("session.cannotRevive", "agent", s.agent.Name)
+	}
+	var resumeErr error
+	if caps.SessionCapabilities.Resume != nil {
+		resp, err := conn.ResumeSession(ctx, acpsdk.ResumeSessionRequest{SessionId: id, Cwd: s.cwd})
+		if err == nil {
+			return agentSession{id: id, modes: resp.Modes, config: resp.ConfigOptions}, nil
+		}
+		// Load opens the same conversation, so a refused resume is not the
+		// end of it.
+		resumeErr = fmt.Errorf("session/resume: %w", err)
+		m.log.Warn("agent refused session/resume", "session", s.id, "err", err)
+	}
+	if caps.LoadSession {
+		// The SDK answers a request only after every notification that came
+		// before the answer has been handled, so the replay ends exactly here.
+		s.replaying.Store(true)
+		defer s.replaying.Store(false)
+		resp, err := conn.LoadSession(ctx, acpsdk.LoadSessionRequest{
+			SessionId: id, Cwd: s.cwd, McpServers: []acpsdk.McpServer{},
+		})
+		if err != nil {
+			return agentSession{}, fmt.Errorf("session/load: %w", err)
+		}
+		return agentSession{id: id, modes: resp.Modes, config: resp.ConfigOptions}, nil
+	}
+	return agentSession{}, resumeErr
+}
+
+// reviveBy is how a conversation of this agent is opened again — resume,
+// load, or empty when it is not — as the agent says at initialize, unless its
+// row knows better.
+func reviveBy(kind string, caps acpsdk.AgentCapabilities) string {
+	switch {
+	case adapters[kind].noRevive:
+		return ""
+	case caps.SessionCapabilities.Resume != nil:
+		return "resume"
+	case caps.LoadSession:
+		return "load"
+	}
+	return ""
+}
+
+// pausedConversation is the conversation to revive, when the run is a person
+// continuing a paused one: the newest earlier run on this stage paused, by
+// the same kind of agent — the id is the vendor's, and claude cannot open
+// codex's. Anything else starts a conversation of its own, as a session run
+// always has.
+func (m *Manager) pausedConversation(s *session) string {
+	sessions, err := m.store.SessionsForCard(s.card.ID)
+	if err != nil {
+		return ""
+	}
+	for _, past := range sessions { // newest first
+		if past.StageID != s.stage.ID {
+			continue
+		}
+		if past.Status == store.StatusPaused && past.Work == model.WorkSession && past.AgentKind == s.agent.Kind {
+			return past.ACPSessionID
+		}
+		return ""
+	}
+	return ""
 }
 
 // turn sends the prompt and returns the agent's final message. It holds a
@@ -428,13 +537,13 @@ func (m *Manager) turn(s *session, conn *acpsdk.ClientSideConnection, acpSession
 // agent that offers no such mode is left in the one it chose, and a refusal is
 // logged rather than failing the session — the mode is a preference and the
 // turn may well work without it.
-func (m *Manager) selectMode(ctx context.Context, s *session, conn *acpsdk.ClientSideConnection, sess acpsdk.NewSessionResponse) {
+func (m *Manager) selectMode(ctx context.Context, s *session, conn *acpsdk.ClientSideConnection, sess agentSession) {
 	mode := s.launch.mode
-	if mode == "" || sess.Modes == nil || string(sess.Modes.CurrentModeId) == mode {
+	if mode == "" || sess.modes == nil || string(sess.modes.CurrentModeId) == mode {
 		return
 	}
 	offered := false
-	for _, available := range sess.Modes.AvailableModes {
+	for _, available := range sess.modes.AvailableModes {
 		if string(available.Id) == mode {
 			offered = true
 			break
@@ -444,25 +553,22 @@ func (m *Manager) selectMode(ctx context.Context, s *session, conn *acpsdk.Clien
 		return
 	}
 	if _, err := conn.SetSessionMode(ctx, acpsdk.SetSessionModeRequest{
-		SessionId: sess.SessionId, ModeId: acpsdk.SessionModeId(mode),
+		SessionId: sess.id, ModeId: acpsdk.SessionModeId(mode),
 	}); err != nil {
 		m.log.Warn("agent refused the session mode", "session", s.id, "mode", mode, "err", err)
 	}
 }
 
-// selectModel asks for the agent's model over ACP, for the kinds that have no
-// flag or variable for it. Advisory for the same reason as the mode: failing a
-// card over a model name would be worse than running it on the default.
-func (m *Manager) selectModel(ctx context.Context, s *session, conn *acpsdk.ClientSideConnection, sess acpsdk.NewSessionResponse) {
-	configID := adapters[s.agent.Kind].modelConfig
-	if configID == "" || s.agent.Model == "" {
+// selectModel asks for the agent's model over ACP, the same way for every
+// agent: the protocol marks the option that picks it with a category, and
+// claude-agent-acp, codex-acp and junie all set it. Advisory for the same
+// reason as the mode: failing a card over a model name would be worse than
+// running it on the default.
+func (m *Manager) selectModel(ctx context.Context, s *session, conn *acpsdk.ClientSideConnection, sess agentSession) {
+	if s.agent.Model == "" {
 		return
 	}
-	for _, opt := range sess.ConfigOptions {
-		sel := opt.Select
-		if sel == nil || string(sel.Id) != configID {
-			continue
-		}
+	if sel := modelOption(sess.config); sel != nil {
 		value, ok := matchConfigValue(sel.Options, s.agent.Model)
 		if !ok {
 			m.log.Warn("agent does not offer this model", "session", s.id, "model", s.agent.Model)
@@ -473,13 +579,32 @@ func (m *Manager) selectModel(ctx context.Context, s *session, conn *acpsdk.Clie
 		}
 		if _, err := conn.SetSessionConfigOption(ctx, acpsdk.SetSessionConfigOptionRequest{
 			ValueId: &acpsdk.SetSessionConfigOptionValueId{
-				SessionId: sess.SessionId, ConfigId: sel.Id, Value: acpsdk.SessionConfigValueId(value),
+				SessionId: sess.id, ConfigId: sel.Id, Value: acpsdk.SessionConfigValueId(value),
 			},
 		}); err != nil {
 			m.log.Warn("agent refused the model", "session", s.id, "model", value, "err", err)
 		}
-		return
 	}
+}
+
+// modelOption is the session option that picks the model: the one the agent
+// put in the model category, or, from an agent that sets no categories, the
+// one called model.
+func modelOption(config []acpsdk.SessionConfigOption) *acpsdk.SessionConfigOptionSelect {
+	var named *acpsdk.SessionConfigOptionSelect
+	for _, opt := range config {
+		sel := opt.Select
+		if sel == nil {
+			continue
+		}
+		if sel.Category != nil && *sel.Category == acpsdk.SessionConfigOptionCategoryModel {
+			return sel
+		}
+		if named == nil && string(sel.Id) == "model" {
+			named = sel
+		}
+	}
+	return named
 }
 
 // matchConfigValue finds the option value somebody meant: its id, or the name
@@ -673,6 +798,15 @@ type session struct {
 	// work is how this run is worked. Fixed at start, like the policy: a stage
 	// edited mid-run does not change what is already running.
 	work string
+	// revive is the conversation a session run continues: a paused run's,
+	// when a person said «Continue». Empty for a run that starts its own.
+	revive string
+	// revivable is what the agent said at initialize: its conversation can be
+	// opened again, so an application closing on it pauses the run.
+	revivable bool
+	// replaying is set while session/load plays the revived conversation
+	// back (reviveSession).
+	replaying atomic.Bool
 
 	mu         sync.Mutex
 	status     store.SessionStatus

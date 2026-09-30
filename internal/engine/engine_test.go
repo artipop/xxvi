@@ -866,6 +866,12 @@ func TestRemarksReachTheAgentTheCardReturnsTo(t *testing.T) {
 // run paused on a conversation it can resume.
 func (f fixture) pause(t *testing.T, cardID string) {
 	t.Helper()
+	f.pauseWorked(t, cardID, model.WorkTerminal)
+}
+
+// pauseWorked is pause for a run worked the given way.
+func (f fixture) pauseWorked(t *testing.T, cardID, work string) {
+	t.Helper()
 	job := f.runner.lastJob(t)
 	f.runner.Cancel(cardID, msg.Msg{})
 	f.runner.mu.Lock()
@@ -876,7 +882,7 @@ func (f fixture) pause(t *testing.T, cardID string) {
 	id := fmt.Sprintf("run-%s-%d", cardID, n)
 	if err := f.store.InsertSession(store.Session{
 		ID: id, CardID: cardID, FlowID: f.flow.ID, StageID: job.Stage.ID,
-		AgentName: job.Agent.Name, Work: model.WorkTerminal, Status: store.StatusRunning,
+		AgentName: job.Agent.Name, Work: work, Status: store.StatusRunning,
 		StartedAt: time.Now().Add(time.Duration(n) * time.Second),
 	}); err != nil {
 		t.Fatalf("сессия: %v", err)
@@ -928,6 +934,29 @@ func TestAReopenedStageSaysNothing(t *testing.T) {
 	job := f.runner.lastJob(t)
 	if job.Prompt != "" || job.Stage.ID != "work" {
 		t.Fatalf("агенту ничего не говорят, стадия та же: %q на %s", job.Prompt, job.Stage.ID)
+	}
+}
+
+// A paused session has nothing to reopen: no CLI would show its conversation,
+// and the stream on the ribbon already does. Only continuing it means anything.
+func TestAPausedSessionIsContinuedNotReopened(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Задача")
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+	f.pauseWorked(t, card.ID, model.WorkSession)
+	before := f.runner.count()
+
+	if err := f.engine.Reopen(card.ID); err == nil {
+		t.Fatal("фоновый шаг не открывают снова")
+	}
+	if f.runner.count() != before {
+		t.Fatal("отказ не должен ничего запускать")
+	}
+	if err := f.engine.Continue(card.ID, ""); err != nil {
+		t.Fatalf("фоновый шаг продолжают: %v", err)
+	}
+	if got := f.runner.lastJob(t).Prompt; got != continueWords {
+		t.Fatalf("без слов агенту говорят продолжать: %q", got)
 	}
 }
 

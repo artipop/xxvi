@@ -2,17 +2,21 @@ package model
 
 import "strings"
 
-// Agent kinds. Two are reached through an adapter their vendor publishes on
-// npm; the third carries its own launch command and is how anything else that
-// speaks ACP is registered.
+// Agent kinds. All but the last are presets: how a known agent is started in
+// ACP mode. The last carries its own launch command and is how anything else
+// that speaks ACP is registered; everything past the launch — sessions,
+// models, reviving a conversation — goes over the protocol the same way for
+// every kind.
 const (
 	KindClaude = "claude"
 	KindCodex  = "codex"
+	KindVibe   = "vibe"
+	KindJunie  = "junie"
 	KindACP    = "acp"
 )
 
 // Kinds is every kind, in the order the UI offers them.
-var Kinds = []string{KindClaude, KindCodex, KindACP}
+var Kinds = []string{KindClaude, KindCodex, KindVibe, KindJunie, KindACP}
 
 // Agent is one registered ACP agent.
 //

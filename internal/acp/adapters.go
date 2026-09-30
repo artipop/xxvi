@@ -23,23 +23,28 @@ import (
 type adapter struct {
 	// bin is the executable, looked up on PATH and in the usual install spots.
 	bin string
-	// npmPackage provides bin when it is not installed. The two vendor adapters
-	// are published there and nowhere else, so it doubles as the install
-	// instruction shown to a person and the argument to npx.
-	npmPackage string
+	// pkg provides bin when it is not installed, published in from. It
+	// doubles as the install instruction shown to a person and the argument
+	// to the registry's runner, so a machine with that runner needs no
+	// install step at all.
+	pkg  string
+	from registry
 	// acpArgs put the CLI into ACP-over-stdio mode. Empty when it has no other
 	// mode to be in.
 	acpArgs []string
-	// modelEnv and modelConfig are the two ways an agent is told which model to
-	// use: a variable at spawn, or a session config option asked for over ACP
-	// once the session exists.
-	modelEnv    string
-	modelConfig string
+	// modelEnv tells the agent its model at spawn, for a kind that reads one.
+	// Every agent is also asked over ACP once the session exists
+	// (Manager.selectModel), so a kind without it still gets its model; the
+	// variable is for ids the agent takes but does not list as options.
+	modelEnv string
 	// dropEnv names variables the process must not inherit from ours.
 	dropEnv []string
 	// mode is the session mode to select after session/new, when the agent's
 	// default is not what a card wants.
 	mode string
+	// noRevive overrides what the agent says at initialize: it claims it can
+	// open a past conversation, and does, but not well enough to work in.
+	noRevive bool
 
 	// The columns below describe the *interactive* CLI of the same agent — what
 	// a stage working in a terminal runs (docs/system.md §4.1.1). They are
@@ -92,6 +97,35 @@ type adapter struct {
 	cliPromptArgs func(prompt string) []string
 }
 
+// registry is where an adapter package is published: how to run it without
+// installing it, and how a person installs it.
+type registry struct {
+	// runner fetches and runs a package in one go.
+	runner string
+	// runArgs follow runner, naming the package and, when it provides more
+	// than one program, which of them.
+	runArgs func(pkg, bin string) []string
+	// install is the command a person runs to install it for good.
+	install func(pkg string) string
+	// needs is what provides runner, for a machine that has neither.
+	needs string
+}
+
+var (
+	npm = registry{
+		runner:  "npx",
+		runArgs: func(pkg, _ string) []string { return []string{"--yes", pkg} },
+		install: func(pkg string) string { return "npm install -g " + pkg },
+		needs:   "Node.js",
+	}
+	pypi = registry{
+		runner:  "uvx",
+		runArgs: func(pkg, bin string) []string { return []string{"--from", pkg, bin} },
+		install: func(pkg string) string { return "uv tool install " + pkg },
+		needs:   "uv",
+	}
+)
+
 // adapters is the table of agents we know how to launch. The generic acp kind
 // is deliberately absent: it carries its own Command.
 var adapters = map[string]adapter{
@@ -99,8 +133,9 @@ var adapters = map[string]adapter{
 	// the claude binary is not needed alongside it. It is a Node package and
 	// there is no other build of it, which is why this kind needs Node.js.
 	model.KindClaude: {
-		bin:        "claude-agent-acp",
-		npmPackage: "@agentclientprotocol/claude-agent-acp",
+		bin:  "claude-agent-acp",
+		pkg:  "@agentclientprotocol/claude-agent-acp",
+		from: npm,
 		// The adapter takes no flags at all: it is an ACP agent and nothing else.
 		modelEnv: "ANTHROPIC_MODEL",
 		// Claude Code refuses to start inside another Claude Code session, and
@@ -140,11 +175,12 @@ var adapters = map[string]adapter{
 	// The Codex adapter drives the codex CLI it depends on, so this kind needs
 	// Node.js too.
 	model.KindCodex: {
-		bin:        "codex-acp",
-		npmPackage: "@agentclientprotocol/codex-acp",
+		bin:  "codex-acp",
+		pkg:  "@agentclientprotocol/codex-acp",
+		from: npm,
 		// It takes no flags either: the model is a session config option, asked
-		// for over the protocol once the session exists.
-		modelConfig: "model",
+		// for over the protocol once the session exists, as for any agent.
+		//
 		// It starts read-only, which is not what a card asked for: a session
 		// that may not edit anything would spend its turn saying so.
 		mode:   "agent",
@@ -159,6 +195,40 @@ var adapters = map[string]adapter{
 		// The separator for the same reason as claude's: a brief that starts
 		// with a dash must not be read as a flag.
 		cliPromptArgs: func(prompt string) []string { return []string{"--", prompt} },
+	},
+	// Mistral Vibe speaks ACP through a program of its own, published on PyPI
+	// beside the CLI. It has no terminal columns: a stage worked by it runs in
+	// the background, where its conversation is revived over the protocol
+	// (session/load) rather than by a flag of its CLI.
+	model.KindVibe: {
+		bin:  "vibe-acp",
+		pkg:  "mistral-vibe",
+		from: pypi,
+	},
+	// Junie is one binary for both: a flag puts it into ACP. It is installed
+	// by JetBrains' own script and published in no package registry, so a
+	// machine without it is told so rather than offered a download. No
+	// terminal columns yet: its CLI takes MCP servers only from folders
+	// (--mcp-location), not the way ours are handed over.
+	//
+	// Its model is not the session's alone: whichever way it is chosen —
+	// the option over ACP or --model — Junie writes it to
+	// ~/.junie/settings.json as the default for every launch after, the
+	// person's own included. An agent entry that names a model moves that
+	// default; there is no per-process way around it (seen on 26.7.27).
+	model.KindJunie: {
+		bin: "junie",
+		// The update check is a prompt of its own, and nobody would see it.
+		acpArgs: []string{"--acp=true", "--skip-update-check"},
+		// It offers resume and load, and neither can be worked in (seen on
+		// 26.7.27). Resume wants mcpServers, which the schema leaves optional
+		// and the SDK therefore omits when empty. And once a conversation is
+		// open again, every turn streams the answer to the turn before and
+		// ends; its own answer arrives after the turn is over. The
+		// conversation itself is intact, only the stream is a turn late, so
+		// a step would end on words that answer nothing. Its stage is
+		// cancelled on a restart, as before resume existed.
+		noRevive: true,
 	},
 }
 
@@ -179,16 +249,17 @@ func cliFor(kind string) (adapter, bool) {
 // the fact was knowable the moment the dialog was opened.
 type AdapterStatus struct {
 	Kind string `json:"kind"`
-	// Package is the npm package that provides the adapter, empty for a kind
+	// Package is the package that provides the adapter, empty for a kind
 	// whose CLI is installed some other way.
 	Package string `json:"package,omitempty"`
 	// Path is the adapter binary we found, empty when there is none.
 	Path string `json:"path,omitempty"`
 	// Ready reports that a session of this kind can start right now.
 	Ready bool `json:"ready"`
-	// ViaNPX marks a kind that is not installed but will be run through npx —
-	// it works, only the first run pays for the download.
-	ViaNPX bool `json:"viaNpx,omitempty"`
+	// Via names the runner — npx, uvx — of a kind that is not installed but
+	// will be run through it: it works, only the first run pays for the
+	// download.
+	Via string `json:"via,omitempty"`
 	// Detail says what is missing, with what a person needs to act on.
 	Detail *msg.Msg `json:"detail,omitempty"`
 
@@ -217,24 +288,25 @@ func AdapterStatuses() []AdapterStatus {
 
 func adapterStatus(kind string) AdapterStatus {
 	def := adapters[kind]
-	st := AdapterStatus{Kind: kind, Package: def.npmPackage}
+	st := AdapterStatus{Kind: kind, Package: def.pkg}
 	st.Terminal, st.TerminalDetail = terminalStatus(kind)
 	if bin, err := lookupBin(def.bin); err == nil {
 		st.Path, st.Ready = bin, true
 		return st
 	}
-	if def.npmPackage == "" {
+	if def.pkg == "" {
 		st.Detail = detail("adapter.missing", "bin", def.bin)
 		return st
 	}
-	if _, err := lookupBin("npx"); err == nil {
-		st.Ready, st.ViaNPX = true, true
-		st.Detail = detail("adapter.viaNpx", "bin", def.bin)
+	if _, err := lookupBin(def.from.runner); err == nil {
+		st.Ready, st.Via = true, def.from.runner
+		st.Detail = detail("adapter.viaRunner", "bin", def.bin, "runner", def.from.runner)
 		return st
 	}
-	// Nothing to offer: npm is how both adapters are published, and installing
-	// Node.js is not something to do behind a person's back.
-	st.Detail = detail("adapter.noNpx", "bin", def.bin, "package", def.npmPackage)
+	// Nothing to offer: installing Node.js or uv is not something to do behind
+	// a person's back.
+	st.Detail = detail("adapter.noRunner", "bin", def.bin, "runner", def.from.runner,
+		"needs", def.from.needs, "install", def.from.install(def.pkg))
 	return st
 }
 
@@ -306,8 +378,8 @@ func launchFor(a model.Agent) (launch, error) {
 }
 
 // adapterArgv resolves the adapter binary for a kind. An installed binary wins;
-// failing that, a vendor adapter published on npm is run through npx, so a
-// machine with Node.js needs no install step at all. Nothing else is guessed:
+// failing that, the package is run through its registry's runner, so a machine
+// with Node.js or uv needs no install step at all. Nothing else is guessed:
 // an agent that cannot be started says so here rather than at its first turn.
 func adapterArgv(kind, override string) ([]string, error) {
 	def := adapters[kind]
@@ -322,13 +394,14 @@ func adapterArgv(kind, override string) ([]string, error) {
 		// from it would silently run something else.
 		return nil, msg.Wrap(err, "adapter.badPath", "path", override)
 	}
-	if def.npmPackage == "" {
+	if def.pkg == "" {
 		return nil, msg.Err("adapter.missing", "bin", def.bin)
 	}
-	if npx, err := lookupBin("npx"); err == nil {
-		return []string{npx, "--yes", def.npmPackage}, nil
+	if runner, err := lookupBin(def.from.runner); err == nil {
+		return append([]string{runner}, def.from.runArgs(def.pkg, def.bin)...), nil
 	}
-	return nil, msg.Err("adapter.install", "bin", def.bin, "package", def.npmPackage)
+	return nil, msg.Err("adapter.install", "bin", def.bin, "runner", def.from.runner,
+		"needs", def.from.needs, "install", def.from.install(def.pkg))
 }
 
 // lookupBin finds an executable. PATH first, then the usual install locations,

@@ -1,6 +1,8 @@
 import { createSignal, For, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Agent } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { AgentCheck } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
 import { agents, guard, loadAgents, vocabulary } from "../state";
 import { say, t } from "../i18n";
 
@@ -25,7 +27,7 @@ export default function AgentsView() {
             <div class="row wrap">
               <span class="title">{a.kind}</span>
               <Show when={a.ready} fallback={<span class="tag bad"><span class="dot" />{t("agents.wontStart")}</span>}>
-                <span class="tag ok"><span class="dot" />{a.viaNpx ? t("agents.viaNpx") : t("work.session")}</span>
+                <span class="tag ok"><span class="dot" />{a.via ? t("agents.via", { runner: a.via }) : t("work.session")}</span>
               </Show>
               {/* Two questions with two answers: the vendor's ACP adapter and
                   the vendor's interactive CLI are different programs, and a
@@ -69,6 +71,7 @@ export default function AgentsView() {
                 <span class="tag">{a.kind}</span>
                 <Show when={a.model}><span class="tag">{a.model}</span></Show>
                 <div class="spacer" />
+                <CheckButton name={a.name} />
                 <button class="btn quiet"
                         onClick={() => setEditing({ agent: JSON.parse(JSON.stringify(a)), original: a.name })}>
                   {t("common.edit")}
@@ -78,11 +81,50 @@ export default function AgentsView() {
                 </button>
               </div>
               <Show when={a.prompt}><div class="body">{a.prompt}</div></Show>
+              <Show when={checks()[a.name]}>{(c) => <CheckResult check={c()} />}</Show>
             </div>
           </Show>
         )}
       </For>
     </>
+  );
+}
+
+// What each agent said about itself, by name. Asked on demand: a check starts
+// the agent, and one run through npx or uvx downloads itself first.
+const [checks, setChecks] = createSignal<Record<string, AgentCheck>>({});
+
+function CheckButton(props: { name: string }): JSX.Element {
+  const [busy, setBusy] = createSignal(false);
+  const check = async () => {
+    setBusy(true);
+    const got = await guard(() => API.CheckAgent(props.name));
+    setBusy(false);
+    if (got) setChecks({ ...checks(), [props.name]: got });
+  };
+  return (
+    <button class="btn quiet" disabled={busy()} onClick={() => void check()} title={t("agents.checkTitle")}>
+      {busy() ? t("agents.checking") : t("agents.check")}
+    </button>
+  );
+}
+
+function CheckResult(props: { check: AgentCheck }): JSX.Element {
+  const c = () => props.check;
+  return (
+    <div class="body">
+      <div class="row wrap">
+        <span class="meta">{[c().title, c().version].filter(Boolean).join(" ")}</span>
+        <span class={c().revive ? "tag ok" : "tag"}>
+          <span class="dot" />{c().revive ? t("agents.revives", { how: c().revive! }) : t("agents.noRevive")}
+        </span>
+        <Show when={c().lists}><span class="tag ok"><span class="dot" />{t("agents.lists")}</span></Show>
+        <Show when={c().model}>
+          <span class="tag" title={(c().models ?? []).join(", ")}>{t("agents.startsOn", { model: c().model! })}</span>
+        </Show>
+      </div>
+      <Show when={c().problem}><div>{say(c().problem)}</div></Show>
+    </div>
   );
 }
 

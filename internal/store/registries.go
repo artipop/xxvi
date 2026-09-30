@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -138,8 +139,10 @@ func validateAgent(a model.Agent) (model.Agent, error) {
 		if len(a.Command) == 0 {
 			return model.Agent{}, msg.Err("agent.noCommand", "kind", model.KindACP)
 		}
-	case model.KindClaude, model.KindCodex:
 	default:
+		if slices.Contains(model.Kinds, a.Kind) {
+			break
+		}
 		return model.Agent{}, msg.Err("agent.unknownKind", "kind", a.Kind, "allowed", strings.Join(model.Kinds, ", "))
 	}
 	return a, nil
