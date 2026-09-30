@@ -635,12 +635,9 @@ func (e *Engine) runStageSaying(card model.Card, flow model.Flow, stage model.St
 	}
 
 	var taken model.TakenByHumanError
-	agent, err := model.PickAgent(card, stage.Crew, agents, e.runner.Busy())
+	agent, err := model.PickAgent(card, agents)
 	switch {
 	case err == nil:
-	case errors.Is(err, model.ErrCrewBusy):
-		e.enqueue(card, flow, stage)
-		return
 	case errors.As(err, &taken):
 		// Not a failed step — the work is being done, only not by us — so the
 		// card waits where it stands rather than taking a failure edge.

@@ -119,10 +119,9 @@ export function applyTemplate(stage: Stage, tpl: StageTemplate, from: StageTempl
     Object.assign(patch, {
       work: tpl.work || "terminal",
       prompt: tpl.prompt || stage.prompt || "",
-      crew: list(tpl.crew).length > 0 ? [...list(tpl.crew)] : list(stage.crew),
     });
   } else {
-    Object.assign(patch, { work: "", prompt: "", crew: [], writes: [], reads: [], maxRunning: 0 });
+    Object.assign(patch, { work: "", prompt: "", writes: [], reads: [], maxRunning: 0 });
   }
   return patch;
 }
@@ -145,8 +144,7 @@ export function nodeDetail(stage: Stage, owns: boolean): string {
   const ref = (sc?.ref ?? "").trim().replace(/\{([^}]+)\}/g, (_, name: string) => `{${propName(name.trim())}}`);
   switch (shapeOf(stage, owns)) {
     case "agent": {
-      const who = list(stage.crew).join(", ") || t("flows.anyAgent");
-      return stage.work === "session" ? `${who} · ${label("work", "session")}` : who;
+      return label("work", stage.work === "session" ? "session" : "terminal");
     }
     case "screen":
       if (sc.kind === "terminal") return ref || t("flows.shell");

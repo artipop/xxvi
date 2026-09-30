@@ -49,7 +49,6 @@ export interface CardStage {
     "id": string;
     "name": string;
     "action": string;
-    "crew"?: string[] | null;
     "final"?: boolean;
     "current": boolean;
 

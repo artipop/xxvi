@@ -52,7 +52,7 @@ func defaultAgent() model.Agent {
 // words, and «Page and check» is the short one somebody can walk end to end — by hand
 // or through the tools this application offers outside (internal/appmcp).
 func SeedFlows() []model.Flow {
-	return append(baseFlows(), HostingFlows(defaultAgent().Name)...)
+	return append(baseFlows(), HostingFlows()...)
 }
 
 func baseFlows() []model.Flow {
@@ -64,7 +64,7 @@ func baseFlows() []model.Flow {
 			EntryStage: "dev-work",
 			Stages: []model.Stage{
 				{
-					ID: "dev-work", Name: "In progress", Action: model.ActionAgent, Crew: []string{"Claude"},
+					ID: "dev-work", Name: "In progress", Action: model.ActionAgent,
 					// In the terminal, because this is the step somebody sits
 					// at: «ask» means the agent asks in its own interface and
 					// is answered in the same window (docs/system.md §4.1.1).
@@ -80,7 +80,7 @@ func baseFlows() []model.Flow {
 					X:       80, Y: 160,
 				},
 				{
-					ID: "dev-check", Name: "Check", Action: model.ActionAgent, Crew: []string{"Claude"},
+					ID: "dev-check", Name: "Check", Action: model.ActionAgent,
 					// A session: nobody watches a check, and there is nobody for
 					// it to talk to. Its verdict is read by the fork below.
 					Work: model.WorkSession,
@@ -166,7 +166,7 @@ func baseFlows() []model.Flow {
 			EntryStage: "page-write",
 			Stages: []model.Stage{
 				{
-					ID: "page-write", Name: "Layout", Action: model.ActionAgent, Crew: []string{"Claude"},
+					ID: "page-write", Name: "Layout", Action: model.ActionAgent,
 					Work: model.WorkTerminal,
 					Prompt: "Make the page the task asks for: one index.html file in the working folder, " +
 						"with no external dependencies. Put the file's address in «Page» — file:///…/index.html.",
@@ -178,7 +178,7 @@ func baseFlows() []model.Flow {
 					X:       80, Y: 160,
 				},
 				{
-					ID: "page-review", Name: "Check", Action: model.ActionAgent, Crew: []string{"Claude"},
+					ID: "page-review", Name: "Check", Action: model.ActionAgent,
 					Work: model.WorkSession,
 					Prompt: "Check the page at «Page»: does it do what the task asks, " +
 						"is the markup intact. Put pass or fail in «Verdict», and write what is wrong in the text.",
@@ -223,7 +223,7 @@ func baseFlows() []model.Flow {
 			EntryStage:  "triage",
 			Stages: []model.Stage{
 				{
-					ID: "triage", Name: "Triage", Action: model.ActionAgent, Crew: []string{"Claude"},
+					ID: "triage", Name: "Triage", Action: model.ActionAgent,
 					Work: model.WorkTerminal,
 					Prompt: "Work out what has to be done and describe a plan. Do not change anything. " +
 						"If a person has to choose between options, say so.",
@@ -231,7 +231,7 @@ func baseFlows() []model.Flow {
 				},
 				{ID: "decide", Name: "Decision needed", Action: model.ActionNone, X: 360, Y: 320},
 				{
-					ID: "do", Name: "Execution", Action: model.ActionAgent, Crew: []string{"Claude"},
+					ID: "do", Name: "Execution", Action: model.ActionAgent,
 					Work:       model.WorkTerminal,
 					Prompt:     "Do what was worked out in the previous step, taking the person's decision into account.",
 					MaxRunning: 1,
@@ -272,8 +272,8 @@ func baseFlows() []model.Flow {
 // a merged MR, and somebody else's MR reviewed. Seeded with the rest on a first
 // run, and offered again when a project is first connected to a hosting — an
 // installation older than them has never seen them, and connecting is the
-// moment they start to mean something. crew is the agent that does the work.
-func HostingFlows(crew string) []model.Flow {
+// moment they start to mean something.
+func HostingFlows() []model.Flow {
 	return []model.Flow{
 		{
 			Name: "Task to MR",
@@ -282,7 +282,7 @@ func HostingFlows(crew string) []model.Flow {
 			EntryStage: "tmr-work",
 			Stages: []model.Stage{
 				{
-					ID: "tmr-work", Name: "In progress", Action: model.ActionAgent, Crew: []string{crew},
+					ID: "tmr-work", Name: "In progress", Action: model.ActionAgent,
 					Work: model.WorkTerminal,
 					Prompt: "Do what the task asks. Commit the work on the task's branch when it is done: " +
 						"what is not committed will not reach the MR.",
@@ -427,10 +427,6 @@ func (a *App) ensureHostingFlows() {
 	if err != nil {
 		return
 	}
-	agents, err := a.Store.Agents()
-	if err != nil || len(agents) == 0 {
-		return
-	}
 	// Known by its entry stage as well as by name: the name is translated
 	// once the example is in (localizeSeeds), and the English one is then
 	// nowhere to be found.
@@ -440,7 +436,7 @@ func (a *App) ensureHostingFlows() {
 		have["entry:"+f.EntryStage] = true
 	}
 	added := false
-	for _, f := range HostingFlows(agents[0].Name) {
+	for _, f := range HostingFlows() {
 		if have[strings.ToLower(f.Name)] || have["entry:"+f.EntryStage] {
 			continue
 		}

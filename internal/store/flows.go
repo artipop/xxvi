@@ -82,16 +82,12 @@ func (s *Store) FlowForStage(stageID string) (model.Flow, error) {
 
 // SaveFlow validates a flow against the agent registry and stores it whole,
 // creating it if its id is new. The stored flow is returned: ids filled in,
-// crews spelled the way the registry spells them.
+// names spelled the way the registry spells them.
 func (s *Store) SaveFlow(f model.Flow) (model.Flow, error) {
-	agents, err := s.Agents()
-	if err != nil {
-		return model.Flow{}, err
-	}
 	// Ids are settled before validation, so an edge may reference a stage the
 	// editor created in the same save.
 	f = withIDs(f)
-	f, err = model.ValidateFlow(f, agents)
+	f, err := model.ValidateFlow(f)
 	if err != nil {
 		return model.Flow{}, err
 	}
@@ -139,12 +135,6 @@ func (s *Store) SaveFlow(f model.Flow) (model.Flow, error) {
 				st.ID, f.ID, i, st.Name, st.Action, st.Work, st.Prompt, st.MaxRunning, st.Final, st.X, st.Y,
 				encodeJSON(st.Writes), encodeJSON(st.Reads), encodeJSON(st.Screens), st.Template); err != nil {
 				return err
-			}
-			for j, name := range st.Crew {
-				if _, err := tx.Exec(`INSERT INTO stage_agent (stage_id, ord, agent_name, agent_key) VALUES (?, ?, ?, ?)`,
-					st.ID, j, name, model.Username(name)); err != nil {
-					return err
-				}
 			}
 		}
 		for i, e := range f.Edges {
@@ -266,7 +256,7 @@ type edgeRow struct {
 }
 
 // loadGraph fills a flow's stages and edges. Three queries whatever the size of
-// the graph: the crews come back in one pass and are handed out by stage.
+// the graph.
 func (s *Store) loadGraph(r flowRow) (model.Flow, error) {
 	f := model.Flow{ID: r.ID, Name: r.Name, Description: r.Description, EntryStage: r.EntryStage}
 
@@ -274,14 +264,10 @@ func (s *Store) loadGraph(r flowRow) (model.Flow, error) {
 	if err := s.db.Select(&stages, `SELECT * FROM stage WHERE flow_id = ? ORDER BY ord`, r.ID); err != nil {
 		return model.Flow{}, fmt.Errorf("read stages of flow %q: %w", r.Name, err)
 	}
-	crews, err := s.crews(r.ID)
-	if err != nil {
-		return model.Flow{}, err
-	}
 	for _, st := range stages {
 		stage := model.Stage{
 			ID: st.ID, Name: st.Name, Action: st.Action, Work: st.Work, Prompt: st.Prompt,
-			Crew: crews[st.ID], MaxRunning: st.MaxRunning, Final: st.Final, X: st.X, Y: st.Y,
+			MaxRunning: st.MaxRunning, Final: st.Final, X: st.X, Y: st.Y,
 			Template: st.Template,
 		}
 		decodeJSON(st.WritesJSON, &stage.Writes)
@@ -303,24 +289,4 @@ func (s *Store) loadGraph(r flowRow) (model.Flow, error) {
 		f.Edges = append(f.Edges, edge)
 	}
 	return f, nil
-}
-
-func (s *Store) crews(flowID string) (map[string][]string, error) {
-	var rows []struct {
-		StageID string `db:"stage_id"`
-		Name    string `db:"agent_name"`
-	}
-	if err := s.db.Select(&rows, `
-		SELECT sa.stage_id, sa.agent_name
-		FROM stage_agent sa
-		JOIN stage s ON s.id = sa.stage_id
-		WHERE s.flow_id = ?
-		ORDER BY sa.stage_id, sa.ord`, flowID); err != nil {
-		return nil, fmt.Errorf("read stage crews: %w", err)
-	}
-	out := map[string][]string{}
-	for _, r := range rows {
-		out[r.StageID] = append(out[r.StageID], r.Name)
-	}
-	return out, nil
 }

@@ -11,7 +11,7 @@ func devFlow() Flow {
 	return Flow{
 		ID: "f1", Name: "Разработка", EntryStage: "work",
 		Stages: []Stage{
-			{ID: "work", Name: "В работе", Action: ActionAgent, Crew: []string{"Claude"}},
+			{ID: "work", Name: "В работе", Action: ActionAgent},
 			{ID: "review", Name: "На проверке", Action: ActionNone},
 			{ID: "done", Name: "Готово", Action: ActionNone, Final: true},
 			{ID: "blocked", Name: "Заблокировано", Action: ActionNone, Final: true},
@@ -132,7 +132,7 @@ func agents() []Agent {
 }
 
 func TestValidateFlowAcceptsAGoodOne(t *testing.T) {
-	f, err := ValidateFlow(devFlow(), agents())
+	f, err := ValidateFlow(devFlow())
 	if err != nil {
 		t.Fatalf("флоу должен быть принят: %v", err)
 	}
@@ -155,7 +155,6 @@ func TestValidateFlowRefusals(t *testing.T) {
 		},
 		"переход в никуда":             func(f *Flow) { f.Edges[0].To = "нет-такой" },
 		"неизвестное событие":          func(f *Flow) { f.Edges[0].On = "полнолуние" },
-		"агент не в реестре":           func(f *Flow) { f.Stages[0].Crew = []string{"Никто"} },
 		"card.changed без условия":     func(f *Flow) { f.Edges[2].If = nil },
 		"финальная стадия что-то дела": func(f *Flow) { f.Stages[2].Action = ActionAgent },
 		"переход из финальной стадии":  func(f *Flow) { f.Edges = append(f.Edges, Edge{From: "done", To: "work", On: TriggerSuccess}) },
@@ -172,23 +171,20 @@ func TestValidateFlowRefusals(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := devFlow()
 			mutate(&f)
-			if _, err := ValidateFlow(f, agents()); err == nil {
+			if _, err := ValidateFlow(f); err == nil {
 				t.Fatal("флоу должен был быть отвергнут")
 			}
 		})
 	}
 }
 
-// A stage that runs an agent must be able to find one. With several registered
-// and no crew there is nothing to choose from, and finding that out at run time
-// costs a card that silently never starts.
 // A stage that named no mode is one somebody meant to watch: the default is the
 // terminal, because it is the mode that shows more, and a flow written before
 // the field existed is a flow whose author expected to see the work.
 func TestAgentStageDefaultsToTheTerminal(t *testing.T) {
 	f := devFlow()
 	f.Stages[0].Work = ""
-	got, err := ValidateFlow(f, agents())
+	got, err := ValidateFlow(f)
 	if err != nil {
 		t.Fatalf("не принят: %v", err)
 	}
@@ -198,7 +194,7 @@ func TestAgentStageDefaultsToTheTerminal(t *testing.T) {
 	// A stage that says «сессией» keeps it: the default fills a silence, it does
 	// not overrule an answer.
 	f.Stages[0].Work = WorkSession
-	got, err = ValidateFlow(f, agents())
+	got, err = ValidateFlow(f)
 	if err != nil {
 		t.Fatalf("не принят: %v", err)
 	}
@@ -207,35 +203,10 @@ func TestAgentStageDefaultsToTheTerminal(t *testing.T) {
 	}
 }
 
-func TestValidateFlowRefusesAgentStageWithNothingToChooseFrom(t *testing.T) {
-	f := devFlow()
-	f.Stages[0].Crew = nil
-	if _, err := ValidateFlow(f, agents()); err == nil {
-		t.Fatal("стадия без состава при нескольких агентах должна быть отвергнута")
-	}
-	// One registered agent is an unambiguous answer, so the same flow is fine.
-	if _, err := ValidateFlow(f, agents()[:1]); err != nil {
-		t.Fatalf("с единственным агентом состав не нужен: %v", err)
-	}
-}
-
-func TestValidateFlowNormalizesCrewToRegistrySpelling(t *testing.T) {
-	f := devFlow()
-	f.Stages[0].Crew = []string{"claude", "  Claude  "}
-	got, err := ValidateFlow(f, agents())
-	if err != nil {
-		t.Fatalf("не принят: %v", err)
-	}
-	if len(got.Stages[0].Crew) != 1 || got.Stages[0].Crew[0] != "Claude" {
-		t.Fatalf("состав должен быть приведён к написанию реестра и без повторов, получено %v", got.Stages[0].Crew)
-	}
-}
-
 // ---- picking an agent ----
 
-func TestPickAgentPrefersTheAssigneeInsideTheCrew(t *testing.T) {
-	card := Card{Assignee: "codex"}
-	got, err := PickAgent(card, []string{"Claude", "Codex"}, agents(), nil)
+func TestPickAgentPrefersTheAssignee(t *testing.T) {
+	got, err := PickAgent(Card{Assignee: "codex"}, agents())
 	if err != nil {
 		t.Fatalf("агент должен быть выбран: %v", err)
 	}
@@ -244,28 +215,9 @@ func TestPickAgentPrefersTheAssigneeInsideTheCrew(t *testing.T) {
 	}
 }
 
-func TestPickAgentSkipsBusyCrewMembers(t *testing.T) {
-	busy := map[string]bool{Username("Claude"): true}
-	got, err := PickAgent(Card{}, []string{"Claude", "Codex"}, agents(), busy)
-	if err != nil {
-		t.Fatalf("должен быть выбран свободный: %v", err)
-	}
-	if got.Name != "Codex" {
-		t.Fatalf("ожидался Codex, получено %q", got.Name)
-	}
-}
-
-func TestPickAgentParksTheCardWhenTheWholeCrewIsBusy(t *testing.T) {
-	busy := map[string]bool{Username("Claude"): true, Username("Codex"): true}
-	_, err := PickAgent(Card{}, []string{"Claude", "Codex"}, agents(), busy)
-	if !errors.Is(err, ErrCrewBusy) {
-		t.Fatalf("ожидалось ErrCrewBusy, получено %v", err)
-	}
-}
-
 func TestPickAgentRefusesACardAPersonTook(t *testing.T) {
 	var taken TakenByHumanError
-	_, err := PickAgent(Card{Assignee: "Артём"}, []string{"Claude"}, agents(), nil)
+	_, err := PickAgent(Card{Assignee: "Артём"}, agents())
 	if !errors.As(err, &taken) || taken.Who != "Артём" {
 		t.Fatalf("карточку взял человек — агент не должен стартовать, получено %v", err)
 	}
@@ -274,7 +226,7 @@ func TestPickAgentRefusesACardAPersonTook(t *testing.T) {
 // An assignee that is a registered agent means the opposite of a person taking
 // the card: that agent runs it.
 func TestPickAgentTreatsAnAgentAssigneeAsAChoiceNotAsATakenCard(t *testing.T) {
-	got, err := PickAgent(Card{Assignee: "Claude"}, nil, agents(), nil)
+	got, err := PickAgent(Card{Assignee: "Claude"}, agents())
 	if err != nil {
 		t.Fatalf("агент-исполнитель должен работать карточку: %v", err)
 	}
@@ -284,7 +236,7 @@ func TestPickAgentTreatsAnAgentAssigneeAsAChoiceNotAsATakenCard(t *testing.T) {
 }
 
 func TestPickAgentFallsBackToTheOnlyRegisteredAgent(t *testing.T) {
-	got, err := PickAgent(Card{}, nil, agents()[:1], nil)
+	got, err := PickAgent(Card{}, agents()[:1])
 	if err != nil {
 		t.Fatalf("единственный агент — однозначный ответ: %v", err)
 	}
@@ -294,7 +246,7 @@ func TestPickAgentFallsBackToTheOnlyRegisteredAgent(t *testing.T) {
 }
 
 func TestPickAgentRefusesToGuessAmongSeveral(t *testing.T) {
-	if _, err := PickAgent(Card{}, nil, agents(), nil); err == nil {
-		t.Fatal("без состава и без исполнителя выбирать не из чего")
+	if _, err := PickAgent(Card{}, agents()); err == nil {
+		t.Fatal("без исполнителя и с несколькими агентами выбирать не из чего")
 	}
 }

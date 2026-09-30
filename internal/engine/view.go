@@ -12,13 +12,12 @@ import (
 
 // CardStage is one stage of the flow as the card sees it.
 type CardStage struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Action  string   `json:"action"`
-	Crew    []string `json:"crew,omitempty"`
-	Final   bool     `json:"final,omitempty"`
-	Current bool     `json:"current"`
-	Done    bool     `json:"done"` // the card has already been through it
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Action  string `json:"action"`
+	Final   bool   `json:"final,omitempty"`
+	Current bool   `json:"current"`
+	Done    bool   `json:"done"` // the card has already been through it
 }
 
 // CardFlow is the whole answer for one card.
@@ -61,7 +60,7 @@ func (e *Engine) CardFlowFor(cardID string) (*CardFlow, error) {
 	}
 	for _, s := range flow.Stages {
 		out.Stages = append(out.Stages, CardStage{
-			ID: s.ID, Name: s.Name, Action: s.Action, Crew: s.Crew, Final: s.Final,
+			ID: s.ID, Name: s.Name, Action: s.Action, Final: s.Final,
 			Current: s.ID == st.StageID,
 			Done:    visited[s.ID] && s.ID != st.StageID,
 		})

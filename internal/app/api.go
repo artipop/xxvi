@@ -1086,17 +1086,8 @@ func (s *API) SaveAgent(a model.Agent) (model.Agent, error) {
 	return saved, nil
 }
 
-// DeleteAgent removes an entry, refusing while a flow still names it: a stage
-// whose crew is nobody is a card that silently never starts, and finding that
-// out here is better than finding it out mid-run.
+// DeleteAgent removes an entry.
 func (s *API) DeleteAgent(name string) error {
-	used, err := s.app.Store.StagesUsingAgent(name)
-	if err != nil {
-		return err
-	}
-	if len(used) > 0 {
-		return msg.Err("agent.inUse", "agent", name, "stages", strings.Join(used, ", "))
-	}
 	if err := s.app.Store.DeleteAgent(name); err != nil {
 		return err
 	}

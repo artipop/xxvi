@@ -88,7 +88,7 @@ func TestUnresolvedScreenRefsWarnsAboutWhatNobodyWrites(t *testing.T) {
 	f.Stages[2].Screens = []Screen{{Kind: ScreenBrowser, Ref: "{Стенд}"}}
 
 	// It is a warning, not a refusal: a person may well set the value by hand.
-	if _, err := ValidateFlow(f, []Agent{{Name: "Claude", Kind: KindClaude}}); err != nil {
+	if _, err := ValidateFlow(f); err != nil {
 		t.Fatalf("непрописанное свойство экрана — предупреждение, а не отказ: %v", err)
 	}
 }
@@ -98,7 +98,6 @@ func TestUnresolvedScreenRefsWarnsAboutWhatNobodyWrites(t *testing.T) {
 // looking — and the review stage is exactly where the preview has to be open
 // (docs/system.md §12.4).
 func TestAWaitingStageMayDeclareScreens(t *testing.T) {
-	agents := []Agent{{Name: "Claude", Kind: KindClaude}}
 	f := Flow{
 		Name: "С ревью", EntryStage: "review",
 		Stages: []Stage{
@@ -106,19 +105,18 @@ func TestAWaitingStageMayDeclareScreens(t *testing.T) {
 				Screens: []Screen{{Kind: ScreenBrowser, Ref: "http://localhost:5173"}}},
 		},
 	}
-	if _, err := ValidateFlow(f, agents); err != nil {
+	if _, err := ValidateFlow(f); err != nil {
 		t.Fatalf("ждущая стадия имеет право на экран: %v", err)
 	}
 
 	// The rule it is deliberately not symmetric with still stands.
 	f.Stages[0].Writes = []PropertyWrite{{Property: "Вердикт"}}
-	if _, err := ValidateFlow(f, agents); err == nil {
+	if _, err := ValidateFlow(f); err == nil {
 		t.Fatal("писать на карточку на ждущей стадии по-прежнему некому")
 	}
 }
 
 func TestScreensAreRefusedWhenTheyCouldNotBeShown(t *testing.T) {
-	agents := []Agent{{Name: "Claude", Kind: KindClaude}}
 	flowWith := func(screens ...Screen) Flow {
 		return Flow{
 			Name: "Один шаг", EntryStage: "work",
@@ -145,7 +143,7 @@ func TestScreensAreRefusedWhenTheyCouldNotBeShown(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := ValidateFlow(flowWith(c.screens...), agents)
+			_, err := ValidateFlow(flowWith(c.screens...))
 			if err == nil {
 				t.Fatalf("такой экран должен быть отвергнут")
 			}
@@ -166,7 +164,7 @@ func TestScreensWithAUsefulDefaultMayPointAtNothing(t *testing.T) {
 		Stages: []Stage{{ID: "work", Name: "Работа", Action: ActionAgent,
 			Screens: []Screen{{Kind: ScreenTerminal}, {Kind: ScreenDiff}}}},
 	}
-	saved, err := ValidateFlow(f, []Agent{{Name: "Claude", Kind: KindClaude}})
+	saved, err := ValidateFlow(f)
 	if err != nil {
 		t.Fatalf("терминал без команды и дифф без ревизий — рабочие экраны: %v", err)
 	}

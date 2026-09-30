@@ -178,9 +178,7 @@ export function ContinueStage(cardID: string, text: string): $CancellablePromise
 }
 
 /**
- * DeleteAgent removes an entry, refusing while a flow still names it: a stage
- * whose crew is nobody is a card that silently never starts, and finding that
- * out here is better than finding it out mid-run.
+ * DeleteAgent removes an entry.
  */
 export function DeleteAgent(name: string): $CancellablePromise<void> {
     return $Call.ByID(2879232337, name);

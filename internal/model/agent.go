@@ -68,8 +68,8 @@ func Username(name string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-// SameAgentName reports whether a name written somewhere — a card's assignee, a
-// stage's crew — refers to this registry entry.
+// SameAgentName reports whether a name written somewhere — a card's assignee —
+// refers to this registry entry.
 func SameAgentName(name, entryName string) bool {
 	name = strings.TrimSpace(name)
 	if name == "" {

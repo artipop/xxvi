@@ -291,7 +291,7 @@ func reviewFlow() model.Flow {
 	return model.Flow{
 		Name: "С ревью", EntryStage: "work",
 		Stages: []model.Stage{
-			{ID: "work", Name: "В работе", Action: model.ActionAgent, Crew: []string{"Claude"}},
+			{ID: "work", Name: "В работе", Action: model.ActionAgent},
 			{
 				ID: "review", Name: "Ревью", Action: model.ActionNone,
 				Screens: []model.Screen{{Kind: model.ScreenDiff, Title: "Что изменилось"}},

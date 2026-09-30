@@ -106,20 +106,6 @@ func (s *Store) DeleteAgent(name string) error {
 	return nil
 }
 
-// StagesUsingAgent is which stages name an agent — what a delete dialog has to
-// say before it removes one.
-func (s *Store) StagesUsingAgent(name string) ([]string, error) {
-	var out []string
-	err := s.db.Select(&out, `
-		SELECT f.name || ' → ' || s.name
-		FROM stage_agent sa
-		JOIN stage s ON s.id = sa.stage_id
-		JOIN flow f ON f.id = s.flow_id
-		WHERE sa.agent_key = ?
-		ORDER BY f.name, s.ord`, model.Username(name))
-	return out, err
-}
-
 func validateAgent(a model.Agent) (model.Agent, error) {
 	a.Name = strings.TrimSpace(a.Name)
 	if a.Name == "" {

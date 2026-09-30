@@ -14,9 +14,9 @@ func dataFlow() model.Flow {
 	return model.Flow{
 		Name: "С проверкой", EntryStage: "work",
 		Stages: []model.Stage{
-			{ID: "work", Name: "В работе", Action: model.ActionAgent, Crew: []string{"Claude"}},
+			{ID: "work", Name: "В работе", Action: model.ActionAgent},
 			{
-				ID: "qa", Name: "Проверка", Action: model.ActionAgent, Crew: []string{"Claude"},
+				ID: "qa", Name: "Проверка", Action: model.ActionAgent,
 				Writes: []model.PropertyWrite{{Property: "Вердикт", Required: true}, {Property: "Превью"}},
 			},
 			{ID: "done", Name: "Готово", Final: true},
@@ -116,7 +116,7 @@ func TestMarksAreTheTwoAnswersOfAWaitingStage(t *testing.T) {
 	flow := model.Flow{
 		Name: "С ревью", EntryStage: "work",
 		Stages: []model.Stage{
-			{ID: "work", Name: "В работе", Action: model.ActionAgent, Crew: []string{"Claude"}},
+			{ID: "work", Name: "В работе", Action: model.ActionAgent},
 			{ID: "review", Name: "На ревью", Action: model.ActionNone},
 			{ID: "done", Name: "Готово", Final: true},
 		},

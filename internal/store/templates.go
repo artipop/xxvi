@@ -27,7 +27,6 @@ type templateRow struct {
 	Action      string `db:"action"`
 	Work        string `db:"work"`
 	Prompt      string `db:"prompt"`
-	CrewJSON    string `db:"crew_json"`
 	Final       bool   `db:"final"`
 	ScreensJSON string `db:"screens_json"`
 	UpdatedAt   int64  `db:"updated_at"`
@@ -38,13 +37,9 @@ func (r templateRow) template() model.StageTemplate {
 		ID: r.ID, Name: r.Name, Description: r.Description, Icon: r.Icon, Color: r.Color,
 		Builtin: r.Builtin, Action: r.Action, Work: r.Work, Prompt: r.Prompt, Final: r.Final,
 	}
-	decodeJSON(r.CrewJSON, &t.Crew)
 	decodeJSON(r.ScreensJSON, &t.Screens)
 	// Absent rather than empty, the way a template arrives from the editor and
 	// the way ValidateTemplate leaves it.
-	if len(t.Crew) == 0 {
-		t.Crew = nil
-	}
 	if len(t.Screens) == 0 {
 		t.Screens = nil
 	}
@@ -90,15 +85,15 @@ func (s *Store) SaveStageTemplate(t model.StageTemplate) (model.StageTemplate, e
 		return model.StageTemplate{}, msg.Err("template.noName")
 	}
 	_, err = s.db.Exec(`
-		INSERT INTO stage_template (id, ord, name, description, icon, color, builtin, action, work, prompt, crew_json, final, screens_json, updated_at)
-		VALUES (?, (SELECT COALESCE(MAX(ord), 0) + 1 FROM stage_template), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO stage_template (id, ord, name, description, icon, color, builtin, action, work, prompt, final, screens_json, updated_at)
+		VALUES (?, (SELECT COALESCE(MAX(ord), 0) + 1 FROM stage_template), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			name = excluded.name, description = excluded.description, icon = excluded.icon,
 			color = excluded.color, action = excluded.action, work = excluded.work,
-			prompt = excluded.prompt, crew_json = excluded.crew_json, final = excluded.final,
+			prompt = excluded.prompt, final = excluded.final,
 			screens_json = excluded.screens_json, updated_at = excluded.updated_at`,
 		t.ID, t.Name, t.Description, t.Icon, t.Color, t.Builtin, t.Action, t.Work, t.Prompt,
-		encodeJSON(nonNil(t.Crew)), t.Final, encodeJSON(nonNil(t.Screens)), millis(time.Now()))
+		t.Final, encodeJSON(nonNil(t.Screens)), millis(time.Now()))
 	if err != nil {
 		return model.StageTemplate{}, fmt.Errorf("save stage template: %w", err)
 	}

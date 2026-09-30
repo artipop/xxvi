@@ -384,5 +384,10 @@ ALTER TABLE card ADD COLUMN folder TEXT NOT NULL DEFAULT '';`,
 		// agent said at initialize that it can open one again; a terminal
 		// run's CLI always can, so the column matters for sessions alone.
 		`ALTER TABLE agent_session ADD COLUMN revivable INTEGER NOT NULL DEFAULT 0;`,
+
+		// A stage is a place where an agent works, and which agent is the
+		// task's to say, so a stage no longer has a crew of its own.
+		`DROP TABLE stage_agent;
+ALTER TABLE stage_template DROP COLUMN crew_json;`,
 	}
 }

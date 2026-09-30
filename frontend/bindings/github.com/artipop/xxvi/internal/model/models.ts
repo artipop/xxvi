@@ -620,12 +620,6 @@ export interface Stage {
     "prompt"?: string;
 
     /**
-     * Crew is who may work this stage. Not an assignment but a list of who is
-     * allowed at all: the card chooses among them (see PickAgent).
-     */
-    "crew"?: string[] | null;
-
-    /**
      * MaxRunning bounds how many cards this stage works at once. Zero means no
      * limit of its own; the machine-wide limit still applies.
      */
@@ -736,7 +730,6 @@ export interface StageTemplate {
     "action": string;
     "work"?: string;
     "prompt"?: string;
-    "crew"?: string[] | null;
     "final"?: boolean;
     "screens"?: Screen[] | null;
 }

@@ -42,7 +42,6 @@ type StageTemplate struct {
 	Action  string   `json:"action"`
 	Work    string   `json:"work,omitempty"`
 	Prompt  string   `json:"prompt,omitempty"`
-	Crew    []string `json:"crew,omitempty"`
 	Final   bool     `json:"final,omitempty"`
 	Screens []Screen `json:"screens,omitempty"`
 }
@@ -128,8 +127,7 @@ var (
 
 // ValidateTemplate normalizes and checks a template by the rules a stage made
 // from it would be checked by, so a template never offers a node the flow then
-// refuses. The crew is not resolved against the registry: an agent may be
-// registered after the template names it, and the flow says so when saved.
+// refuses.
 func ValidateTemplate(t StageTemplate) (StageTemplate, error) {
 	t.ID = strings.TrimSpace(t.ID)
 	t.Name = strings.TrimSpace(t.Name)
@@ -163,22 +161,12 @@ func ValidateTemplate(t StageTemplate) (StageTemplate, error) {
 	}
 	switch {
 	case t.Action != ActionAgent:
-		t.Work, t.Prompt, t.Crew = "", "", nil
+		t.Work, t.Prompt = "", ""
 	case t.Work == "":
 		t.Work = WorkTerminal
 	case t.Work != WorkTerminal && t.Work != WorkSession:
 		return StageTemplate{}, msg.Err("template.unknownWork",
 			"work", t.Work, "allowed", strings.Join(Works, ", "))
-	}
-	crew := make([]string, 0, len(t.Crew))
-	for _, name := range t.Crew {
-		if name = strings.TrimSpace(name); name != "" {
-			crew = append(crew, name)
-		}
-	}
-	t.Crew = nil
-	if len(crew) > 0 {
-		t.Crew = crew
 	}
 	if t.Final {
 		t.Screens = nil

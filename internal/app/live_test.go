@@ -34,7 +34,7 @@ func TestLiveCardGoesThroughAFlow(t *testing.T) {
 		Name: "Живая проверка", EntryStage: "live-work",
 		Stages: []model.Stage{
 			{
-				ID: "live-work", Name: "В работе", Action: model.ActionAgent, Crew: []string{"Claude"},
+				ID: "live-work", Name: "В работе", Action: model.ActionAgent,
 				// Named rather than defaulted: this test is about a real ACP
 				// session, and the default is the terminal, which waits for a
 				// report nobody here would give.

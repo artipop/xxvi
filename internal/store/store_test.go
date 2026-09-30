@@ -34,7 +34,7 @@ func devFlow() model.Flow {
 	return model.Flow{
 		Name: "Разработка", EntryStage: "work",
 		Stages: []model.Stage{
-			{ID: "work", Name: "В работе", Action: model.ActionAgent, Crew: []string{"Claude"}},
+			{ID: "work", Name: "В работе", Action: model.ActionAgent},
 			{ID: "review", Name: "На проверке", Action: model.ActionNone},
 			{ID: "done", Name: "Готово", Final: true},
 		},
@@ -86,6 +86,7 @@ func TestDatabaseAtTheBaselineTakesTheStepsAfterIt(t *testing.T) {
 		`DROP TABLE project_folder`,
 		`ALTER TABLE card DROP COLUMN folder`,
 		`ALTER TABLE agent_session DROP COLUMN revivable`,
+		`CREATE TABLE stage_agent (stage_id TEXT NOT NULL, ord INTEGER NOT NULL, agent_name TEXT NOT NULL, agent_key TEXT NOT NULL, PRIMARY KEY (stage_id, ord))`,
 		`INSERT INTO project (id, name, name_key, kind, path, created_at) VALUES ('p1', 'Сайт', 'сайт', 'folder', '/tmp/сайт', 0)`,
 		`DELETE FROM schema_migration WHERE version > ` + strconv.Itoa(Baseline),
 	} {
@@ -157,9 +158,6 @@ func TestSaveFlowRoundTrip(t *testing.T) {
 	// Order is a person's decision and must survive the round trip.
 	if got.Stages[0].ID != "work" || got.Stages[2].ID != "done" {
 		t.Fatalf("порядок стадий не сохранился: %v", stageIDs(got))
-	}
-	if len(got.Stages[0].Crew) != 1 || got.Stages[0].Crew[0] != "Claude" {
-		t.Fatalf("состав стадии не сохранился: %v", got.Stages[0].Crew)
 	}
 	if got.Edges[1].If == nil || got.Edges[1].If.Property != "Одобрено" {
 		t.Fatalf("условие ребра не сохранилось: %+v", got.Edges[1].If)
@@ -474,19 +472,6 @@ func TestAgentRegistryRefusesNonsense(t *testing.T) {
 	}
 }
 
-func TestStagesUsingAgentAnswersBeforeADelete(t *testing.T) {
-	s := open(t)
-	claude(t, s)
-	s.SaveFlow(devFlow())
-	used, err := s.StagesUsingAgent("claude")
-	if err != nil {
-		t.Fatalf("прочитать: %v", err)
-	}
-	if len(used) != 1 || !strings.Contains(used[0], "В работе") {
-		t.Fatalf("должна найтись стадия, называющая агента: %v", used)
-	}
-}
-
 func TestSourceRulesKeepTheirOrder(t *testing.T) {
 	s := open(t)
 	src := model.Source{
@@ -621,7 +606,7 @@ func TestStageDeclarationsSurviveARoundTrip(t *testing.T) {
 	saved, err := st.SaveFlow(model.Flow{
 		Name: "С проверкой", EntryStage: "qa",
 		Stages: []model.Stage{{
-			ID: "qa", Name: "Проверка", Action: model.ActionAgent, Crew: []string{"Claude"},
+			ID: "qa", Name: "Проверка", Action: model.ActionAgent,
 			Writes: []model.PropertyWrite{{Property: "Вердикт", Required: true}, {Property: "Превью"}},
 			Reads:  []string{"Ветка"},
 		}},
@@ -656,7 +641,7 @@ func TestStageScreensSurviveSaving(t *testing.T) {
 	saved, err := s.SaveFlow(model.Flow{
 		Name: "С экранами", EntryStage: "work",
 		Stages: []model.Stage{{
-			ID: "work", Name: "Работа", Action: model.ActionAgent, Crew: []string{"Claude"},
+			ID: "work", Name: "Работа", Action: model.ActionAgent,
 			Screens: []model.Screen{
 				{Kind: model.ScreenNotes, Title: "План", Ref: "план.md"},
 				{Kind: model.ScreenTerminal},

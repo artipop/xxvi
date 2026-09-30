@@ -306,9 +306,6 @@ type Stage struct {
 	// Prompt is what the agent is told about this step, on top of its own
 	// prompt and the card's task.
 	Prompt string `json:"prompt,omitempty"`
-	// Crew is who may work this stage. Not an assignment but a list of who is
-	// allowed at all: the card chooses among them (see PickAgent).
-	Crew []string `json:"crew,omitempty"`
 	// MaxRunning bounds how many cards this stage works at once. Zero means no
 	// limit of its own; the machine-wide limit still applies.
 	MaxRunning int `json:"maxRunning,omitempty"`

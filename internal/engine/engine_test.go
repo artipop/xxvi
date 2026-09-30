@@ -119,7 +119,7 @@ func devFlow() model.Flow {
 	return model.Flow{
 		Name: "Разработка", EntryStage: "work",
 		Stages: []model.Stage{
-			{ID: "work", Name: "В работе", Action: model.ActionAgent, Crew: []string{"Claude"}},
+			{ID: "work", Name: "В работе", Action: model.ActionAgent},
 			{ID: "review", Name: "На проверке", Action: model.ActionNone},
 			{ID: "done", Name: "Готово", Final: true},
 			{ID: "blocked", Name: "Заблокировано", Final: true},
@@ -355,7 +355,7 @@ func routingFlow() model.Flow {
 	return model.Flow{
 		Name: "Маршрутизация", EntryStage: "work",
 		Stages: []model.Stage{
-			{ID: "work", Name: "В работе", Action: model.ActionAgent, Crew: []string{"Claude"}},
+			{ID: "work", Name: "В работе", Action: model.ActionAgent},
 			{ID: "deploy", Name: "Выкатка", Final: true},
 			{ID: "review", Name: "На проверке", Final: true},
 		},
@@ -444,15 +444,17 @@ func TestTypedTaskOpensWithTheWordsTyped(t *testing.T) {
 
 // ---- who picks the card up ----
 
-func TestBusyCrewParksTheCardAndTheQueueStartsItLater(t *testing.T) {
-	f := setup(t, devFlow())
+func TestAFullStageParksTheCardAndTheQueueStartsItLater(t *testing.T) {
+	flow := devFlow()
+	flow.Stages[0].MaxRunning = 1
+	f := setup(t, flow)
 	first, second := f.card(t, "Первая"), f.card(t, "Вторая")
 
 	f.engine.TakeIntoWork(first.ID, f.flow.ID)
 	f.engine.TakeIntoWork(second.ID, f.flow.ID)
 
 	if f.runner.count() != 1 {
-		t.Fatalf("единственный агент занят — вторая должна ждать, запусков: %d", f.runner.count())
+		t.Fatalf("стадия полна — вторая должна ждать, запусков: %d", f.runner.count())
 	}
 	if queued, _ := f.store.IsQueued(second.ID); !queued {
 		t.Fatal("вторая карточка должна стоять в очереди")
@@ -473,13 +475,10 @@ func TestBusyCrewParksTheCardAndTheQueueStartsItLater(t *testing.T) {
 	}
 }
 
-func TestStageLimitIsObeyedWhateverTheCrew(t *testing.T) {
+func TestStageLimitIsObeyed(t *testing.T) {
 	flow := devFlow()
-	flow.Stages[0].Crew = []string{"Claude", "Codex"}
 	flow.Stages[0].MaxRunning = 1
-	f := setup(t, flow,
-		model.Agent{Name: "Claude", Kind: model.KindClaude},
-		model.Agent{Name: "Codex", Kind: model.KindCodex})
+	f := setup(t, flow)
 
 	first, second := f.card(t, "Первая"), f.card(t, "Вторая")
 	f.engine.TakeIntoWork(first.ID, f.flow.ID)
@@ -513,7 +512,6 @@ func TestCardTakenByAPersonDoesNotStartAnAgent(t *testing.T) {
 
 func TestAnAgentAssigneeIsAChoiceOfAgent(t *testing.T) {
 	flow := devFlow()
-	flow.Stages[0].Crew = []string{"Claude", "Codex"}
 	f := setup(t, flow,
 		model.Agent{Name: "Claude", Kind: model.KindClaude},
 		model.Agent{Name: "Codex", Kind: model.KindCodex})
@@ -727,7 +725,9 @@ func TestCardNotOnAFlowSaysNothing(t *testing.T) {
 }
 
 func TestOverviewCountsWhereEverythingIs(t *testing.T) {
-	f := setup(t, devFlow())
+	flow := devFlow()
+	flow.Stages[0].MaxRunning = 1
+	f := setup(t, flow)
 	first, second := f.card(t, "Первая"), f.card(t, "Вторая")
 	f.engine.TakeIntoWork(first.ID, f.flow.ID)
 	f.engine.TakeIntoWork(second.ID, f.flow.ID)

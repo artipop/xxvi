@@ -18,7 +18,7 @@ import (
 // ValidateFlow normalizes and checks a flow against the agent registry. The
 // returned flow is the one to store: trimmed, with crews resolved to registry
 // spelling and stage ids settled.
-func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
+func ValidateFlow(f Flow) (Flow, error) {
 	f.Name = strings.TrimSpace(f.Name)
 	if f.Name == "" {
 		return Flow{}, msg.Err("flow.noName")
@@ -76,21 +76,6 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 			return Flow{}, msg.Err("stage.negativeLimit", "stage", s.Name)
 		}
 
-		crew, err := normalizeCrew(s.Crew, agents)
-		if err != nil {
-			return Flow{}, msg.Wrap(err, "stage.invalid", "stage", s.Name)
-		}
-		s.Crew = crew
-
-		// A stage that runs an agent has to be able to find one. With a crew
-		// that is already checked above; without one the card falls back to
-		// "the only registered agent", and that has to actually be true.
-		if s.Action == ActionAgent && len(s.Crew) == 0 && len(agents) != 1 {
-			if len(agents) == 0 {
-				return Flow{}, msg.Err("stage.noAgents", "stage", s.Name)
-			}
-			return Flow{}, msg.Err("stage.noCrew", "stage", s.Name, "agents", AgentNames(agents))
-		}
 		// A final stage is where a card stops. Running something there would
 		// produce an outcome with nowhere to go.
 		if s.Final && s.Action != ActionNone {
@@ -212,40 +197,6 @@ func validateCond(c Cond, trigger Trigger) (Cond, error) {
 		return Cond{}, msg.Err("cond.commentNotOutcome")
 	}
 	return c, nil
-}
-
-// normalizeCrew resolves crew names to registry spelling, dropping repeats and
-// refusing names nobody answers to. A stage naming an unregistered agent is
-// worth refusing at save time: at run time it would be a card that silently
-// never starts.
-func normalizeCrew(crew []string, agents []Agent) ([]string, error) {
-	out := make([]string, 0, len(crew))
-	seen := make(map[string]bool, len(crew))
-	for _, name := range crew {
-		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
-		}
-		var entry *Agent
-		for i := range agents {
-			if SameAgentName(name, agents[i].Name) {
-				entry = &agents[i]
-				break
-			}
-		}
-		if entry == nil {
-			return nil, msg.Err("crew.unknownAgent", "agent", name, "agents", AgentNames(agents))
-		}
-		if seen[Username(entry.Name)] {
-			continue
-		}
-		seen[Username(entry.Name)] = true
-		out = append(out, entry.Name)
-	}
-	if len(out) == 0 {
-		return nil, nil
-	}
-	return out, nil
 }
 
 // normalizeWrites trims a stage's declared outputs and refuses the two things

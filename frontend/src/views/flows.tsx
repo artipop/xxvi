@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, createStore, For, Show, type StoreSetter } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Edge, Flow, PropertyWrite, Screen, Stage, StageTemplate } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import { agents, flows, guard, list, loadFlows, loadTemplates, templates, vocabulary } from "../state";
+import { flows, guard, list, loadFlows, loadTemplates, templates, vocabulary } from "../state";
 import FlowCanvas, { type CanvasApi, DRAG_KIND, type Selection, type StageWrite, condLabel, edgeIndexOf } from "./flowCanvas";
 import {
   KIND_FALLBACK, NODE_COLORS, NODE_ICONS, NodeIcon, PICKER_FALLBACK, Tile, applyTemplate, newStage, ownsScreen, shapeOf, templateName, templateNote,
@@ -461,15 +461,9 @@ function StagePanel(props: {
     const st = stage();
     props.onSaveAsTemplate({
       id: "", name: "", icon: tpl()?.icon || "terminal", color: tpl()?.color || NODE_COLORS[0],
-      action: st.action || "none", work: st.work, prompt: st.prompt, crew: list(st.crew),
+      action: st.action || "none", work: st.work, prompt: st.prompt,
       final: st.final, screens: list(st.screens).map((sc) => ({ ...sc })),
     } as StageTemplate);
-  };
-
-  const toggleCrew = (name: string) => {
-    const crew = new Set(list(stage().crew));
-    crew.has(name) ? crew.delete(name) : crew.add(name);
-    set({ crew: [...crew] });
   };
 
   const removeStage = () => {
@@ -628,21 +622,6 @@ function StagePanel(props: {
         </Show>
 
         <Show when={shape() === "agent"}>
-          <div class="field">
-            <span class="field-label">{t("flows.crew")}</span>
-            <div class="agent-picks">
-              <For each={list(agents().agents)}>
-                {(a) => (
-                  <button class={`agent-pick ${list(stage().crew).includes(a.name) ? "on" : ""}`}
-                          onClick={() => toggleCrew(a.name)}>
-                    <span class="agent-pick__name">{a.name}</span>
-                    <span class="agent-pick__kind">{label("kind", a.kind)}</span>
-                  </button>
-                )}
-              </For>
-            </div>
-          </div>
-
           {/* Where the work happens: a terminal is where a person sits beside the
               agent and answers it in its own interface, a session is a step
               nobody watches (docs/system.md §4.1.1). */}
@@ -823,12 +802,6 @@ function TemplatePanel(props: {
   const editScreen = (i: number, patch: Partial<Screen>) =>
     set({ screens: screens().map((sc, at) => (at === i ? { ...sc, ...patch } : sc)) });
 
-  const toggleCrew = (name: string) => {
-    const crew = new Set(list(draft.crew));
-    crew.has(name) ? crew.delete(name) : crew.add(name);
-    set({ crew: [...crew] });
-  };
-
   const save = async () => {
     setError("");
     try {
@@ -911,20 +884,6 @@ function TemplatePanel(props: {
       </div>
 
       <Show when={behaviourOf(draft) === "agent"}>
-        <div class="field">
-          <span class="field-label">{t("flows.crew")}</span>
-          <div class="agent-picks">
-            <For each={list(agents().agents)}>
-              {(a) => (
-                <button class={`agent-pick ${list(draft.crew).includes(a.name) ? "on" : ""}`}
-                        onClick={() => toggleCrew(a.name)}>
-                  <span class="agent-pick__name">{a.name}</span>
-                  <span class="agent-pick__kind">{label("kind", a.kind)}</span>
-                </button>
-              )}
-            </For>
-          </div>
-        </div>
         <div class="field">
           <span class="field-label">{t("flows.whereWork")}</span>
           <div class="segmented">
