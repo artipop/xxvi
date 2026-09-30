@@ -27,6 +27,7 @@ type cardRow struct {
 	State       string `db:"state"`
 	Assignee    string `db:"assignee"`
 	Project     string `db:"project"`
+	Folder      string `db:"folder"`
 	WorkMode    string `db:"work_mode"`
 	Branch      string `db:"branch"`
 	BaseRef     string `db:"base_ref"`
@@ -42,7 +43,7 @@ func (r cardRow) card() model.Card {
 	return model.Card{
 		ID: r.ID, Source: r.Source, ExternalID: r.ExternalID, ItemVersion: r.ItemVersion,
 		Title: r.Title, Body: r.Body, URL: r.URL,
-		State: model.CardState(r.State), Assignee: r.Assignee, Project: r.Project,
+		State: model.CardState(r.State), Assignee: r.Assignee, Project: r.Project, Folder: r.Folder,
 		WorkMode: r.WorkMode, Branch: r.Branch, Base: r.BaseRef, Worktree: r.Worktree,
 		Session: r.Session, Typed: r.Typed,
 		CreatedAt: fromMillis(r.CreatedAt), UpdatedAt: fromMillis(r.UpdatedAt),
@@ -69,10 +70,10 @@ func (s *Store) CreateCard(c model.Card) (model.Card, error) {
 
 	err := s.tx(func(tx *sqlx.Tx) error {
 		if _, err := tx.Exec(`
-			INSERT INTO card (id, source, external_id, item_version, title, body, url, state, assignee, project, work_mode, branch, base_ref, session, typed, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			INSERT INTO card (id, source, external_id, item_version, title, body, url, state, assignee, project, folder, work_mode, branch, base_ref, session, typed, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			c.ID, c.Source, c.ExternalID, c.ItemVersion, c.Title, c.Body, c.URL,
-			string(c.State), c.Assignee, c.Project, c.WorkMode, c.Branch, c.Base, c.Session, c.Typed, millis(c.CreatedAt), millis(c.UpdatedAt)); err != nil {
+			string(c.State), c.Assignee, c.Project, c.Folder, c.WorkMode, c.Branch, c.Base, c.Session, c.Typed, millis(c.CreatedAt), millis(c.UpdatedAt)); err != nil {
 			return err
 		}
 		return writeProps(tx, c.ID, c.Props)

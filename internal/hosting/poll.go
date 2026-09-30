@@ -98,7 +98,7 @@ func (s *Service) pollWaiting() {
 		if !flow.HasEdge(st.StageID, model.TriggerMRMerged) && !flow.HasEdge(st.StageID, model.TriggerMRClosed) {
 			continue
 		}
-		project, err := s.store.Project(card.Project)
+		project, err := s.store.CardProject(card)
 		if err != nil {
 			continue
 		}

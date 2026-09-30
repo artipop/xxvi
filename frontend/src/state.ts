@@ -3,7 +3,7 @@ import { Browser, Events } from "@wailsio/runtime";
 import * as API from "../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { AgentsView, CardView, UpdateState, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp/models";
-import type { Card, Flow, InboxGroup, Project, Source, StageTemplate } from "../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { Card, Flow, Folder, InboxGroup, Project, Source, StageTemplate } from "../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { CardSummary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
 import { applyLanguage, choose, type Choice, errorText, label, lang, langInEnglish, t } from "./i18n";
@@ -22,6 +22,22 @@ export const [templates, setTemplates] = createSignal<StageTemplate[]>([]);
 export const [agents, setAgents] = createSignal<AgentsView>({ agents: [], adapters: [] });
 export const [attention, setAttention] = createSignal<Attention[]>([]);
 export const [projects, setProjects] = createSignal<Project[]>([]);
+
+/** A project's folders; the first is where a task that named none works. */
+export function projectFolders(projectID: string | undefined): Folder[] {
+  return list(projects().find((p) => p.id === projectID)?.folders);
+}
+
+/** The folder a task works in: the one it names, else the project's first. */
+export function taskFolder(projectID: string | undefined, folderID: string | undefined): Folder | undefined {
+  const folders = projectFolders(projectID);
+  return folders.find((f) => f.id === folderID) ?? (folderID ? undefined : folders[0]);
+}
+
+/** What a folder is called on screen: its name, else the folder itself. */
+export function folderName(f: Folder): string {
+  return f.name || (f.path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? f.path);
+}
 
 // How a card works in a repository, as the server names the modes
 // (model/workmode.go), with what each means. Offered wherever a card gets its

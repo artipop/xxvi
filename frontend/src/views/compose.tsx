@@ -2,7 +2,7 @@ import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { PastSession } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
-import { agents, applyCard, flows, guard, list, projects, showRibbon, workModes, workspace } from "../state";
+import { agents, applyCard, flows, folderName, guard, list, projectFolders, projects, showRibbon, taskFolder, workModes, workspace } from "../state";
 import { errorText, t, when } from "../i18n";
 
 // A task typed where the work is watched, not filed first and fetched back from
@@ -20,7 +20,7 @@ import { errorText, t, when } from "../i18n";
 
 const KEY = "xxvi.compose";
 
-function remembered(): { workMode?: string; agent?: string; flow?: string } {
+function remembered(): { workMode?: string; agent?: string; flow?: string; folders?: Record<string, string> } {
   try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; }
 }
 
@@ -30,6 +30,9 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   const [workMode, setWorkMode] = createSignal(was.workMode ?? "");
   const [agent, setAgent] = createSignal(was.agent ?? "");
   const [flow, setFlow] = createSignal(was.flow ?? "");
+  // The folder is remembered per project: a front and a back are chosen
+  // between again only when the work moves from one to the other.
+  const [folders, setFolders] = createSignal<Record<string, string>>(was.folders ?? {});
   const [busy, setBusy] = createSignal(false);
   const [fromSession, setFromSession] = createSignal(false);
   const [sessions, setSessions] = createSignal<PastSession[] | undefined>();
@@ -40,11 +43,14 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   // The project is where the task is typed, not a question: the workspace
   // standing open is the answer.
   const projectID = () => (projects().some((p) => p.id === workspace()) ? workspace() : "");
+  // Which of the project's folders: a question only when it has more than one.
+  const folder = () => taskFolder(projectID(), folders()[projectID()]) ?? taskFolder(projectID(), "");
+  const folderID = () => folder()?.id ?? "";
   // A branch of its own is a question about a repository; anywhere else the
   // answer is the folder as it stands, whatever was remembered. A continued
   // conversation's unfinished work is in the folder itself, so it never gets
   // a branch or tree: that would continue it somewhere the work is not.
-  const isRepo = () => projects().find((p) => p.id === projectID())?.repo ?? false;
+  const isRepo = () => folder()?.repo ?? false;
   const mode = () =>
     !fromSession() && isRepo() && workModes().some((m) => m.value === workMode()) ? workMode() : "";
   const agentName = () =>
@@ -55,13 +61,13 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   // The answer to an older question is dropped: a slow adapter must not fill
   // the list for an agent that is no longer chosen.
   let asked = 0;
-  createEffect(() => [fromSession(), agentName(), projectID()] as const, ([on, who, where]) => {
+  createEffect(() => [fromSession(), agentName(), projectID(), folderID()] as const, ([on, who, where, dir]) => {
     setSession(undefined);
     setSessions(undefined);
     setSessionsError("");
     if (!on || !who || !where) return;
     const n = ++asked;
-    API.PastSessions(who, where).then(
+    API.PastSessions(who, where, dir).then(
       (got) => { if (n === asked) setSessions(got ?? []); },
       (err) => { if (n === asked) setSessionsError(errorText(err)); },
     );
@@ -82,12 +88,12 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     // the agent is handed what was typed, and here that is nothing.
     const view = await guard(() =>
       from
-        ? API.ContinueSession(from.id, from.title ?? "", "", projectID(), "", agentName(), flowID())
-        : API.StartTask(text(), t("compose.untitled"), projectID(), mode(), agentName(), flowID()));
+        ? API.ContinueSession(from.id, from.title ?? "", "", projectID(), folderID(), "", agentName(), flowID())
+        : API.StartTask(text(), t("compose.untitled"), projectID(), folderID(), mode(), agentName(), flowID()));
     setBusy(false);
     if (!view) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ workMode: workMode(), agent: agentName(), flow: flowID() }));
+      localStorage.setItem(KEY, JSON.stringify({ workMode: workMode(), agent: agentName(), flow: flowID(), folders: folders() }));
     } catch { /* a convenience, not a record */ }
     setText("");
     setFromSession(false);
@@ -157,6 +163,12 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
             {t("compose.fromSession")}
           </button>
         </div>
+        <Show when={projectFolders(projectID()).length > 1}>
+          <select value={folderID()} title={t("compose.folder")}
+                  onChange={(e) => { const id = e.currentTarget.value; setFolders((f) => ({ ...f, [projectID()]: id })); }}>
+            <For each={projectFolders(projectID())}>{(f) => <option value={f.id}>{folderName(f)}</option>}</For>
+          </select>
+        </Show>
         <Show when={isRepo() && !fromSession()}>
           <select value={mode()} onChange={(e) => setWorkMode(e.currentTarget.value)}
                   title={workModes().find((m) => m.value === mode())?.why}>

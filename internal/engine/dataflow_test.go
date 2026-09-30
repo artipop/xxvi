@@ -182,7 +182,7 @@ func TestReadsFallBackToWhatTheRouteWrote(t *testing.T) {
 	f.runner.finish(card.ID, model.TriggerSuccess, "Вердикт: fail\nПревью: https://preview.example/1")
 
 	brief := f.runner.lastJob(t).Brief
-	if !strings.Contains(brief, "From the card:") || !strings.Contains(brief, "https://preview.example/1") {
+	if !strings.Contains(brief, "From the task:") || !strings.Contains(brief, "https://preview.example/1") {
 		t.Fatalf("стадия без своих входов получает то, что записали до неё:\n%s", brief)
 	}
 }

@@ -361,5 +361,23 @@ INSERT INTO stage_template (id, ord, icon, color, builtin, action, work, final, 
 	('publish',  8,  'publish',  '#6aa2e8', 1, 'publish', '', 0, '[]'),
 	('verdict',  9,  'verdict',  '#6aa2e8', 1, 'verdict', '', 0, '[]'),
 	('final',    10, 'final',    '#7bc47f', 1, 'none',    '', 1, '[]');`,
+
+		// 20. A project's folders: a front and a back are one project in two
+		// places. Every project so far had one, and it becomes the first under
+		// the project's own id, so a task that named no folder — all of them
+		// until now — keeps working where it did. project.path stays, written
+		// as the first folder, for the rows that read it.
+		`
+CREATE TABLE project_folder (
+	id         TEXT PRIMARY KEY,
+	project_id TEXT    NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+	ord        INTEGER NOT NULL,
+	name       TEXT    NOT NULL DEFAULT '',
+	path       TEXT    NOT NULL
+);
+CREATE INDEX idx_project_folder_project ON project_folder(project_id, ord);
+INSERT INTO project_folder (id, project_id, ord, name, path) SELECT id, id, 0, '', path FROM project;
+
+ALTER TABLE card ADD COLUMN folder TEXT NOT NULL DEFAULT '';`,
 	}
 }

@@ -260,7 +260,7 @@ func TestACardWorksInItsProjectFolder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("карточка: %v", err)
 	}
-	if _, err := api.SetCardProject(card.ID, project.ID); err != nil {
+	if _, err := api.SetCardProject(card.ID, project.ID, ""); err != nil {
 		t.Fatalf("назначить проект: %v", err)
 	}
 
@@ -302,7 +302,7 @@ func TestAMissingProjectFolderIsAnError(t *testing.T) {
 		t.Fatalf("завести проект: %v", err)
 	}
 	card, _ := api.AddCard("", "Починить форму", "")
-	if _, err := api.SetCardProject(card.ID, project.ID); err != nil {
+	if _, err := api.SetCardProject(card.ID, project.ID, ""); err != nil {
 		t.Fatalf("назначить проект: %v", err)
 	}
 	if err := os.RemoveAll(folder); err != nil {
@@ -336,7 +336,7 @@ func TestAProjectInUseIsNotDeleted(t *testing.T) {
 		t.Fatalf("завести проект: %v", err)
 	}
 	card, _ := api.AddCard("", "Починить форму", "")
-	if _, err := api.SetCardProject(card.ID, project.ID); err != nil {
+	if _, err := api.SetCardProject(card.ID, project.ID, ""); err != nil {
 		t.Fatalf("назначить проект: %v", err)
 	}
 	if err := api.DeleteProject(project.ID); err == nil {
@@ -344,7 +344,7 @@ func TestAProjectInUseIsNotDeleted(t *testing.T) {
 	}
 
 	// Freed, it goes.
-	if _, err := api.SetCardProject(card.ID, ""); err != nil {
+	if _, err := api.SetCardProject(card.ID, "", ""); err != nil {
 		t.Fatalf("снять проект: %v", err)
 	}
 	if err := api.DeleteProject(project.ID); err != nil {
@@ -425,7 +425,7 @@ func TestTheDiffScreenReadsTheCardsProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("карточка: %v", err)
 	}
-	if _, err := api.SetCardProject(card.ID, project.ID); err != nil {
+	if _, err := api.SetCardProject(card.ID, project.ID, ""); err != nil {
 		t.Fatalf("назначить проект: %v", err)
 	}
 
@@ -492,7 +492,7 @@ func TestStartTaskGoesStraightToWork(t *testing.T) {
 		t.Fatalf("проект: %v", err)
 	}
 
-	view, err := api.StartTask("Починить форму входа\n\nПадает на пустом пароле.", "", proj.ID, "", "Claude", dev.ID)
+	view, err := api.StartTask("Починить форму входа\n\nПадает на пустом пароле.", "", proj.ID, "", "", "Claude", dev.ID)
 	if err != nil {
 		t.Fatalf("начать задачу: %v", err)
 	}
@@ -505,14 +505,39 @@ func TestStartTaskGoesStraightToWork(t *testing.T) {
 	}
 
 	// A refusal comes before anything exists.
-	if _, err := api.StartTask("Ещё одна", "", "нет-такого", "", "Claude", dev.ID); err == nil {
+	if _, err := api.StartTask("Ещё одна", "", "нет-такого", "", "", "Claude", dev.ID); err == nil {
 		t.Fatal("несуществующий проект — отказ")
 	}
-	if _, err := api.StartTask("   ", "", "", "", "Claude", dev.ID); err == nil {
+	if _, err := api.StartTask("   ", "", "", "", "", "Claude", dev.ID); err == nil {
 		t.Fatal("пустая задача — отказ")
 	}
 	if cards, _ := a.Store.CardsInState(model.StateInbox); len(cards) != 0 {
-		t.Fatalf("отказ не оставляет карточек во входящих: %+v", cards)
+		t.Fatalf("отказ не оставляет задач во входящих: %+v", cards)
+	}
+}
+
+// A project in two folders: a task started in the second one works there, and
+// a folder that is not the project's is refused before anything exists.
+func TestStartTaskInAProjectFolder(t *testing.T) {
+	a := open(t)
+	api := NewAPI(a)
+	dev := mustFlow(t, a, "Development")
+	front, back := t.TempDir(), t.TempDir()
+	proj, err := api.SaveProject(model.Project{Name: "Магазин", Folders: []model.Folder{
+		{Name: "фронт", Path: front}, {Name: "бэк", Path: back},
+	}})
+	if err != nil {
+		t.Fatalf("проект: %v", err)
+	}
+	view, err := api.StartTask("Эндпоинт", "", proj.ID, proj.Folders[1].ID, "", "Claude", dev.ID)
+	if err != nil {
+		t.Fatalf("начать задачу: %v", err)
+	}
+	if dir, err := a.Agents.WorkDir(view.Card.ID); err != nil || dir != back {
+		t.Fatalf("задача работает в %q (%v), а не в бэке %q", dir, err, back)
+	}
+	if _, err := api.StartTask("Ещё", "", proj.ID, "нет-такой", "", "Claude", dev.ID); err == nil {
+		t.Fatal("чужая папка — отказ")
 	}
 }
 
@@ -527,7 +552,7 @@ func TestContinueSessionStartsACardFromAConversation(t *testing.T) {
 		t.Fatalf("проект: %v", err)
 	}
 
-	view, err := api.ContinueSession("abc-123", "Форма входа падает", "", proj.ID, "", "Claude", dev.ID)
+	view, err := api.ContinueSession("abc-123", "Форма входа падает", "", proj.ID, "", "", "Claude", dev.ID)
 	if err != nil {
 		t.Fatalf("продолжить разговор: %v", err)
 	}
@@ -536,10 +561,10 @@ func TestContinueSessionStartsACardFromAConversation(t *testing.T) {
 		t.Fatalf("карточка в работе, с разговором и его названием: %+v", c)
 	}
 
-	if _, err := api.ContinueSession("", "", "", proj.ID, "", "Claude", dev.ID); err == nil {
+	if _, err := api.ContinueSession("", "", "", proj.ID, "", "", "Claude", dev.ID); err == nil {
 		t.Fatal("без выбранного разговора — отказ")
 	}
-	if _, err := api.ContinueSession("abc-123", "", "", proj.ID, "", "нет-такого", dev.ID); err == nil {
+	if _, err := api.ContinueSession("abc-123", "", "", proj.ID, "", "", "нет-такого", dev.ID); err == nil {
 		t.Fatal("разговор открывает только агент, который его вёл, — и он должен существовать")
 	}
 }
@@ -576,25 +601,25 @@ func TestWorkModeIsARepositoryQuestionAnsweredOnce(t *testing.T) {
 	if _, err := api.SetCardWorkMode(card.ID, model.WorkModeWorktree); err == nil {
 		t.Fatal("без проекта своей ветки не бывает")
 	}
-	if _, err := api.SetCardProject(card.ID, plain.ID); err != nil {
+	if _, err := api.SetCardProject(card.ID, plain.ID, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := api.SetCardWorkMode(card.ID, model.WorkModeBranch); err == nil {
 		t.Fatal("папка без git — отказ")
 	}
-	if _, err := api.SetCardProject(card.ID, repo.ID); err != nil {
+	if _, err := api.SetCardProject(card.ID, repo.ID, ""); err != nil {
 		t.Fatal(err)
 	}
 	if view, err := api.SetCardWorkMode(card.ID, model.WorkModeWorktree); err != nil || view.Card.WorkMode != model.WorkModeWorktree {
 		t.Fatalf("репозиторию можно: %+v, %v", view.Card, err)
 	}
 	// Moved to a folder with no git, the card works in it as it stands.
-	if view, _ := api.SetCardProject(card.ID, plain.ID); view.Card.WorkMode != model.WorkModeFolder {
+	if view, _ := api.SetCardProject(card.ID, plain.ID, ""); view.Card.WorkMode != model.WorkModeFolder {
 		t.Fatalf("режим сбрасывается: %+v", view.Card)
 	}
 
 	// Once the branch is made, neither the mode nor the project moves.
-	if _, err := api.SetCardProject(card.ID, repo.ID); err != nil {
+	if _, err := api.SetCardProject(card.ID, repo.ID, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Store.SetCardWorkspace(card.ID, "zadacha-1", "main", ""); err != nil {
@@ -603,11 +628,11 @@ func TestWorkModeIsARepositoryQuestionAnsweredOnce(t *testing.T) {
 	if _, err := api.SetCardWorkMode(card.ID, model.WorkModeBranch); err == nil {
 		t.Fatal("ветка уже есть — режим не меняется")
 	}
-	if _, err := api.SetCardProject(card.ID, plain.ID); err == nil {
+	if _, err := api.SetCardProject(card.ID, plain.ID, ""); err == nil {
 		t.Fatal("ветка уже есть — проект не меняется")
 	}
 
-	if _, err := api.StartTask("Ещё", "", plain.ID, model.WorkModeWorktree, "Claude", mustFlow(t, a, "Development").ID); err == nil {
+	if _, err := api.StartTask("Ещё", "", plain.ID, "", model.WorkModeWorktree, "Claude", mustFlow(t, a, "Development").ID); err == nil {
 		t.Fatal("задача с деревом в папке без git — отказ до создания")
 	}
 }

@@ -1,6 +1,6 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import { agents, applyCard, attention, closeCard, guard, list, openCard, projects, showRibbon, vocabulary, workModes } from "../state";
+import { agents, applyCard, attention, closeCard, folderName, guard, list, openCard, projectFolders, projects, showRibbon, taskFolder, vocabulary, workModes } from "../state";
 import { label, propName, propValue, t, waitText } from "../i18n";
 import { QuestionForm, WorktreeForm } from "./attention";
 import { JournalList } from "./journal";
@@ -192,10 +192,11 @@ function Props() {
 // both are a person's answer rather than the graph's.
 function Place() {
   const view = () => openCard()!;
-  const set = async (id: string) =>
-    applyCard(await guard(() => API.SetCardProject(view().card.id, id)));
+  const set = async (id: string, folder = "") =>
+    applyCard(await guard(() => API.SetCardProject(view().card.id, id, folder)));
   const current = () => projects().find((p) => p.id === view().card.project);
-  const where = () => view().card.worktree || current()!.path;
+  const folder = () => taskFolder(view().card.project, view().card.folder);
+  const where = () => view().card.worktree || folder()?.path || current()!.path;
 
   return (
     <div class="panel">
@@ -207,10 +208,16 @@ function Place() {
           <option value="">{t("common.ownFolder")}</option>
           <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
         </select>
+        <Show when={projectFolders(view().card.project).length > 1}>
+          <select value={folder()?.id ?? ""} onChange={(e) => set(view().card.project!, e.currentTarget.value)}
+                  class="fit" title={t("compose.folder")}>
+            <For each={projectFolders(view().card.project)}>{(f) => <option value={f.id}>{folderName(f)}</option>}</For>
+          </select>
+        </Show>
         <div class="meta note">
           {current() ? t("card.opensIn", { path: where() }) : t("card.ownFolderNote")}
         </div>
-        <Show when={current()?.repo}>
+        <Show when={folder()?.repo}>
           <WorkMode />
         </Show>
       </Show>

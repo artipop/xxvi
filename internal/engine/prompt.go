@@ -139,7 +139,7 @@ func TerminalBrief(card model.Card, flow model.Flow, stage model.Stage, agent mo
 	add(agent.Prompt)
 	add(stage.Prompt)
 	if props := describeProps(card.Props); props != "" {
-		add("Card properties:\n" + props)
+		add("Task properties:\n" + props)
 	}
 	add(workModeNote(card))
 	add(StageInputs(card, flow, stage))
@@ -216,8 +216,8 @@ func outcomeHint(flow model.Flow, stage model.Stage) string {
 		return ""
 	}
 	return fmt.Sprintf(
-		"Where the card goes next depends on your last message: "+
-			"end it with the words %s if that is the case — otherwise the card takes another branch.\n",
+		"Where the task goes next depends on your last message: "+
+			"end it with the words %s if that is the case — otherwise the task takes another branch.\n",
 		strings.Join(phrases, " or "))
 }
 
@@ -240,7 +240,7 @@ func StageInputs(card model.Card, flow model.Flow, stage model.Stage) string {
 	if b.Len() == 0 {
 		return ""
 	}
-	return "From the card:" + b.String()
+	return "From the task:" + b.String()
 }
 
 // StageOutputs is the stage's declared writes, said as the contract they are.
@@ -291,9 +291,9 @@ func ArrivalNote(flow model.Flow, event model.FlowEvent, revisit bool) string {
 	}
 	detail := DescribeMove(event.Detail, event.On)
 	if revisit {
-		return fmt.Sprintf("The card came back here from the stage «%s»: %s. Take this into account.", from.Name, detail)
+		return fmt.Sprintf("The task came back here from the stage «%s»: %s. Take this into account.", from.Name, detail)
 	}
-	return fmt.Sprintf("The card came from the stage «%s»: %s. Take this into account.", from.Name, detail)
+	return fmt.Sprintf("The task came from the stage «%s»: %s. Take this into account.", from.Name, detail)
 }
 
 // DescribeMove is why a card moved, for an agent to read. The UI words the same
@@ -311,7 +311,7 @@ func DescribeMove(m *msg.Msg, on string) string {
 	case "move.byHand":
 		text = "moved by hand"
 	case "move.cardChanged":
-		text = fmt.Sprintf("«%s» was set to «%s» on the card", m.Arg("property"), m.Arg("value"))
+		text = fmt.Sprintf("«%s» was set to «%s» on the task", m.Arg("property"), m.Arg("value"))
 	case "move.on":
 		text = describeTrigger(m.Arg("on"))
 	case "outcome.agentDone":
@@ -355,7 +355,7 @@ func describeTrigger(on string) string {
 	case model.TriggerFailure:
 		return "the step failed"
 	case model.TriggerCardChanged:
-		return "a value was set on the card"
+		return "a value was set on the task"
 	case model.TriggerMRMerged:
 		return "the MR was merged"
 	case model.TriggerMRClosed:

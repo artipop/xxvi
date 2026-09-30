@@ -155,8 +155,8 @@ export function ConnectHosting(projectID: string, provider: string, remote: stri
  * id. The text is optional, because the conversation is the task; without it
  * the card is named after the conversation.
  */
-export function ContinueSession(sessionID: string, sessionTitle: string, text: string, projectID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(562019854, sessionID, sessionTitle, text, projectID, workMode, agent, flowID);
+export function ContinueSession(sessionID: string, sessionTitle: string, text: string, projectID: string, folderID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(562019854, sessionID, sessionTitle, text, projectID, folderID, workMode, agent, flowID);
 }
 
 /**
@@ -413,8 +413,8 @@ export function OpenTerminal(cardID: string, screenID: string, command: string):
  * folder, for a card to continue one of them. A project is required: a card
  * with no project works in a fresh folder, where nobody has talked to anyone.
  */
-export function PastSessions(agentName: string, projectID: string): $CancellablePromise<acp$0.PastSession[] | null> {
-    return $Call.ByID(4283328862, agentName, projectID);
+export function PastSessions(agentName: string, projectID: string, folderID: string): $CancellablePromise<acp$0.PastSession[] | null> {
+    return $Call.ByID(4283328862, agentName, projectID, folderID);
 }
 
 /**
@@ -605,12 +605,13 @@ export function SetBriefLanguage(name: string): $CancellablePromise<void> {
 }
 
 /**
- * SetCardProject says where a card's work happens. Beside the assignee on
- * purpose: both are about by whom and where, and both are a person's answer
- * rather than the graph's.
+ * SetCardProject says where a card's work happens: the project and which of
+ * its folders, empty for the first. Beside the assignee on purpose: both are
+ * about by whom and where, and both are a person's answer rather than the
+ * graph's.
  */
-export function SetCardProject(cardID: string, projectID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(1424901168, cardID, projectID);
+export function SetCardProject(cardID: string, projectID: string, folderID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(1424901168, cardID, projectID, folderID);
 }
 
 /**
@@ -729,8 +730,8 @@ export function StartLaunch(cardID: string, screenID: string, p: launch$0.Profil
  * nothing. Its title is then untitled, worded by the screen that knows the
  * person's language.
  */
-export function StartTask(text: string, untitled: string, projectID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(289388112, text, untitled, projectID, workMode, agent, flowID);
+export function StartTask(text: string, untitled: string, projectID: string, folderID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(289388112, text, untitled, projectID, folderID, workMode, agent, flowID);
 }
 
 /**

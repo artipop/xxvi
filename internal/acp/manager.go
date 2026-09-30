@@ -603,7 +603,7 @@ func (m *Manager) WorkDir(cardID string) (string, error) { return m.workDir(card
 func (m *Manager) workDir(cardID string) (string, error) {
 	card, err := m.store.Card(cardID)
 	if err == nil && card.Project != "" {
-		project, err := m.store.Project(card.Project)
+		project, err := m.store.CardProject(card)
 		if err != nil {
 			return "", err
 		}

@@ -39,9 +39,13 @@ func (s *Store) Projects() ([]model.Project, error) {
 	if err := s.db.Select(&rows, `SELECT * FROM project ORDER BY name_key`); err != nil {
 		return nil, fmt.Errorf("read projects: %w", err)
 	}
+	folders, err := s.folders(``)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]model.Project, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, r.project())
+		out = append(out, withFolders(r.project(), folders[r.ID]))
 	}
 	return out, nil
 }
@@ -56,7 +60,58 @@ func (s *Store) Project(id string) (model.Project, error) {
 	if err != nil {
 		return model.Project{}, err
 	}
-	return r.project(), nil
+	folders, err := s.folders(id)
+	if err != nil {
+		return model.Project{}, err
+	}
+	return withFolders(r.project(), folders[id]), nil
+}
+
+// CardProject is the project a card works in, narrowed to its folder.
+func (s *Store) CardProject(card model.Card) (model.Project, error) {
+	p, err := s.Project(card.Project)
+	if err != nil {
+		return model.Project{}, err
+	}
+	return p.In(card.Folder)
+}
+
+type folderRow struct {
+	ID        string `db:"id"`
+	ProjectID string `db:"project_id"`
+	Ord       int    `db:"ord"`
+	Name      string `db:"name"`
+	Path      string `db:"path"`
+}
+
+// folders reads the folders of one project, or of all of them for an empty id.
+func (s *Store) folders(projectID string) (map[string][]model.Folder, error) {
+	var rows []folderRow
+	q := `SELECT * FROM project_folder ORDER BY project_id, ord`
+	var args []any
+	if projectID != "" {
+		q = `SELECT * FROM project_folder WHERE project_id = ? ORDER BY ord`
+		args = append(args, projectID)
+	}
+	if err := s.db.Select(&rows, q, args...); err != nil {
+		return nil, fmt.Errorf("read project folders: %w", err)
+	}
+	out := map[string][]model.Folder{}
+	for _, r := range rows {
+		out[r.ProjectID] = append(out[r.ProjectID], model.Folder{ID: r.ID, Name: r.Name, Path: r.Path})
+	}
+	return out, nil
+}
+
+// withFolders puts a project's folders on it. A project whose folders are
+// missing — none should be — still has the path it was saved with.
+func withFolders(p model.Project, folders []model.Folder) model.Project {
+	if len(folders) == 0 {
+		folders = []model.Folder{{ID: p.ID, Path: p.Path}}
+	}
+	p.Folders = folders
+	p.Path = folders[0].Path
+	return p
 }
 
 // SaveProject writes one entry, creating an id for a new one. The name is
@@ -68,6 +123,11 @@ func (s *Store) SaveProject(p model.Project) (model.Project, error) {
 	}
 	if p.ID == "" {
 		p.ID = uuid.NewString()
+	}
+	for i := range p.Folders {
+		if p.Folders[i].ID == "" {
+			p.Folders[i].ID = uuid.NewString()
+		}
 	}
 	err = s.tx(func(tx *sqlx.Tx) error {
 		var taken string
@@ -86,12 +146,60 @@ func (s *Store) SaveProject(p model.Project) (model.Project, error) {
 				kind = excluded.kind, path = excluded.path,
 				remote = excluded.remote, server = excluded.server, provider = excluded.provider`,
 			p.ID, p.Name, nameKey(p.Name), p.Kind, p.Path, p.Remote, p.Server, p.Provider, millis(time.Now()))
-		return err
+		if err != nil {
+			return err
+		}
+		return saveFolders(tx, p)
 	})
 	if err != nil {
 		return model.Project{}, err
 	}
 	return p, nil
+}
+
+// saveFolders writes a project's folders in place of the ones it had,
+// refusing to drop a folder a card still works in — for the same reason a
+// project in use is not deleted: the card would start its next step in some
+// other folder.
+func saveFolders(tx *sqlx.Tx, p model.Project) error {
+	var was []folderRow
+	if err := tx.Select(&was, `SELECT * FROM project_folder WHERE project_id = ?`, p.ID); err != nil {
+		return err
+	}
+	// A card that named no folder is on the first one. When another folder
+	// becomes first, such a card is pinned to the one it was on, or it would
+	// quietly move.
+	for _, old := range was {
+		if old.Ord == 0 && old.ID != p.Folders[0].ID {
+			if _, err := tx.Exec(`UPDATE card SET folder = ? WHERE project = ? AND folder = ''`, old.ID, p.ID); err != nil {
+				return err
+			}
+		}
+	}
+	for _, old := range was {
+		if model.HasFolder(p.Folders, old.ID) {
+			continue
+		}
+		var used int
+		q := `SELECT COUNT(*) FROM card WHERE project = ? AND folder = ? AND state NOT IN (?, ?)`
+		if err := tx.Get(&used, q, p.ID, old.ID, string(model.StateDone), string(model.StateDropped)); err != nil {
+			return err
+		}
+		if used > 0 {
+			name := model.Folder{Name: old.Name, Path: old.Path}.FolderName()
+			return msg.Err("project.folderInUse", "folder", name, "count", strconv.Itoa(used))
+		}
+	}
+	if _, err := tx.Exec(`DELETE FROM project_folder WHERE project_id = ?`, p.ID); err != nil {
+		return err
+	}
+	for i, f := range p.Folders {
+		if _, err := tx.Exec(`INSERT INTO project_folder (id, project_id, ord, name, path) VALUES (?, ?, ?, ?, ?)`,
+			f.ID, p.ID, i, f.Name, f.Path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DeleteProject removes an entry, refusing while a card still names it.
@@ -111,10 +219,11 @@ func (s *Store) DeleteProject(id string) error {
 	return err
 }
 
-// SetCardProject says where a card's work happens.
-func (s *Store) SetCardProject(cardID, projectID string) error {
-	_, err := s.db.Exec(`UPDATE card SET project = ?, updated_at = ? WHERE id = ?`,
-		projectID, millis(time.Now()), cardID)
+// SetCardProject says where a card's work happens: the project and which of
+// its folders.
+func (s *Store) SetCardProject(cardID, projectID, folderID string) error {
+	_, err := s.db.Exec(`UPDATE card SET project = ?, folder = ?, updated_at = ? WHERE id = ?`,
+		projectID, folderID, millis(time.Now()), cardID)
 	return err
 }
 
@@ -134,20 +243,27 @@ func (s *Store) SetCardWorkspace(cardID, branch, base, worktree string) error {
 	return err
 }
 
-// FolderHolder is the card that has a project's folder switched to its branch,
+// FolderHolder is the card that has a project folder switched to its branch,
 // other than the one asking: a card in branch mode with its branch made and
 // its work not over. Not found is the folder being free.
 //
 // No lock of its own: the card's state is the lock. A card that is done or
 // dropped has let go, and nothing has to remember to release anything.
-func (s *Store) FolderHolder(projectID, exceptCard string) (model.Card, bool, error) {
+//
+// The folder is the project narrowed by In; a card that named none is on the
+// first, so the first answers for the empty id as well as for its own.
+func (s *Store) FolderHolder(project model.Project, folderID, exceptCard string) (model.Card, bool, error) {
+	first := len(project.Folders) > 0 && (folderID == "" || folderID == project.Folders[0].ID)
+	if first {
+		folderID = project.Folders[0].ID
+	}
 	var r cardRow
 	err := s.db.Get(&r, `
 		SELECT * FROM card
-		WHERE project = ? AND work_mode = ? AND branch != '' AND id != ?
+		WHERE project = ? AND (folder = ? OR (? AND folder = '')) AND work_mode = ? AND branch != '' AND id != ?
 		  AND state NOT IN (?, ?)
 		ORDER BY updated_at DESC LIMIT 1`,
-		projectID, model.WorkModeBranch, exceptCard, string(model.StateDone), string(model.StateDropped))
+		project.ID, folderID, first, model.WorkModeBranch, exceptCard, string(model.StateDone), string(model.StateDropped))
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.Card{}, false, nil
 	}

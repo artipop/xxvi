@@ -662,7 +662,7 @@ func (s *API) AddCard(sourceName, title, body string) (model.Card, error) {
 // empty one is a task begun without a word, which the agent is handed as
 // nothing. Its title is then untitled, worded by the screen that knows the
 // person's language.
-func (s *API) StartTask(text, untitled, projectID, workMode, agent, flowID string) (CardView, error) {
+func (s *API) StartTask(text, untitled, projectID, folderID, workMode, agent, flowID string) (CardView, error) {
 	text = strings.TrimSpace(text)
 	title := taskTitle(text)
 	if text == "" {
@@ -673,7 +673,7 @@ func (s *API) StartTask(text, untitled, projectID, workMode, agent, flowID strin
 	}
 	return s.startCard(model.Card{
 		Title: title, Body: text, Typed: true,
-		Assignee: strings.TrimSpace(agent), Project: projectID, WorkMode: workMode,
+		Assignee: strings.TrimSpace(agent), Project: projectID, Folder: folderID, WorkMode: workMode,
 	}, flowID)
 }
 
@@ -681,7 +681,7 @@ func (s *API) StartTask(text, untitled, projectID, workMode, agent, flowID strin
 // the agent's own CLI: its first terminal stage for that agent resumes it by
 // id. The text is optional, because the conversation is the task; without it
 // the card is named after the conversation.
-func (s *API) ContinueSession(sessionID, sessionTitle, text, projectID, workMode, agent, flowID string) (CardView, error) {
+func (s *API) ContinueSession(sessionID, sessionTitle, text, projectID, folderID, workMode, agent, flowID string) (CardView, error) {
 	sessionID, agent = strings.TrimSpace(sessionID), strings.TrimSpace(agent)
 	if sessionID == "" {
 		return CardView{}, msg.Err("sessions.noneChosen")
@@ -700,14 +700,14 @@ func (s *API) ContinueSession(sessionID, sessionTitle, text, projectID, workMode
 	}
 	return s.startCard(model.Card{
 		Title: title, Body: text, Typed: true, Session: sessionID,
-		Assignee: agent, Project: projectID, WorkMode: workMode,
+		Assignee: agent, Project: projectID, Folder: folderID, WorkMode: workMode,
 	}, flowID)
 }
 
 // startCard makes the card and puts it on the flow, refusing a bad project or
 // flow before anything exists.
 func (s *API) startCard(c model.Card, flowID string) (CardView, error) {
-	if err := s.checkWorkMode(c.Project, c.WorkMode); err != nil {
+	if err := s.checkWorkMode(c.Project, c.Folder, c.WorkMode); err != nil {
 		return CardView{}, err
 	}
 	if _, err := s.app.Store.Flow(flowID); err != nil {
@@ -748,6 +748,9 @@ func (s *API) Projects() ([]model.Project, error) {
 }
 
 func (s *API) describe(p *model.Project) {
+	for i := range p.Folders {
+		p.Folders[i].Repo = acp.IsRepo(p.Folders[i].Path)
+	}
 	p.Repo = acp.IsRepo(p.Path)
 	s.app.Hosting.Describe(p)
 	if src, ok := s.app.Hosting.ReviewSource(p.ID); ok {
@@ -781,9 +784,11 @@ func (s *API) SaveProject(p model.Project) (model.Project, error) {
 	if err != nil {
 		return model.Project{}, err
 	}
-	info, err := os.Stat(checked.Path)
-	if err != nil || !info.IsDir() {
-		return model.Project{}, msg.Err("project.folderNotFound", "path", checked.Path)
+	for _, f := range checked.Folders {
+		info, err := os.Stat(f.Path)
+		if err != nil || !info.IsDir() {
+			return model.Project{}, msg.Err("project.folderNotFound", "path", f.Path)
+		}
 	}
 	// The hosting is changed by connecting and disconnecting, not by the
 	// form: a form opened before a connect would otherwise save it away.
@@ -881,28 +886,36 @@ func (s *API) DeleteProject(id string) error {
 	return nil
 }
 
-// SetCardProject says where a card's work happens. Beside the assignee on
-// purpose: both are about by whom and where, and both are a person's answer
-// rather than the graph's.
-func (s *API) SetCardProject(cardID, projectID string) (CardView, error) {
+// SetCardProject says where a card's work happens: the project and which of
+// its folders, empty for the first. Beside the assignee on purpose: both are
+// about by whom and where, and both are a person's answer rather than the
+// graph's.
+func (s *API) SetCardProject(cardID, projectID, folderID string) (CardView, error) {
 	card, err := s.app.Store.Card(cardID)
 	if err != nil {
 		return CardView{}, err
 	}
-	if card.Branch != "" && projectID != card.Project {
+	if projectID == "" {
+		folderID = ""
+	}
+	if card.Branch != "" && (projectID != card.Project || folderID != card.Folder) {
 		return CardView{}, msg.Err("card.projectLocked", "branch", card.Branch)
 	}
 	if projectID != "" {
-		if _, err := s.app.Store.Project(projectID); err != nil {
+		project, err := s.app.Store.Project(projectID)
+		if err != nil {
+			return CardView{}, err
+		}
+		if _, err := project.In(folderID); err != nil {
 			return CardView{}, err
 		}
 	}
-	if err := s.app.Store.SetCardProject(cardID, projectID); err != nil {
+	if err := s.app.Store.SetCardProject(cardID, projectID, folderID); err != nil {
 		return CardView{}, err
 	}
 	// A branch of its own is a question about a repository; a card moved to
 	// a folder that is not one, or to no project at all, works as it stands.
-	if card.WorkMode != model.WorkModeFolder && s.checkWorkMode(projectID, card.WorkMode) != nil {
+	if card.WorkMode != model.WorkModeFolder && s.checkWorkMode(projectID, folderID, card.WorkMode) != nil {
 		if err := s.app.Store.SetCardWorkMode(cardID, model.WorkModeFolder); err != nil {
 			return CardView{}, err
 		}
@@ -927,7 +940,7 @@ func (s *API) SetCardWorkMode(cardID, mode string) (CardView, error) {
 	if card.Branch != "" {
 		return CardView{}, msg.Err("card.workModeLocked", "branch", card.Branch)
 	}
-	if err := s.checkWorkMode(card.Project, mode); err != nil {
+	if err := s.checkWorkMode(card.Project, card.Folder, mode); err != nil {
 		return CardView{}, err
 	}
 	if err := s.app.Store.SetCardWorkMode(cardID, mode); err != nil {
@@ -959,7 +972,7 @@ func (s *API) KeepCardWorktree(cardID string) (CardView, error) {
 
 // checkWorkMode refuses a mode the project cannot have: an unknown one, or a
 // branch of its own where there is no repository to make it in.
-func (s *API) checkWorkMode(projectID, mode string) error {
+func (s *API) checkWorkMode(projectID, folderID, mode string) error {
 	if err := model.ValidateWorkMode(mode); err != nil {
 		return err
 	}
@@ -969,7 +982,11 @@ func (s *API) checkWorkMode(projectID, mode string) error {
 		}
 		return nil
 	}
-	project, err := s.app.Store.Project(projectID)
+	whole, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return err
+	}
+	project, err := whole.In(folderID)
 	if err != nil {
 		return err
 	}
@@ -988,7 +1005,7 @@ const pastSessionsTimeout = 90 * time.Second
 // PastSessions lists the conversations an agent already had in a project's
 // folder, for a card to continue one of them. A project is required: a card
 // with no project works in a fresh folder, where nobody has talked to anyone.
-func (s *API) PastSessions(agentName, projectID string) ([]acp.PastSession, error) {
+func (s *API) PastSessions(agentName, projectID, folderID string) ([]acp.PastSession, error) {
 	agent, err := s.app.Store.Agent(agentName)
 	if err != nil {
 		return nil, err
@@ -996,7 +1013,11 @@ func (s *API) PastSessions(agentName, projectID string) ([]acp.PastSession, erro
 	if projectID == "" {
 		return nil, msg.Err("sessions.needProject")
 	}
-	project, err := s.app.Store.Project(projectID)
+	whole, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return nil, err
+	}
+	project, err := whole.In(folderID)
 	if err != nil {
 		return nil, err
 	}

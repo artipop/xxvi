@@ -83,6 +83,9 @@ func TestDatabaseAtTheBaselineTakesTheStepsAfterIt(t *testing.T) {
 		`ALTER TABLE card DROP COLUMN typed`,
 		`ALTER TABLE stage DROP COLUMN template`,
 		`DROP TABLE stage_template`,
+		`DROP TABLE project_folder`,
+		`ALTER TABLE card DROP COLUMN folder`,
+		`INSERT INTO project (id, name, name_key, kind, path, created_at) VALUES ('p1', 'Сайт', 'сайт', 'folder', '/tmp/сайт', 0)`,
 		`DELETE FROM schema_migration WHERE version > ` + strconv.Itoa(Baseline),
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {
@@ -96,7 +99,16 @@ func TestDatabaseAtTheBaselineTakesTheStepsAfterIt(t *testing.T) {
 	}
 	defer back.Close()
 	if _, err := back.CreateCard(model.Card{Title: "т", Typed: true}); err != nil {
-		t.Fatalf("карточка после шагов за базой: %v", err)
+		t.Fatalf("задача после шагов за базой: %v", err)
+	}
+	// A project from before folders were a list keeps its one, under its own
+	// id: the tasks that named no folder go on working where they did.
+	p, err := back.Project("p1")
+	if err != nil {
+		t.Fatalf("проект после шагов за базой: %v", err)
+	}
+	if len(p.Folders) != 1 || p.Folders[0].ID != "p1" || p.Folders[0].Path != "/tmp/сайт" {
+		t.Fatalf("папки старого проекта: %+v", p.Folders)
 	}
 }
 
@@ -660,5 +672,57 @@ func TestStageScreensSurviveSaving(t *testing.T) {
 	}
 	if screens[1].Kind != model.ScreenTerminal || screens[1].Ref != "" {
 		t.Fatalf("терминал без команды должен пережить сохранение: %+v", screens[1])
+	}
+}
+
+// A project in two places: a task works in the folder it named, the other one
+// is not held by its branch, and a folder a task still works in cannot be
+// dropped from under it.
+func TestProjectFolders(t *testing.T) {
+	s := open(t)
+	p, err := s.SaveProject(model.Project{Name: "Магазин", Folders: []model.Folder{
+		{Name: "фронт", Path: "/tmp/shop/front"},
+		{Name: "бэк", Path: "/tmp/shop/back"},
+	}})
+	if err != nil {
+		t.Fatalf("сохранить проект: %v", err)
+	}
+	if len(p.Folders) != 2 || p.Folders[1].ID == "" || p.Path != "/tmp/shop/front" {
+		t.Fatalf("папки проекта: %+v", p)
+	}
+	back := p.Folders[1].ID
+
+	c, err := s.CreateCard(model.Card{Title: "API", State: model.StateFlow, Project: p.ID, Folder: back,
+		WorkMode: model.WorkModeBranch, Branch: "api"})
+	if err != nil {
+		t.Fatalf("задача: %v", err)
+	}
+	if got, err := s.CardProject(c); err != nil || got.Path != "/tmp/shop/back" {
+		t.Fatalf("задача работает в %q (%v), а не в бэке", got.Path, err)
+	}
+
+	whole, _ := s.Project(p.ID)
+	if _, held, _ := s.FolderHolder(whole, back, ""); !held {
+		t.Fatal("ветка задачи должна держать папку бэка")
+	}
+	if _, held, _ := s.FolderHolder(whole, "", ""); held {
+		t.Fatal("ветка в бэке не держит фронт")
+	}
+
+	whole.Folders = whole.Folders[:1]
+	if _, err := s.SaveProject(whole); err == nil {
+		t.Fatal("папку, в которой работает задача, убрать нельзя")
+	}
+
+	// The front made second: a task that named no folder stays in the front.
+	plain, _ := s.CreateCard(model.Card{Title: "Стили", Project: p.ID})
+	whole, _ = s.Project(p.ID)
+	whole.Folders[0], whole.Folders[1] = whole.Folders[1], whole.Folders[0]
+	if _, err := s.SaveProject(whole); err != nil {
+		t.Fatalf("переставить папки: %v", err)
+	}
+	plain, _ = s.Card(plain.ID)
+	if got, _ := s.CardProject(plain); got.Path != "/tmp/shop/front" {
+		t.Fatalf("задача без папки уехала в %q", got.Path)
 	}
 }

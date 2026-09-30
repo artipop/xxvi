@@ -189,12 +189,12 @@ func (s *Server) handler() http.Handler {
 // instructions is what a session reads before it calls anything: the shape of
 // the application in the smallest number of sentences that still makes the
 // tools predictable.
-const instructions = `This is XXVI — an inbox and flows. A task lives as a card: it sits in the inbox,
+const instructions = `This is XXVI — an inbox and flows. A task sits in the inbox,
 a person or you put it on a flow (take_into_work), and from there it travels through stages.
 
-A stage is the only place a card stands. A step on it ends with a report
+A stage is the only place a task stands. A step on it ends with a report
 (finish_step): the step's outcome plus the values the stage promised to leave on
-the card. Where the card goes after the report is the flow's decision, not the
+the task. Where the task goes after the report is the flow's decision, not the
 caller's — so "go to the next step" here is exactly finish_step with the outcome done.
 
 A stage where nothing runs waits for an answer: there finish_step sets
@@ -209,35 +209,35 @@ func (s *Server) mcp() *mcp.Server {
 	)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "flows",
-		Description: "The flows there are: their stages, what happens on them, which values they leave on the card and along which edges the card moves on.",
+		Description: "The flows there are: their stages, what happens on them, which values they leave on the task and along which edges the task moves on.",
 	}, s.flows)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "cards",
-		Description: "Cards: in the inbox, in work or closed. For those in work, the stage they stand on and what they wait for.",
+		Name:        "tasks",
+		Description: "Tasks: in the inbox, in work or closed. For those in work, the stage they stand on and what they wait for.",
 	}, s.cards)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "card",
-		Description: "One card in full: text, properties, stage, what it waits for, working folder and the latest entries of its history.",
+		Name:        "task",
+		Description: "One task in full: text, properties, stage, what it waits for, working folder and the latest entries of its history.",
 	}, s.card)
 	mcp.AddTool(srv, &mcp.Tool{
-		Name:        "add_card",
-		Description: "Add a card to the inbox. It goes nowhere until it is put on a flow.",
+		Name:        "add_task",
+		Description: "Add a task to the inbox. It goes nowhere until it is put on a flow.",
 	}, s.addCard)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "take_into_work",
-		Description: "Put a card from the inbox on the entry stage of a flow. This is the only way to start it moving.",
+		Description: "Put a task from the inbox on the entry stage of a flow. This is the only way to start it moving.",
 	}, s.takeIntoWork)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "finish_step",
-		Description: "Say that the card's current step is finished, and how — and so move on to the next one. " +
+		Description: "Say that the task's current step is finished, and how — and so move on to the next one. " +
 			"On an agent stage this is the work report: outcome done or failed plus the declared values. " +
 			"On a stage where nothing runs it answers for it: done sets «" + model.OutcomeProperty + "» = «" + model.OutcomePassed +
 			"», failed sets «" + model.OutcomeFailed + "». " +
-			"Where the card goes is the flow's decision.",
+			"Where the task goes is the flow's decision.",
 	}, s.finishStep)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "set_property",
-		Description: "Set a property of a card. If the stage waits for exactly this value, the card moves on; " +
+		Description: "Set a property of a task. If the stage waits for exactly this value, the task moves on; " +
 			"any other property is simply put on the card.",
 	}, s.setProperty)
 	return srv
@@ -266,7 +266,7 @@ func (s *Server) flows(_ context.Context, _ *mcp.CallToolRequest, _ noInput) (*m
 }
 
 type cardsInput struct {
-	State string `json:"state,omitempty" jsonschema:"which cards: work — in work on a flow (the default), inbox — in the inbox, done — closed"`
+	State string `json:"state,omitempty" jsonschema:"which tasks: work — in work on a flow (the default), inbox — in the inbox, done — closed"`
 }
 
 func (s *Server) cards(_ context.Context, _ *mcp.CallToolRequest, in cardsInput) (*mcp.CallToolResult, any, error) {
@@ -280,14 +280,14 @@ func (s *Server) cards(_ context.Context, _ *mcp.CallToolRequest, in cardsInput)
 	case "dropped":
 		state = model.StateDropped
 	default:
-		return errorf("«%s» is not a card state. There are work, inbox, done and dropped.", in.State), nil, nil
+		return errorf("«%s» is not a task state. There are work, inbox, done and dropped.", in.State), nil, nil
 	}
 	cards, err := s.deps.Store.CardsInState(state)
 	if err != nil {
 		return errorf("%v", err), nil, nil
 	}
 	if len(cards) == 0 {
-		return text("There are no such cards."), nil, nil
+		return text("There are no such tasks."), nil, nil
 	}
 	var b strings.Builder
 	for _, c := range cards {
@@ -309,7 +309,7 @@ func (s *Server) cards(_ context.Context, _ *mcp.CallToolRequest, in cardsInput)
 }
 
 type cardInput struct {
-	Card string `json:"card" jsonschema:"the card: its id or title"`
+	Card string `json:"task" jsonschema:"the task: its id or title"`
 }
 
 func (s *Server) card(_ context.Context, _ *mcp.CallToolRequest, in cardInput) (*mcp.CallToolResult, any, error) {
@@ -327,18 +327,18 @@ type addCardInput struct {
 
 func (s *Server) addCard(_ context.Context, _ *mcp.CallToolRequest, in addCardInput) (*mcp.CallToolResult, any, error) {
 	if s.deps.Filer == nil {
-		return errorf("cards cannot be added right now — the inbox is not up"), nil, nil
+		return errorf("tasks cannot be added right now — the inbox is not up"), nil, nil
 	}
 	card, err := s.deps.Filer.AddManual("", in.Title, in.Body, nil)
 	if err != nil {
 		return errorf("%v", err), nil, nil
 	}
-	return text(fmt.Sprintf("The card «%s» [%s] is in the inbox. To get it moving, put it on a flow (take_into_work).",
+	return text(fmt.Sprintf("The task «%s» [%s] is in the inbox. To get it moving, put it on a flow (take_into_work).",
 		card.Title, card.ID)), nil, nil
 }
 
 type takeInput struct {
-	Card   string `json:"card" jsonschema:"the card: its id or title"`
+	Card   string `json:"task" jsonschema:"the task: its id or title"`
 	Flow   string `json:"flow" jsonschema:"the flow: its name or id"`
 	Worker string `json:"worker,omitempty" jsonschema:"who works the steps: the name of an agent in the application registry — then the application starts it; any other name — then the application starts nobody, and the steps are worked by whoever calls these tools"`
 }
@@ -368,10 +368,10 @@ func (s *Server) takeIntoWork(_ context.Context, _ *mcp.CallToolRequest, in take
 }
 
 type finishInput struct {
-	Card       string            `json:"card" jsonschema:"the card: its id or title"`
+	Card       string            `json:"task" jsonschema:"the task: its id or title"`
 	Outcome    string            `json:"outcome" jsonschema:"how the step ended: done or failed"`
-	Summary    string            `json:"summary" jsonschema:"what was done, in a few sentences — it goes into the card's history and is what the next stage reads"`
-	Properties map[string]string `json:"properties,omitempty" jsonschema:"the values the stage promised to leave on the card, by property name"`
+	Summary    string            `json:"summary" jsonschema:"what was done, in a few sentences — it goes into the task's history and is what the next stage reads"`
+	Properties map[string]string `json:"properties,omitempty" jsonschema:"the values the stage promised to leave on the task, by property name"`
 }
 
 // finishStep ends the step a card stands on. Which of the engine's roads that
@@ -396,7 +396,7 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 		return errorf("%v", err), nil, nil
 	}
 	if !onFlow {
-		return errorf("the card «%s» is not in work (%s) — it has no step to finish. Put it on a flow: take_into_work.",
+		return errorf("the task «%s» is not in work (%s) — it has no step to finish. Put it on a flow: take_into_work.",
 			card.Title, card.State), nil, nil
 	}
 	flow, err := s.deps.Store.Flow(st.FlowID)
@@ -405,7 +405,7 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 	}
 	stage, found := flow.Stage(st.StageID)
 	if !found {
-		return errorf("the card's stage is gone from the flow «%s» — move the card in the application", flow.Name), nil, nil
+		return errorf("the task's stage is gone from the flow «%s» — move the task in the application", flow.Name), nil, nil
 	}
 	if s.running(card.ID) {
 		return errorf("an application agent is working this step — the report will come from it. " +
@@ -413,7 +413,7 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 	}
 
 	if stage.Action == model.ActionPublish || stage.Action == model.ActionVerdict {
-		return errorf("the application works this step itself — it talks to the hosting and moves the card when done"), nil, nil
+		return errorf("the application works this step itself — it talks to the hosting and moves the task when done"), nil, nil
 	}
 	if stage.Action == model.ActionAgent {
 		if missing := missingRequired(stage.Writes, ok, in.Properties); missing != "" {
@@ -434,7 +434,7 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 	if !flow.WatchesProperty(stage.ID, model.OutcomeProperty) {
 		waits := flow.Waits(stage.ID)
 		if len(waits) == 0 {
-			return errorf("the stage «%s» does not wait for an answer — from here the card is moved in the application.", stage.Name), nil, nil
+			return errorf("the stage «%s» does not wait for an answer — from here the task is moved in the application.", stage.Name), nil, nil
 		}
 		return errorf("the stage «%s» waits not for a step outcome but for %s. Set that value: set_property.",
 			stage.Name, describeWaits(waits)), nil, nil
@@ -462,7 +462,7 @@ func (s *Server) finishStep(_ context.Context, _ *mcp.CallToolRequest, in finish
 }
 
 type propInput struct {
-	Card     string `json:"card" jsonschema:"the card: its id or title"`
+	Card     string `json:"task" jsonschema:"the task: its id or title"`
 	Property string `json:"property" jsonschema:"the property name, as the flow asks for it"`
 	Value    string `json:"value" jsonschema:"the value"`
 }
@@ -499,13 +499,13 @@ func (s *Server) moved(card model.Card, flow model.Flow, from model.Stage) strin
 	place, _ := s.deps.Engine.CardFlowFor(card.ID)
 	switch {
 	case fresh.State == model.StateDone:
-		fmt.Fprintf(&b, "Step recorded. Card «%s»: «%s» → the flow «%s» is complete, the card is closed.", fresh.Title, from.Name, flow.Name)
+		fmt.Fprintf(&b, "Step recorded. Task «%s»: «%s» → the flow «%s» is complete, the task is closed.", fresh.Title, from.Name, flow.Name)
 	case place == nil:
-		fmt.Fprintf(&b, "Step recorded. The card «%s» is no longer on a flow (%s).", fresh.Title, fresh.State)
+		fmt.Fprintf(&b, "Step recorded. The task «%s» is no longer on a flow (%s).", fresh.Title, fresh.State)
 	case place.StageID == from.ID:
-		fmt.Fprintf(&b, "Step recorded, but the card «%s» stayed on «%s».", fresh.Title, from.Name)
+		fmt.Fprintf(&b, "Step recorded, but the task «%s» stayed on «%s».", fresh.Title, from.Name)
 	default:
-		fmt.Fprintf(&b, "Step recorded. Card «%s»: «%s» → «%s».", fresh.Title, from.Name, stageName(*place))
+		fmt.Fprintf(&b, "Step recorded. Task «%s»: «%s» → «%s».", fresh.Title, from.Name, stageName(*place))
 	}
 	if outcome := fresh.Prop(model.OutcomeProperty); outcome != "" {
 		fmt.Fprintf(&b, " %s: %s.", model.OutcomeProperty, outcome)
@@ -578,7 +578,7 @@ func describeFlow(f model.Flow) string {
 		fmt.Fprintf(&b, "- «%s» [%s]", st.Name, st.ID)
 		switch {
 		case st.Final:
-			b.WriteString(" — final: a card arriving here is closed")
+			b.WriteString(" — final: a task arriving here is closed")
 		case st.Action == model.ActionAgent:
 			fmt.Fprintf(&b, " — an agent works it (%s)", workName(st.Work))
 			if st.ID == f.EntryStage {
@@ -622,7 +622,7 @@ func describeStage(f model.Flow, st model.Stage, indent string, props map[string
 		fmt.Fprintf(&b, "%sStage task: %s\n", indent, p)
 	}
 	for _, w := range st.Writes {
-		fmt.Fprintf(&b, "%sLeaves on the card: «%s»", indent, w.Property)
+		fmt.Fprintf(&b, "%sLeaves on the task: «%s»", indent, w.Property)
 		if w.Required {
 			b.WriteString(" — required, the step does not finish without it")
 		}
@@ -657,7 +657,7 @@ func describeStage(f model.Flow, st model.Stage, indent string, props map[string
 func (s *Server) resolveCard(ref string) (model.Card, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
-		return model.Card{}, errors.New("no card named")
+		return model.Card{}, errors.New("no task named")
 	}
 	if card, err := s.deps.Store.Card(ref); err == nil {
 		return card, nil
@@ -676,12 +676,12 @@ func (s *Server) resolveCard(ref string) (model.Card, error) {
 	}
 	switch len(found) {
 	case 0:
-		return model.Card{}, fmt.Errorf("the card «%s» was not found — see the list: cards", ref)
+		return model.Card{}, fmt.Errorf("the task «%s» was not found — see the list: tasks", ref)
 	case 1:
 		return found[0], nil
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "there are several cards titled «%s», name the id:", ref)
+	fmt.Fprintf(&b, "there are several tasks titled «%s», name the id:", ref)
 	for _, c := range found {
 		fmt.Fprintf(&b, " %s (%s)", c.ID, c.State)
 	}
@@ -864,7 +864,7 @@ func triggerName(on string) string {
 	case model.TriggerFailure:
 		return "step failed"
 	case model.TriggerCardChanged:
-		return "set on the card"
+		return "set on the task"
 	}
 	return on
 }

@@ -180,7 +180,7 @@ func TestPublishPushesAndOpensOneMR(t *testing.T) {
 		t.Fatalf("флоу: %v", err)
 	}
 	card, _ := h.api.AddCard("", "Починить форму", "Форма входа падает на пустом пароле.")
-	if _, err := h.api.SetCardProject(card.ID, h.project.ID); err != nil {
+	if _, err := h.api.SetCardProject(card.ID, h.project.ID, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.api.SetCardWorkMode(card.ID, model.WorkModeWorktree); err != nil {

@@ -2,15 +2,22 @@ import { createEffect, createSignal, createStore, onSettled, For, Show } from "s
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Project } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { RemoteOption } from "../../bindings/github.com/artipop/xxvi/internal/hosting/models";
-import { guard, list, loadProjects, projects, vocabulary, openOutside } from "../state";
+import { folderName, guard, list, loadProjects, projects, vocabulary, openOutside } from "../state";
 import { errorText, label, t } from "../i18n";
 
-// Where work happens. The card says what, the flow says how it travels, this
-// says in which folder it all takes place — and a card names one by id, so a
-// project can be renamed without dragging anything behind it.
+// Where work happens. The task says what, the flow says how it travels, this
+// says in which folder it all takes place — and a task names one by id, so a
+// project can be renamed without dragging anything behind it. A project can
+// live in several folders, a front and a back, and a task picks one of them.
 
 function blank(): Project {
-  return { id: "", name: "", kind: "folder", path: "" };
+  return { id: "", name: "", kind: "folder", path: "", folders: [{ id: "", name: "", path: "" }] };
+}
+
+// The form edits a copy of the folders, never the list the registry holds.
+function editable(p: Project): Project {
+  const folders = list(p.folders).length > 0 ? list(p.folders) : [{ id: "", name: "", path: p.path }];
+  return { ...p, folders: folders.map((f) => ({ ...f })) };
 }
 
 export default function ProjectsView() {
@@ -28,7 +35,7 @@ export default function ProjectsView() {
         <ProjectForm
           project={editing()!}
           onDone={() => { setEditing(null); void loadProjects(); }}
-          onChanged={(p) => { setEditing({ ...p }); void loadProjects(); }}
+          onChanged={(p) => { setEditing(editable(p)); void loadProjects(); }}
         />
       </Show>
 
@@ -37,7 +44,7 @@ export default function ProjectsView() {
       }>
         <For each={projects()}>
           {(p) => (
-            <div class="card clickable" onClick={() => setEditing({ ...p })}>
+            <div class="card clickable" onClick={() => setEditing(editable(p))}>
               <div class="row">
                 <span class="title">{p.name}</span>
                 <span class="tag">{label("projectKind", p.kind)}</span>
@@ -54,7 +61,13 @@ export default function ProjectsView() {
                 </Show>
                 <div class="spacer" />
               </div>
-              <div class="mono">{p.path}</div>
+              <For each={list(p.folders)}>
+                {(f) => (
+                  <div class="mono">
+                    <Show when={list(p.folders).length > 1}>{folderName(f)}: </Show>{f.path}
+                  </div>
+                )}
+              </For>
             </div>
           )}
         </For>
@@ -94,16 +107,18 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
     }
   };
 
-  const pick = async () => {
-    const chosen = await guard(() => API.PickFolder(t("projects.pickTitle"), draft.path));
+  const pick = async (i: number) => {
+    const chosen = await guard(() => API.PickFolder(t("projects.pickTitle"), list(draft.folders)[i]?.path ?? ""));
     // Empty is a person closing the dialog without choosing, and then what
     // they had stays what they have.
     if (chosen) {
-      setDraft((d) => { d.path = chosen; });
+      setDraft((d) => { d.folders![i].path = chosen; });
       if (!draft.name.trim()) setDraft((d) => { d.name = basename(chosen); });
       setError(null);
     }
   };
+  const addFolder = () => setDraft((d) => { d.folders = [...list(d.folders), { id: "", name: "", path: "" }]; });
+  const removeFolder = (i: number) => setDraft((d) => { d.folders = list(d.folders).filter((_, j) => j !== i); });
 
   const remove = async () => {
     await guard(() => API.DeleteProject(draft.id));
@@ -127,17 +142,33 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
           </select>
         </label>
       </div>
-      <label class="field">
-        <span>{t("projects.folder")}</span>
+      <div class="field">
+        <span>{list(draft.folders).length > 1 ? t("projects.folders") : t("projects.folder")}</span>
+        <For each={list(draft.folders)}>
+          {(f, i) => (
+            <div class="row">
+              {/* A name is asked only when there is something to tell apart. */}
+              <Show when={list(draft.folders).length > 1}>
+                <input type="text" class="folder-name" placeholder={basename(f.path) || t("projects.folderName")}
+                       value={f.name} title={t("projects.folderName")}
+                       onInput={(e) => { const v = e.currentTarget.value; setDraft((d) => { d.folders![i()].name = v; }); }} />
+              </Show>
+              <input type="text" class="grow" placeholder={t("projects.pathPlaceholder")} value={f.path}
+                     onInput={(e) => { const v = e.currentTarget.value; setDraft((d) => { d.folders![i()].path = v; }); }} />
+              {/* Typed only when there is no other way: somebody who knows where
+                  their project is knows it as a place they can point at, not as a
+                  string they can spell. */}
+              <button class="btn" onClick={() => pick(i())}>{t("projects.pick")}</button>
+              <Show when={list(draft.folders).length > 1}>
+                <button class="btn quiet" onClick={() => removeFolder(i())} title={t("projects.removeFolder")}>×</button>
+              </Show>
+            </div>
+          )}
+        </For>
         <div class="row">
-          <input type="text" class="grow" placeholder={t("projects.pathPlaceholder")} value={draft.path}
-                 onInput={(e) => setDraft((d) => { d.path = e.currentTarget.value; })} />
-          {/* Typed only when there is no other way: somebody who knows where
-              their project is knows it as a place they can point at, not as a
-              string they can spell. */}
-          <button class="btn" onClick={pick}>{t("projects.pick")}</button>
+          <button class="btn quiet" onClick={addFolder} title={t("projects.addFolderWhy")}>{t("projects.addFolder")}</button>
         </div>
-      </label>
+      </div>
 
       {/* Only a saved repository can be connected: the remotes are read
           from its folder. */}

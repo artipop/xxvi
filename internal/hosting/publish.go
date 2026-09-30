@@ -199,7 +199,7 @@ func (s *Service) cardProject(card model.Card) (model.Project, error) {
 	if card.Project == "" {
 		return model.Project{}, msg.Err("hosting.noProject")
 	}
-	return s.store.Project(card.Project)
+	return s.store.CardProject(card)
 }
 
 func (s *Service) note(cardID string, kind model.EntryKind, what msg.Msg) {

@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Card, InboxGroup } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import { applyCard, flows, guard, inbox, workspace, list, loadInbox, openCardByID, projects, setInbox, showRibbon, sources, openOutside } from "../state";
+import { applyCard, flows, folderName, guard, inbox, workspace, list, loadInbox, openCardByID, projectFolders, projects, setInbox, showRibbon, sources, openOutside } from "../state";
 import { propName, propValue, t } from "../i18n";
 
 // The inbox: what the sources brought, grouped by what brought it. A card here
@@ -154,6 +154,7 @@ function InboxCard(props: { card: Card }) {
   const suggested = () => props.card.props?.[SUGGESTED] ?? "";
   const [flowID, setFlowID] = createSignal("");
   const [projectID, setProjectID] = createSignal(workspace());
+  const [folderID, setFolderID] = createSignal("");
 
   const chosen = () => {
     if (flowID()) return flowID();
@@ -168,7 +169,7 @@ function InboxCard(props: { card: Card }) {
   // person's answer like the flow is, and this is the moment both are real.
   const take = async () => {
     if (projectID()) {
-      if (!(await guard(() => API.SetCardProject(props.card.id, projectID())))) return;
+      if (!(await guard(() => API.SetCardProject(props.card.id, projectID(), folderID())))) return;
     }
     const view = await guard(() => API.TakeIntoWork(props.card.id, chosen()));
     if (!view) return;
@@ -209,11 +210,17 @@ function InboxCard(props: { card: Card }) {
         {/* An MR under review is in its own repository, on its own branch:
             where it is worked is not a question. */}
         <Show when={projects().length > 0 && props.card.workMode !== "review"}>
-          <select value={projectID()} onChange={(e) => setProjectID(e.currentTarget.value)}
+          <select value={projectID()} onChange={(e) => { setProjectID(e.currentTarget.value); setFolderID(""); }}
                   class="fit" title={t("inbox.where")}>
             <option value="">{t("common.ownFolder")}</option>
             <For each={projects()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
           </select>
+          <Show when={projectFolders(projectID()).length > 1}>
+            <select value={folderID() || projectFolders(projectID())[0]?.id} onChange={(e) => setFolderID(e.currentTarget.value)}
+                    class="fit" title={t("compose.folder")}>
+              <For each={projectFolders(projectID())}>{(f) => <option value={f.id}>{folderName(f)}</option>}</For>
+            </select>
+          </Show>
         </Show>
         <button class="btn primary" onClick={take} disabled={flows().length === 0}>{t("inbox.doIt")}</button>
         <Show when={suggested()}>

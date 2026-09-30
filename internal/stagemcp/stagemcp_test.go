@@ -224,7 +224,7 @@ func TestDescriptionReachesItsStep(t *testing.T) {
 		Report:   func(Report) error { return nil },
 		Describe: func(text string) error { got <- text; return nil },
 	})
-	res, err := callTool(t, s, token, "describe_card", map[string]any{"description": "  Переезд на ORM: схема готова, миграции — нет.  "})
+	res, err := callTool(t, s, token, "describe_task", map[string]any{"description": "  Переезд на ORM: схема готова, миграции — нет.  "})
 	if err != nil {
 		t.Fatalf("вызвать инструмент: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestDescriptionReachesItsStep(t *testing.T) {
 func TestNoDescriptionToolWithoutTaker(t *testing.T) {
 	s := serve(t)
 	token := s.Grant(Step{Report: func(Report) error { return nil }})
-	res, err := callTool(t, s, token, "describe_card", map[string]any{"description": "что-то"})
+	res, err := callTool(t, s, token, "describe_task", map[string]any{"description": "что-то"})
 	if err == nil && !res.IsError {
 		t.Fatal("без Describe инструмента быть не должно")
 	}

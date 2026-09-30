@@ -96,6 +96,11 @@ export interface Card {
     "project"?: string;
 
     /**
+     * Folder is which of the project's folders: its id, empty for the first.
+     */
+    "folder"?: string;
+
+    /**
      * WorkMode is how the card works in its project when that is a repository
      * (workmode.go). A person's answer, like the project itself.
      */
@@ -277,6 +282,37 @@ export interface FlowEvent {
 }
 
 /**
+ * Folder is one place a project's code lives.
+ */
+export interface Folder {
+    /**
+     * ID is what a task points at, so a folder can be renamed or moved on
+     * disk without the task noticing. The first folder of a project made
+     * before folders were a list has the project's own id.
+     */
+    "id": string;
+
+    /**
+     * Name is what a person picks it by: «front», «back». Empty is named
+     * after the folder itself.
+     */
+    "name": string;
+
+    /**
+     * Path is absolute. For a kind that is not a folder this is where it
+     * lands on this machine once it is fetched.
+     */
+    "path": string;
+
+    /**
+     * Repo says the folder is a git repository, which is what offers a task
+     * the choice of a branch of its own. Not stored: asked of the folder when
+     * the registry is read, since a folder can become one at any time.
+     */
+    "repo"?: boolean;
+}
+
+/**
  * InboxGroup is the inbox as it is read: one source and its cards. Cards
  * grouped by what brought them is the whole of the inbox screen.
  */
@@ -395,16 +431,20 @@ export interface Project {
     "kind": string;
 
     /**
-     * Path is the folder, absolute. For a kind that is not a folder this is
-     * where it lands on this machine once it is fetched.
+     * Folders are the places the project's code lives: one for most, two
+     * for a front and a back kept apart. The first is the project's own —
+     * what a task that named no folder works in, and where the hosting is
+     * read from.
      */
-    "path": string;
+    "folders": Folder[] | null;
 
     /**
-     * Repo says the folder is a git repository, which is what offers a card
-     * the choice of a branch of its own. Not stored: asked of the folder when
-     * the registry is read, since a folder can become one at any time.
+     * Path and Repo are the folder this value stands for: the first one as
+     * the registry hands it out, the task's own once narrowed by In. Kept
+     * flat because everything that works in a folder — branches, trees,
+     * the hosting's remote — asks exactly these two and nothing else.
      */
+    "path": string;
     "repo"?: boolean;
 
     /**

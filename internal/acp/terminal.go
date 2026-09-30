@@ -164,7 +164,7 @@ func (m *Manager) runTerminal(s *session) {
 		},
 		Describe: func(text string) error {
 			if !s.isLeaving() {
-				return errors.New("nobody asked for a description: the card is still in work")
+				return errors.New("nobody asked for a description: the task is still in work")
 			}
 			select {
 			case described <- text:
@@ -661,8 +661,8 @@ func deliverPrompt(m *Manager, s *session, sess *term.Session) {
 // under way finishes first and the request waits behind it.
 const leaveWait = 3 * time.Minute
 
-const leaveRequest = "The person has taken this card off its flow and put it back in the inbox. " +
-	"Call describe_card once with a description of the task as it stands, drawn from this conversation: " +
+const leaveRequest = "The person has taken this task off its flow and put it back in the inbox. " +
+	"Call describe_task once with a description of the task as it stands, drawn from this conversation: " +
 	"what it is about, what has been done, what is left and what was decided — for somebody who was not here. " +
 	"Write it in the language of this conversation. Do nothing else: the session is closed right after."
 

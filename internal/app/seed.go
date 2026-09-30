@@ -69,7 +69,7 @@ func baseFlows() []model.Flow {
 					// at: «ask» means the agent asks in its own interface and
 					// is answered in the same window (docs/system.md §4.1.1).
 					Work:   model.WorkTerminal,
-					Prompt: "Do what the card asks. If something is missing, ask.",
+					Prompt: "Do what the task asks. If something is missing, ask.",
 					// What this stage leaves on the card. Not required: a task
 					// that needed no branch still finished.
 					Writes: []model.PropertyWrite{{Property: "Branch"}},
@@ -162,13 +162,13 @@ func baseFlows() []model.Flow {
 			// reported from outside (internal/appmcp).
 			Name: "Page and check",
 			Description: "An agent makes a page, a check gives a verdict, a person looks at it in the browser and decides. " +
-				"A short route that shows a card's whole way.",
+				"A short route that shows a task's whole way.",
 			EntryStage: "page-write",
 			Stages: []model.Stage{
 				{
 					ID: "page-write", Name: "Layout", Action: model.ActionAgent, Crew: []string{"Claude"},
 					Work: model.WorkTerminal,
-					Prompt: "Make the page the card asks for: one index.html file in the working folder, " +
+					Prompt: "Make the page the task asks for: one index.html file in the working folder, " +
 						"with no external dependencies. Put the file's address in «Page» — file:///…/index.html.",
 					// Required: the browser screen below opens exactly this
 					// value, and a step that ended without it would leave the
@@ -180,7 +180,7 @@ func baseFlows() []model.Flow {
 				{
 					ID: "page-review", Name: "Check", Action: model.ActionAgent, Crew: []string{"Claude"},
 					Work: model.WorkSession,
-					Prompt: "Check the page at «Page»: does it do what the card asks, " +
+					Prompt: "Check the page at «Page»: does it do what the task asks, " +
 						"is the markup intact. Put pass or fail in «Verdict», and write what is wrong in the text.",
 					Reads:   []string{"Page"},
 					Writes:  []model.PropertyWrite{{Property: "Verdict", Required: true}},
@@ -278,13 +278,13 @@ func HostingFlows(crew string) []model.Flow {
 		{
 			Name: "Task to MR",
 			Description: "An agent does the work on the task's own branch, a person reviews the diff, " +
-				"the application pushes and opens the MR, and the card waits until it is merged.",
+				"the application pushes and opens the MR, and the task waits until it is merged.",
 			EntryStage: "tmr-work",
 			Stages: []model.Stage{
 				{
 					ID: "tmr-work", Name: "In progress", Action: model.ActionAgent, Crew: []string{crew},
 					Work: model.WorkTerminal,
-					Prompt: "Do what the card asks. Commit the work on the task's branch when it is done: " +
+					Prompt: "Do what the task asks. Commit the work on the task's branch when it is done: " +
 						"what is not committed will not reach the MR.",
 					X: 80, Y: 160,
 				},

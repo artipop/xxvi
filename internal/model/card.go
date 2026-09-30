@@ -57,6 +57,8 @@ type Card struct {
 	// project can be renamed without the card noticing. Empty is a real answer —
 	// a task that starts from a blank page gets a folder of its own.
 	Project string `json:"project,omitempty"`
+	// Folder is which of the project's folders: its id, empty for the first.
+	Folder string `json:"folder,omitempty"`
 	// WorkMode is how the card works in its project when that is a repository
 	// (workmode.go). A person's answer, like the project itself.
 	WorkMode string `json:"workMode,omitempty"`

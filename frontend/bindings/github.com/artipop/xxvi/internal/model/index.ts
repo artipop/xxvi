@@ -13,6 +13,7 @@ export type {
     Edge,
     Flow,
     FlowEvent,
+    Folder,
     InboxGroup,
     JournalEntry,
     Mark,

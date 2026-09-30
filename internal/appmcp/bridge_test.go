@@ -72,7 +72,7 @@ func TestBridgeCarriesTheToolsThrough(t *testing.T) {
 	for _, tool := range tools.Tools {
 		names[tool.Name] = true
 	}
-	for _, want := range []string{"flows", "cards", "card", "add_card", "take_into_work", "finish_step", "set_property"} {
+	for _, want := range []string{"flows", "tasks", "task", "add_task", "take_into_work", "finish_step", "set_property"} {
 		if !names[want] {
 			t.Fatalf("мост не пронёс инструмент %s: %v", want, names)
 		}

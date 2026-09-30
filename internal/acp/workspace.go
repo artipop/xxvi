@@ -110,7 +110,7 @@ func (m *Manager) RefreshReviewTree(cardID string) error {
 	if info, err := os.Stat(card.Worktree); err != nil || !info.IsDir() {
 		return nil
 	}
-	project, err := m.store.Project(card.Project)
+	project, err := m.store.CardProject(card)
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func (m *Manager) claimWorktree(card model.Card, project model.Project) (string,
 
 func (m *Manager) claimBranch(card model.Card, project model.Project) (string, error) {
 	folder := project.Path
-	holder, held, err := m.store.FolderHolder(project.ID, card.ID)
+	holder, held, err := m.store.FolderHolder(project, card.Folder, card.ID)
 	if err != nil {
 		return "", err
 	}
@@ -438,7 +438,7 @@ func (m *Manager) RemoveWorktree(cardID string, discard bool) error {
 	if card.State != model.StateDone && card.State != model.StateDropped {
 		return msg.Err("worktree.cardInWork")
 	}
-	project, err := m.store.Project(card.Project)
+	project, err := m.store.CardProject(card)
 	if err != nil {
 		return err
 	}

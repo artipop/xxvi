@@ -1,6 +1,7 @@
 package model
 
 import (
+	"path"
 	"strings"
 
 	"github.com/artipop/xxvi/internal/msg"
@@ -35,13 +36,17 @@ type Project struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Kind string `json:"kind"`
-	// Path is the folder, absolute. For a kind that is not a folder this is
-	// where it lands on this machine once it is fetched.
+	// Folders are the places the project's code lives: one for most, two
+	// for a front and a back kept apart. The first is the project's own —
+	// what a task that named no folder works in, and where the hosting is
+	// read from.
+	Folders []Folder `json:"folders"`
+	// Path and Repo are the folder this value stands for: the first one as
+	// the registry hands it out, the task's own once narrowed by In. Kept
+	// flat because everything that works in a folder — branches, trees,
+	// the hosting's remote — asks exactly these two and nothing else.
 	Path string `json:"path"`
-	// Repo says the folder is a git repository, which is what offers a card
-	// the choice of a branch of its own. Not stored: asked of the folder when
-	// the registry is read, since a folder can become one at any time.
-	Repo bool `json:"repo,omitempty"`
+	Repo bool   `json:"repo,omitempty"`
 
 	// Remote, Server and Provider are the project's hosting, as a person set
 	// it up: which of the repository's remotes is the one on the hosting —
@@ -68,6 +73,61 @@ type Project struct {
 	// ReviewInbox says the merge requests waiting on this account's review
 	// come into the inbox. Read off the source registry, where it lives.
 	ReviewInbox bool `json:"reviewInbox,omitempty"`
+}
+
+// Folder is one place a project's code lives.
+type Folder struct {
+	// ID is what a task points at, so a folder can be renamed or moved on
+	// disk without the task noticing. The first folder of a project made
+	// before folders were a list has the project's own id.
+	ID string `json:"id"`
+	// Name is what a person picks it by: «front», «back». Empty is named
+	// after the folder itself.
+	Name string `json:"name"`
+	// Path is absolute. For a kind that is not a folder this is where it
+	// lands on this machine once it is fetched.
+	Path string `json:"path"`
+	// Repo says the folder is a git repository, which is what offers a task
+	// the choice of a branch of its own. Not stored: asked of the folder when
+	// the registry is read, since a folder can become one at any time.
+	Repo bool `json:"repo,omitempty"`
+}
+
+// In is the project narrowed to one of its folders: the one a task works in.
+// Empty is the first. A folder that is not there any more is an error rather
+// than the first one: working in the wrong place is worse than not working.
+func (p Project) In(folderID string) (Project, error) {
+	if folderID == "" && len(p.Folders) > 0 {
+		folderID = p.Folders[0].ID
+	}
+	for _, f := range p.Folders {
+		if f.ID == folderID {
+			p.Path, p.Repo = f.Path, f.Repo
+			return p, nil
+		}
+	}
+	if folderID == "" {
+		return p, nil
+	}
+	return Project{}, msg.Err("project.folderGone", "project", p.Name)
+}
+
+// HasFolder says a folder of this id is among these.
+func HasFolder(folders []Folder, id string) bool {
+	for _, f := range folders {
+		if f.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// FolderName is what a folder is called on screen.
+func (f Folder) FolderName() string {
+	if f.Name != "" {
+		return f.Name
+	}
+	return path.Base(strings.ReplaceAll(f.Path, "\\", "/"))
 }
 
 // Hosting providers: which API a project's remote speaks. Closed, like
@@ -97,7 +157,10 @@ var Providers = []string{ProviderGitLab}
 func ValidateProject(p Project) (Project, error) {
 	p.Name = strings.TrimSpace(p.Name)
 	p.Kind = strings.TrimSpace(p.Kind)
-	p.Path = strings.TrimSpace(p.Path)
+	// A project from before folders were a list comes with its path alone.
+	if len(p.Folders) == 0 && strings.TrimSpace(p.Path) != "" {
+		p.Folders = []Folder{{Path: p.Path}}
+	}
 
 	if p.Name == "" {
 		return Project{}, msg.Err("project.noName")
@@ -116,14 +179,39 @@ func ValidateProject(p Project) (Project, error) {
 		return Project{}, msg.Err("project.unknownProvider",
 			"provider", p.Provider, "allowed", strings.Join(Providers, ", "))
 	}
-	if p.Path == "" {
+	if len(p.Folders) == 0 {
 		return Project{}, msg.Err("project.noPath", "project", p.Name)
 	}
-	// Absolute, because a relative path means "relative to whatever this
-	// process happened to be started in", and that is not a place.
-	if !strings.HasPrefix(p.Path, "/") && !(len(p.Path) >= 2 && p.Path[1] == ':') {
-		return Project{}, msg.Err("project.relativePath", "project", p.Name, "path", p.Path)
+	folders := make([]Folder, 0, len(p.Folders))
+	seen := map[string]bool{}
+	names := map[string]bool{}
+	for _, f := range p.Folders {
+		f.ID = strings.TrimSpace(f.ID)
+		f.Name = strings.TrimSpace(f.Name)
+		f.Path = strings.TrimSpace(f.Path)
+		if f.Path == "" {
+			return Project{}, msg.Err("project.noPath", "project", p.Name)
+		}
+		// Absolute, because a relative path means "relative to whatever this
+		// process happened to be started in", and that is not a place.
+		if !strings.HasPrefix(f.Path, "/") && !(len(f.Path) >= 2 && f.Path[1] == ':') {
+			return Project{}, msg.Err("project.relativePath", "project", p.Name, "path", f.Path)
+		}
+		if seen[f.Path] {
+			return Project{}, msg.Err("project.folderTwice", "path", f.Path)
+		}
+		seen[f.Path] = true
+		// Picked by name, so two of one name are two choices nobody can
+		// tell apart.
+		key := strings.ToLower(f.FolderName())
+		if names[key] {
+			return Project{}, msg.Err("project.folderNameTaken", "name", f.FolderName())
+		}
+		names[key] = true
+		folders = append(folders, f)
 	}
+	p.Folders = folders
+	p.Path, p.Repo = folders[0].Path, folders[0].Repo
 	return p, nil
 }
 

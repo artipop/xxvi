@@ -205,8 +205,8 @@ func (s *Server) handler() http.Handler {
 // the agent reads it before calling rather than after being refused.
 type finishInput struct {
 	Outcome    string            `json:"outcome" jsonschema:"how the step ended: done or failed"`
-	Summary    string            `json:"summary" jsonschema:"what was done, in a few sentences — it lands in the card's comments and is what the next stage reads"`
-	Properties map[string]string `json:"properties,omitempty" jsonschema:"the values this stage was asked to leave on the card, by property name"`
+	Summary    string            `json:"summary" jsonschema:"what was done, in a few sentences — it lands in the task's comments and is what the next stage reads"`
+	Properties map[string]string `json:"properties,omitempty" jsonschema:"the values this stage was asked to leave on the task, by property name"`
 }
 
 // newServer exposes one step's report as a tool.
@@ -232,11 +232,11 @@ func newServer(step Step) *mcp.Server {
 		}); err != nil {
 			return errorResult("%v", err), nil, nil
 		}
-		return textResult("Step recorded. The card has moved on — there will be no further instructions for it."), nil, nil
+		return textResult("Step recorded. The task has moved on — there will be no further instructions for it."), nil, nil
 	})
 	if step.Describe != nil {
 		mcp.AddTool(srv, &mcp.Tool{
-			Name:        "describe_card",
+			Name:        "describe_task",
 			Description: describeCard,
 		}, func(_ context.Context, _ *mcp.CallToolRequest, in describeInput) (*mcp.CallToolResult, any, error) {
 			text := strings.TrimSpace(in.Description)
@@ -259,9 +259,9 @@ type describeInput struct {
 // describeCard keeps the tool out of the agent's own initiative: it is the
 // answer to one request the application types into the terminal, and a
 // description written mid-task would overwrite the person's own words.
-const describeCard = "Only when the application asks for it in this conversation: the card is going back to the inbox, " +
+const describeCard = "Only when the application asks for it in this conversation: the task is going back to the inbox, " +
 	"and this writes its description — what the task is, what has been done, what is left and what was decided, " +
-	"so that somebody who was not in this conversation can pick it up. It replaces the card's text. " +
+	"so that somebody who was not in this conversation can pick it up. It replaces the task's text. " +
 	"Never call it on your own, and never instead of finish_step."
 
 // whenToFinish is said in both places for the same reason as lastCall. Left to
@@ -284,7 +284,7 @@ func whenToFinish(step Step) string {
 		"everything the task and this stage ask for is actually done, not planned or proposed; "+
 		"you have checked the result (built it, ran the tests, or looked at what it produces); "+
 		"your changes are committed if you are on a branch; "+
-		"you have every value this step has to leave on the card; "+
+		"you have every value this step has to leave on the task; "+
 		"and nothing is waiting on the person — you have not just asked them a question, offered options or shown a plan to approve. "+
 		"If any of these is in doubt, do not call it: say what you did and what is left open, ask «I'm done — move on to %s?», and wait. "+
 		"Call it once the person agrees or asks you to finish; if they want something else, keep working. "+
@@ -305,9 +305,9 @@ func instructions(step Step) string {
 		fmt.Fprintf(&b, " — the stage «%s»", step.StageName)
 	}
 	if step.CardTitle != "" {
-		fmt.Fprintf(&b, " for the card «%s»", step.CardTitle)
+		fmt.Fprintf(&b, " for the task «%s»", step.CardTitle)
 	}
-	b.WriteString(".\n\nThe step ends with a call to finish_step: until it is called, the card stands here and goes nowhere. ")
+	b.WriteString(".\n\nThe step ends with a call to finish_step: until it is called, the task stands here and goes nowhere. ")
 	b.WriteString("Leaving the terminal does not count as finishing the step. ")
 	b.WriteString(whenToFinish(step))
 	b.WriteString(lastCall)
@@ -324,7 +324,7 @@ func instructions(step Step) string {
 // about too late.
 func describe(step Step) string {
 	var b strings.Builder
-	b.WriteString("Report that the step is finished, and how: until this call the card stays where it is. ")
+	b.WriteString("Report that the step is finished, and how: until this call the task stays where it is. ")
 	b.WriteString(whenToFinish(step))
 	b.WriteString(lastCall)
 	if len(step.Writes) == 0 {
