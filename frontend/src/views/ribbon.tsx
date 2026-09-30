@@ -62,6 +62,14 @@ const RunPane = lazy(() => import("./run"));
 const WIDTHS = [0.34, 0.5, 0.67, 1];
 const DEFAULT_WIDTH = 2; // two thirds: wide enough for a page, narrow enough to see the next step
 
+function centerInBand(el: HTMLElement | undefined) {
+  const band = el?.closest<HTMLElement>(".band");
+  if (!el || !band) return;
+  const by = el.getBoundingClientRect().left + el.offsetWidth / 2
+    - (band.getBoundingClientRect().left + band.clientWidth / 2);
+  band.scrollTo({ left: band.scrollLeft + by, behavior: "instant" });
+}
+
 /** motion is one behaviour, asked once: the strip is the only thing that moves. */
 function motion(): ScrollBehavior {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
@@ -161,7 +169,14 @@ export default function Ribbon(): JSX.Element {
         if (!target || flown[id] === target) continue;
         const first = flown[id] === undefined;
         flown[id] = target;
-        if (first) continue;
+        // A strip first seen is arrived at, not moved along: its band is put on
+        // the step at once, or that step sits off the band's edge. Only the
+        // band is scrolled — scrollIntoView would move the stack to this strip
+        // too.
+        if (first) {
+          queueMicrotask(() => centerInBand(paneEl(target)));
+          continue;
+        }
         if (id !== openRibbon()) {
           setMoved((m) => ({ ...m, [id]: true }));
           continue;

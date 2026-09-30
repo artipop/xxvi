@@ -931,6 +931,36 @@ func TestAReopenedStageSaysNothing(t *testing.T) {
 	}
 }
 
+// A stage run more than once opens on its latest step: that is where the work
+// is, or where the person has to say something. The first run of the segment
+// may have finished hours ago.
+func TestTheRibbonFocusesTheLatestStep(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Задача")
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+	f.pause(t, card.ID)
+	if err := f.engine.Reopen(card.ID); err != nil {
+		t.Fatalf("открыть снова: %v", err)
+	}
+	f.pause(t, card.ID)
+
+	view := ribbonOf(t, f, card.ID)
+	seg := view.Segments[len(view.Segments)-1]
+	var runs []ScreenView
+	for _, sc := range seg.Screens {
+		if sc.SessionID != "" {
+			runs = append(runs, sc)
+		}
+	}
+	if len(runs) < 2 {
+		t.Fatalf("на стадии два запуска: %+v", seg.Screens)
+	}
+	last := runs[len(runs)-1]
+	if view.FocusID != last.ID || !last.Paused {
+		t.Fatalf("фокус — на последнем, приостановленном шаге %q, а не на %q", last.ID, view.FocusID)
+	}
+}
+
 // Only a paused stage can be continued: one running, finished or never paused
 // has nothing to pick up, and continuing it would start a second run.
 func TestOnlyAPausedStageContinues(t *testing.T) {

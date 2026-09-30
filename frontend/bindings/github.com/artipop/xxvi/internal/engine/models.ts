@@ -115,8 +115,9 @@ export interface RibbonView {
     "segments": Segment[] | null;
 
     /**
-     * FocusID is where the ribbon flies when a step ends: the first screen of
-     * the segment the card stands in.
+     * FocusID is where the ribbon flies when a step ends, and where it opens:
+     * the latest step of the segment the card stands in, or its first screen
+     * when no step has run there.
      */
     "focusId"?: string;
 

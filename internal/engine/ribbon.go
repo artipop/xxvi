@@ -112,8 +112,9 @@ type RibbonView struct {
 	StageName string    `json:"stageName,omitempty"`
 	Running   bool      `json:"running,omitempty"`
 	Segments  []Segment `json:"segments"`
-	// FocusID is where the ribbon flies when a step ends: the first screen of
-	// the segment the card stands in.
+	// FocusID is where the ribbon flies when a step ends, and where it opens:
+	// the latest step of the segment the card stands in, or its first screen
+	// when no step has run there.
 	FocusID string `json:"focusId,omitempty"`
 	// Returnable is a card taken off its flow into the inbox, which can go
 	// back to the stage it left (Engine.Return).
@@ -258,8 +259,17 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 	placeProblems(view.Segments, events, journal, sessions, visitOf)
 
 	for _, seg := range view.Segments {
-		if seg.Current && len(seg.Screens) > 0 {
-			view.FocusID = seg.Screens[0].ID
+		if !seg.Current || len(seg.Screens) == 0 {
+			continue
+		}
+		// Runs come first and in order, so the last one with a session is the
+		// step going on now — or the paused one waiting for a person. The
+		// segment's first screen is the oldest run, often one long finished.
+		view.FocusID = seg.Screens[0].ID
+		for _, sc := range seg.Screens {
+			if sc.SessionID != "" {
+				view.FocusID = sc.ID
+			}
 		}
 	}
 	return view, nil
