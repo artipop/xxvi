@@ -33,6 +33,7 @@ import (
 	"github.com/artipop/xxvi/internal/nativeterm"
 	"github.com/artipop/xxvi/internal/ptyhold"
 	"github.com/artipop/xxvi/internal/stagemcp"
+	"github.com/artipop/xxvi/internal/userpath"
 )
 
 //go:embed all:frontend/dist
@@ -68,7 +69,13 @@ func main() {
 	// first process is started — its setup and a fork running at once deadlock
 	// the whole application (internal/nativeterm).
 	nativeterm.Init()
-	adoptShellPath()
+	// Before anything is spawned, and after Ghostty for the reason above. See
+	// internal/userpath.
+	if changed, err := userpath.Restore(); err != nil {
+		log.Printf("path: %v", err)
+	} else if changed {
+		log.Printf("path: taken from the login shell (%s)", os.Getenv("SHELL"))
+	}
 	app.HoldTerminals = func(socket string) *exec.Cmd {
 		self, err := os.Executable()
 		if err != nil {
