@@ -12,7 +12,7 @@ package nativeterm
 // libghostty-vt the holder uses share hundreds of symbols, and only separate
 // images keep them apart. Opening it late also keeps it out of every build and
 // test that does not show a native terminal.
-typedef void (*nt_show_fn)(void *, const char *, const char *, double, double, double, double, double, double);
+typedef void (*nt_show_fn)(void *, const char *, const char *, double, double, double, double, double, double, double, double, double, double);
 typedef void (*nt_id_fn)(const char *);
 typedef void (*nt_void_fn)(void);
 static nt_show_fn p_show;
@@ -22,7 +22,7 @@ static nt_void_fn p_close_all, p_init;
 static int nt_load(const char *path) {
 	void *h = dlopen(path, RTLD_NOW | RTLD_LOCAL);
 	if (!h) return 0;
-	p_show = (nt_show_fn)dlsym(h, "nt_show");
+	p_show = (nt_show_fn)dlsym(h, "nt_show_in");
 	p_hide = (nt_id_fn)dlsym(h, "nt_hide");
 	p_close = (nt_id_fn)dlsym(h, "nt_close");
 	p_close_all = (nt_void_fn)dlsym(h, "nt_close_all");
@@ -30,7 +30,7 @@ static int nt_load(const char *path) {
 	p_init = (nt_void_fn)dlsym(h, "nt_init");
 	return p_show && p_hide && p_close && p_close_all && p_focus && p_init;
 }
-static void nt_call_show(void *w, const char *id, const char *cmd, double x, double y, double wd, double ht, double dpr, double font) { p_show(w, id, cmd, x, y, wd, ht, dpr, font); }
+static void nt_call_show(void *w, const char *id, const char *cmd, double x, double y, double wd, double ht, double cx, double cy, double cw, double ch, double dpr, double font) { p_show(w, id, cmd, x, y, wd, ht, cx, cy, cw, ch, dpr, font); }
 static void nt_call_hide(const char *id) { p_hide(id); }
 static void nt_call_close(const char *id) { p_close(id); }
 static void nt_call_close_all(void) { p_close_all(); }
@@ -98,14 +98,16 @@ func Init() {
 // Show puts the terminal id in a native view over the window at the page's
 // rectangle (CSS pixels from the top left, at the page's device pixel ratio
 // dpr), starting its bridge with command the first time, in fontSize points.
-func Show(nswindow unsafe.Pointer, id, command string, x, y, w, h, dpr, fontSize float64) {
+// Only the part inside the clip rectangle cx, cy, cw, ch is seen: what of the
+// pane the page itself would show.
+func Show(nswindow unsafe.Pointer, id, command string, x, y, w, h, cx, cy, cw, ch, dpr, fontSize float64) {
 	if !Available() {
 		return
 	}
 	cid, ccmd := C.CString(id), C.CString(command)
 	defer C.free(unsafe.Pointer(cid))
 	defer C.free(unsafe.Pointer(ccmd))
-	C.nt_call_show(nswindow, cid, ccmd, C.double(x), C.double(y), C.double(w), C.double(h), C.double(dpr), C.double(fontSize))
+	C.nt_call_show(nswindow, cid, ccmd, C.double(x), C.double(y), C.double(w), C.double(h), C.double(cx), C.double(cy), C.double(cw), C.double(ch), C.double(dpr), C.double(fontSize))
 }
 
 // Hide takes the view off screen and keeps it — and its bridge — alive.

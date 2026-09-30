@@ -111,6 +111,28 @@ export default function Terminal(props: {
   );
 }
 
+// The part of the pane the page shows: cut by the window and by every ancestor
+// that clips — the ribbon's band, a scrolled stack.
+function seenOf(el: HTMLElement, r: { left: number; top: number; width: number; height: number }) {
+  const c = { left: Math.max(r.left, 0), top: Math.max(r.top, 0),
+    right: Math.min(r.left + r.width, window.innerWidth), bottom: Math.min(r.top + r.height, window.innerHeight) };
+  for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+    const cs = getComputedStyle(a);
+    if (cs.overflowX === "visible" && cs.overflowY === "visible") continue;
+    const ab = a.getBoundingClientRect();
+    const left = ab.left + a.clientLeft, top = ab.top + a.clientTop;
+    if (cs.overflowX !== "visible") {
+      c.left = Math.max(c.left, left);
+      c.right = Math.min(c.right, left + a.clientWidth);
+    }
+    if (cs.overflowY !== "visible") {
+      c.top = Math.max(c.top, top);
+      c.bottom = Math.min(c.bottom, top + a.clientHeight);
+    }
+  }
+  return c;
+}
+
 function followNatively(handle: { id: string; url: string }, host: () => HTMLElement | undefined, gone: () => boolean): () => void {
   let last = "";
   let frame = 0;
@@ -125,18 +147,20 @@ function followNatively(handle: { id: string; url: string }, host: () => HTMLEle
       const cs = getComputedStyle(el);
       const pl = parseFloat(cs.paddingLeft) || 0, pr = parseFloat(cs.paddingRight) || 0;
       const pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
-      const r = { left: b.left + pl, top: b.top + pt, width: b.width - pl - pr, height: b.height - pt - pb, right: b.right - pr, bottom: b.bottom - pb };
-      const onScreen = r.width > 8 && r.height > 8 && r.right > 0 && r.bottom > 0
-        && r.left < window.innerWidth && r.top < window.innerHeight;
+      const r = { left: b.left + pl, top: b.top + pt, width: b.width - pl - pr, height: b.height - pt - pb };
+      const c = seenOf(el, r);
       // Nothing of the page is checked for lying over the pane: the view is
       // above the whole page, and a menu opened over a terminal goes under
       // it. Accepted for now.
-      const visible = onScreen;
+      const visible = r.width > 8 && r.height > 8 && c.right - c.left > 8 && c.bottom - c.top > 8;
       const dpr = window.devicePixelRatio || 1;
-      const key = visible ? `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)},${dpr}` : "hidden";
+      const key = visible
+        ? [r.left, r.top, r.width, r.height, c.left, c.top, c.right, c.bottom].map(Math.round).join(",") + "," + dpr
+        : "hidden";
       if (key !== last) {
         last = key;
-        if (visible) void API.ShowNativeTerminal(handle.id, handle.url, r.left, r.top, r.width, r.height, dpr, FONT_SIZE);
+        if (visible) void API.ShowNativeTerminal(handle.id, handle.url, r.left, r.top, r.width, r.height,
+          c.left, c.top, c.right - c.left, c.bottom - c.top, dpr, FONT_SIZE);
         else void API.HideNativeTerminal(handle.id);
       }
     }

@@ -1,6 +1,6 @@
 // The native half of internal/nativeterm, built into libxxvinative.dylib with
-// Ghostty's full library: Ghostty surfaces as subviews of the window's content
-// view, laid over the page where the page draws a terminal's pane.
+// Ghostty's full library: Ghostty surfaces in clipping subviews of the window's
+// content view, laid over the page where the page draws a terminal's pane.
 //
 // What a host has to do for a surface — keys, mouse, clipboard — follows
 // Ghostty's own macOS host (macos/Sources/Ghostty/Surface View). Every call is
@@ -471,7 +471,8 @@ static bool ensureApp(void) {
 // ---- what internal/nativeterm calls ----
 
 __attribute__((visibility("default")))
-void nt_show(void *nswindow, const char *cid, const char *ccommand, double x, double y, double w, double h, double dpr, double font) {
+void nt_show_in(void *nswindow, const char *cid, const char *ccommand, double x, double y, double w, double h,
+                double cx, double cy, double cw, double ch, double dpr, double font) {
   NSString *ident = [NSString stringWithUTF8String:cid];
   NSString *command = [NSString stringWithUTF8String:ccommand];
   onMain(^{
@@ -483,14 +484,25 @@ void nt_show(void *nswindow, const char *cid, const char *ccommand, double x, do
     // screen's says by how much.
     double k = win.backingScaleFactor > 0 && dpr > 0 ? dpr / win.backingScaleFactor : 1;
     double px = x * k, py = y * k, pw = w * k, ph = h * k;
-    // The page measures from the top, the content view from the bottom.
-    NSRect frame = NSMakeRect(px, content.bounds.size.height - py - ph, pw, ph);
+    double qx = cx * k, qy = cy * k, qw = cw * k, qh = ch * k;
+    // The page measures from the top, the content view from the bottom; the
+    // view sits in its clip, which is where the page lets it be seen.
+    NSRect clipFrame = NSMakeRect(qx, content.bounds.size.height - qy - qh, qw, qh);
+    NSRect frame = NSMakeRect(px - qx, (qy + qh) - (py + ph), pw, ph);
     NTView *v = (NTView *)views[ident];
     BOOL appears = !v || v.hidden;
     if (!v) {
       v = [[NTView alloc] initWithFrame:frame];
       v.ident = ident;
-      [content addSubview:v positioned:NSWindowAbove relativeTo:nil];
+      // The page is not over the view and so cannot cut it: a pane half
+      // scrolled out of the ribbon would otherwise be drawn whole, over
+      // whatever lies beside the ribbon. The clip does what the page's
+      // overflow does for its own panes.
+      NSView *clip = [[NSView alloc] initWithFrame:clipFrame];
+      clip.wantsLayer = YES;
+      clip.layer.masksToBounds = YES;
+      [clip addSubview:v];
+      [content addSubview:clip positioned:NSWindowAbove relativeTo:nil];
       ghostty_surface_config_s sc = ghostty_surface_config_new();
       sc.platform_tag = GHOSTTY_PLATFORM_MACOS;
       sc.platform.macos.nsview = (__bridge void *)v;
@@ -502,13 +514,15 @@ void nt_show(void *nswindow, const char *cid, const char *ccommand, double x, do
       if (font > 0) sc.font_size = (float)font;
       v.surface = ghostty_surface_new(app, &sc);
       if (!v.surface) {
-        [v removeFromSuperview];
+        [clip removeFromSuperview];
         return;
       }
       ghostty_surface_set_content_scale(v.surface, win.backingScaleFactor, win.backingScaleFactor);
       views[ident] = v;
     }
     v.hidden = NO;
+    v.superview.hidden = NO;
+    [v.superview setFrame:clipFrame];
     [v setFrame:frame];
     [v setFrameSize:frame.size];
     if (appears && [wanted isEqualToString:ident]) [win makeFirstResponder:v];
@@ -525,6 +539,7 @@ void nt_hide(const char *cid) {
     // terminal nobody can see.
     if (v.window.firstResponder == v) toPage(v.window);
     v.hidden = YES;
+    v.superview.hidden = YES;
   });
 }
 
@@ -538,6 +553,7 @@ void nt_close(const char *cid) {
     if (v.window.firstResponder == v) toPage(v.window);
     ghostty_surface_t s = v.surface;
     v.surface = NULL;
+    [v.superview removeFromSuperview];
     [v removeFromSuperview];
     if (s) ghostty_surface_free(s);
   });
