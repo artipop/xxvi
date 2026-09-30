@@ -1,4 +1,4 @@
-import { createEffect, createSignal, createStore, onSettled, storePath, For, Show } from "solid-js";
+import { createEffect, createSignal, createStore, onSettled, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Project } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { RemoteOption } from "../../bindings/github.com/artipop/xxvi/internal/hosting/models";
@@ -99,8 +99,8 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
     // Empty is a person closing the dialog without choosing, and then what
     // they had stays what they have.
     if (chosen) {
-      setDraft(storePath("path", chosen));
-      if (!draft.name.trim()) setDraft(storePath("name", basename(chosen)));
+      setDraft((d) => { d.path = chosen; });
+      if (!draft.name.trim()) setDraft((d) => { d.name = basename(chosen); });
       setError(null);
     }
   };
@@ -116,11 +116,11 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
         <label class="field">
           <span>{t("projects.name")}</span>
           <input type="text" value={draft.name}
-                 onInput={(e) => setDraft(storePath("name", e.currentTarget.value))} />
+                 onInput={(e) => setDraft((d) => { d.name = e.currentTarget.value; })} />
         </label>
         <label class="field">
           <span>{t("projects.kind")}</span>
-          <select value={draft.kind} onChange={(e) => setDraft(storePath("kind", e.currentTarget.value))}>
+          <select value={draft.kind} onChange={(e) => setDraft((d) => { d.kind = e.currentTarget.value; })}>
             <For each={list(vocabulary().projectKinds)}>
               {(k) => <option value={k}>{label("projectKind", k)}</option>}
             </For>
@@ -131,7 +131,7 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
         <span>{t("projects.folder")}</span>
         <div class="row">
           <input type="text" class="grow" placeholder={t("projects.pathPlaceholder")} value={draft.path}
-                 onInput={(e) => setDraft(storePath("path", e.currentTarget.value))} />
+                 onInput={(e) => setDraft((d) => { d.path = e.currentTarget.value; })} />
           {/* Typed only when there is no other way: somebody who knows where
               their project is knows it as a place they can point at, not as a
               string they can spell. */}

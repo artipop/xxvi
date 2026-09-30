@@ -1,4 +1,4 @@
-import { createSignal, createStore, storePath, For, Show } from "solid-js";
+import { createSignal, createStore, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Rule, Source } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import { flows, guard, loadSources, sources, vocabulary } from "../state";
@@ -67,7 +67,7 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
     });
   };
 
-  const setRule = (i: number, patch: Partial<Rule>) => setDraft(storePath("rules", i, patch));
+  const setRule = (i: number, patch: Partial<Rule>) => setDraft((d) => { Object.assign((d.rules as Rule[])[i], patch); });
 
   const removeRule = (i: number) => setDraft((s) => { s.rules!.splice(i, 1); });
 
@@ -86,24 +86,24 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
       <div class="grid2">
         <label class="field">
           <span>{t("agents.name")}</span>
-          <input type="text" value={draft.name} onInput={(e) => setDraft(storePath("name", e.currentTarget.value))} />
+          <input type="text" value={draft.name} onInput={(e) => setDraft((d) => { d.name = e.currentTarget.value; })} />
         </label>
         <label class="field">
           <span>{t("sources.file")}</span>
           <input type="text" value={draft.config?.path ?? ""}
-                 onInput={(e) => setDraft(storePath("config", { ...(draft.config ?? {}), path: e.currentTarget.value }))} />
+                 onInput={(e) => setDraft((d) => { d.config = { ...(draft.config ?? {}), path: e.currentTarget.value }; })} />
         </label>
       </div>
 
       <div class="row wrap toolbar">
         <label class="row check">
           <input type="checkbox" checked={draft.enabled}
-                 onChange={(e) => setDraft(storePath("enabled", e.currentTarget.checked))} />
+                 onChange={(e) => setDraft((d) => { d.enabled = e.currentTarget.checked; })} />
           <span>{t("sources.enabled")}</span>
         </label>
         <label class="row check">
           <input type="checkbox" checked={draft.noisy ?? false}
-                 onChange={(e) => setDraft(storePath("noisy", e.currentTarget.checked))} />
+                 onChange={(e) => setDraft((d) => { d.noisy = e.currentTarget.checked; })} />
           <span>{t("sources.noisyToggle")}</span>
         </label>
       </div>
