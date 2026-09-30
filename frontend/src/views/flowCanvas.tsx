@@ -27,8 +27,13 @@ import "@dschz/solid-flow/dist/style.css";
 import { label, propName, propValue, t } from "../i18n";
 import { themeColor } from "../theme";
 import { KIND_FALLBACK, Tile, nodeDetail, ownsScreen, templateName, templateOf } from "./templates";
+import {
+  CAPTION_HEIGHT, type Layout, type LayoutEdge, type Point, PORT_FAILURE, PORT_IN, PORT_SUCCESS, type Route,
+  backLabelSpot, captionWidth, elkCaptions, entryLabelSpot, layoutFlow, roundedPath,
+} from "./flowLayout";
 
-// The flow as a graph. Pan, zoom and drag are Solid Flow's; the layout is ours.
+// The flow as a graph. Pan, zoom and drag are Solid Flow's; where the boxes
+// stand and how the arrows run is ELK's (flowLayout.ts).
 //
 // A box is a stage — the place a card stands and the work done there — and an
 // arrow is what moves a card on. What a stage leaves on the card is drawn on the
@@ -57,16 +62,6 @@ const HANDLE_EVENT = "event";
 
 const GAP_X = 80;
 const GAP_Y = 24;
-
-// LANE is how far apart two long-haul arrows are pushed. An arrow that skips
-// stages runs the width of the graph, and several of them at the same height
-// read as one thick line — which is what a failure arrow from one stage and a
-// return arrow from another look like travelling side by side into one box.
-const LANE = 26;
-
-// How far under the lowest of the two stages the first lane runs — clear of a
-// box, which is 68 tall and 90 with outputs on it.
-const LANE_BASE = 48;
 
 // StageWrite is one property the stage leaves on the card, as the box draws it.
 // `branchable` is whether an arrow can ask about it: an arrow asks "is it this
@@ -227,35 +222,9 @@ function depths(stages: Stage[], edges: Edge[]): Map<string, number> {
   return depth;
 }
 
-// longHaul says which arrows need a corridor of their own rather than the direct
-// route between two boxes: anything going backwards, and anything jumping past a
-// stage. A step to the next stage is the one case that never crosses anything.
-//
-// Backwards counts however short it is. An arrow one stage back still has to
-// travel the width of both boxes to get there, and the library draws it through
-// them: opaque boxes then cut it into pieces, which reads as two broken stubs
-// rather than as one arrow.
-function longHaul(stages: Stage[], edges: Edge[]): Map<string, number> {
-  const depth = depths(stages, edges);
-  const out = new Map<string, number>();
-  let lane = 0;
-  edges.forEach((edge, index) => {
-    const from = depth.get(edge.from);
-    const to = depth.get(edge.to);
-    if (from === undefined || to === undefined) return;
-    if (to > from + 1) {
-      // forward, past at least one stage
-    } else if (to > from) {
-      return; // the next stage along: the direct route crosses nothing
-    }
-    out.set(edgeId(edge, index), lane);
-    lane += 1;
-  });
-  return out;
-}
-
 // layout places the stages in columns of equal depth, keeping the editor's own
-// order within a column. A stage placed by hand stays where it was put.
+// order within a column, and a stage placed by hand where it was put. It is what
+// the canvas shows for the moment before ELK has answered, and nothing more.
 function layout(stages: Stage[], edges: Edge[], rowHeight: number): Map<string, { x: number; y: number }> {
   const depth = depths(stages, edges);
   const taken = new Map<number, number>();
@@ -315,7 +284,11 @@ const StageBox = (props: NodeProps) => {
 
   return (
     <div class={classes()} style={{ "--kind": data().template?.color || KIND_FALLBACK }}>
-      <Handle type="target" position="left" isConnectable={Boolean(data().editable)} />
+      {/* At the port's height rather than the library's middle of the box: a
+          box with a row of outputs is taller, and its middle is not where ELK
+          brings the arrows in. */}
+      <Handle type="target" position="left" style={{ top: `${NODE_HEIGHT * PORT_IN}px` }}
+              isConnectable={Boolean(data().editable)} />
 
       <div class="flowbox__head">
         <Tile tpl={data().template} />
@@ -337,12 +310,12 @@ const StageBox = (props: NodeProps) => {
 
       <Handle
         id={HANDLE_SUCCESS} type="source" position="right"
-        style={{ top: `${NODE_HEIGHT * 0.3}px` }} class="flowbox__out flowbox__out--success"
+        style={{ top: `${NODE_HEIGHT * PORT_SUCCESS}px` }} class="flowbox__out flowbox__out--success"
         isConnectable={Boolean(data().editable)}
       />
       <Handle
         id={HANDLE_FAILURE} type="source" position="right"
-        style={{ top: `${NODE_HEIGHT * 0.7}px` }} class="flowbox__out flowbox__out--failure"
+        style={{ top: `${NODE_HEIGHT * PORT_FAILURE}px` }} class="flowbox__out flowbox__out--failure"
         isConnectable={Boolean(data().editable)}
       />
       <Handle
@@ -401,31 +374,52 @@ const MARK = 9;
 // rest of it, or the outline thins away as the picture is zoomed out.
 const MARK_RING = 2;
 
-// lanePath is a long arrow's own way round: out of the handle, down into a
-// corridor of its own under the graph, across, and up into the target. Written
-// by hand because the corridor is the point — the library puts every arrow
-// between the same two rows at the same height, so two long arrows travelled the
-// picture side by side and read as one thick line.
-export function lanePath(sx: number, sy: number, tx: number, ty: number, lane: number) {
-  const out = 18;
-  const y = Math.max(sy, ty) + LANE_BASE + lane * LANE;
-  const x1 = sx + out;
-  const x2 = tx - out;
-  return {
-    d: `M ${sx},${sy} L ${x1},${sy} L ${x1},${y} L ${x2},${y} L ${x2},${ty} L ${tx},${ty}`,
-    labelX: (x1 + x2) / 2,
-    labelY: y,
-  };
-}
+// NEAR is how far, in flow units, a route's end may stand from the handle it
+// belongs to and still be the route for it. The library finds a handle by
+// measuring the dot it drew, whose centre sits a few pixels off the box's edge
+// where ELK's port is; further than that means the route is the previous
+// layout's — ELK has not answered this change yet — and the arrow follows the
+// boxes with the library's own path for that moment.
+const NEAR = 6;
 
-// LaneEdge draws a short arrow the way the library would and a long one through
-// a lane of its own. It exists at all because the library's edge wrapper
-// forwards a fixed list of props, and nothing that shapes the path is on it.
-const LaneEdge = (props: EdgeProps) => {
+const near = (p: Point, x: number, y: number) => Math.abs(p.x - x) <= NEAR && Math.abs(p.y - y) <= NEAR;
+
+type EdgeData = {
+  route?: Route;
+  back?: boolean;
+  // Who places the caption: ELK (in the route), or the canvas — by the bus a
+  // way back runs along, or at the box an event comes into.
+  captionAt?: "elk" | "back" | "entry";
+  captionWidth?: number;
+  editable?: boolean;
+};
+
+// RoutedEdge draws an arrow along the route ELK laid for it: straight runs,
+// rounded corners, and a dot where arrows join. It exists at all because the
+// library's edge wrapper forwards a fixed list of props, and nothing that
+// shapes the path is on it.
+const RoutedEdge = (props: EdgeProps) => {
+  const data = () => (props.data ?? {}) as EdgeData;
   const path = createMemo(() => {
-    const lane = (props.data as { lane?: number } | undefined)?.lane;
-    if (lane !== undefined) {
-      return lanePath(props.sourceX, props.sourceY, props.targetX, props.targetY, lane);
+    const route = data().route;
+    const pts = route?.points;
+    if (pts && pts.length >= 2
+        && near(pts[0], props.sourceX, props.sourceY) && near(pts[pts.length - 1], props.targetX, props.targetY)) {
+      // Drawn as ELK laid it, ends included. Pulling the ends onto the
+      // measured dots tilted every straight run by the dot's few pixels.
+      const points = pts;
+      const width = data().captionWidth ?? 0;
+      const at = data().captionAt;
+      const label = at === "back" ? backLabelSpot(points, width)
+        : at === "entry" ? entryLabelSpot(points, width)
+        : route!.label;
+      const mid = points[Math.floor(points.length / 2)];
+      return {
+        d: roundedPath(points),
+        labelX: label?.x ?? mid.x,
+        labelY: label?.y ?? mid.y,
+        junctions: route!.junctions,
+      };
     }
     const [d, labelX, labelY] = getSmoothStepPath({
       sourceX: props.sourceX,
@@ -434,8 +428,9 @@ const LaneEdge = (props: EdgeProps) => {
       targetY: props.targetY,
       sourcePosition: props.sourcePosition,
       targetPosition: props.targetPosition,
+      borderRadius: 10,
     });
-    return { d, labelX, labelY };
+    return { d, labelX, labelY, junctions: [] as Point[] };
   });
 
   // A route being read has no way to redraw itself, so the ends are the canvas'
@@ -443,7 +438,7 @@ const LaneEdge = (props: EdgeProps) => {
   // the way a stage's does. Nothing but data goes there — the canvas owns that
   // store and copies it, and a callback in one is a function surviving a proxy
   // by luck.
-  const editable = () => Boolean((props.data as { editable?: boolean } | undefined)?.editable);
+  const editable = () => Boolean(data().editable);
 
   const viewport = useViewport();
   const zoom = () => viewport().zoom || 1;
@@ -460,6 +455,12 @@ const LaneEdge = (props: EdgeProps) => {
         markerEnd={props.markerEnd}
         interactionWidth={props.interactionWidth}
       />
+
+      {/* Where arrows run together into one: the dot says they join here
+          rather than cross. */}
+      <For each={path().junctions}>
+        {(j) => <circle class="flowedge__junction" cx={j.x} cy={j.y} r={3.5} fill={(props.style as { stroke?: string } | undefined)?.stroke} />}
+      </For>
 
       {/* How an arrow is broken or re-pointed: grab its end and drag. Dropping
           it on another stage moves the arrow there; dropping it on nothing at
@@ -486,7 +487,7 @@ const LaneEdge = (props: EdgeProps) => {
   );
 };
 
-const edgeTypes = { lane: LaneEdge };
+const edgeTypes = { routed: RoutedEdge };
 
 // The part of the canvas API this component reaches for. `fitView` is optional
 // because the handle is also read where the canvas measures nothing.
@@ -610,20 +611,132 @@ export function condLabel(edge: Edge): string {
   return `${propName(cond.property ?? "")} = ${propValue(cond.property ?? "", cond.value)}`;
 }
 
+// modelOrder is the stages in the order a card meets them: from the entry,
+// depth first, «passed» before «failed» before everything else, then whatever
+// nothing reaches. ELK reads it as the direction of travel — which arrow of a
+// cycle is the way back — and as the order of stages it has no other reason to
+// order.
+function modelOrder(stages: Stage[], edges: Edge[], entry: string): Stage[] {
+  const byId = new Map(stages.map((s) => [s.id, s]));
+  const rankOn = (on: string) => (on === "success" ? 0 : on === "failure" ? 1 : 2);
+  const out: Stage[] = [];
+  const seen = new Set<string>();
+  const visit = (id: string) => {
+    const stage = byId.get(id);
+    if (!stage || seen.has(id)) return;
+    seen.add(id);
+    out.push(stage);
+    edges
+      .filter((e) => e.from === id)
+      .sort((a, b) => rankOn(a.on) - rankOn(b.on))
+      .forEach((e) => visit(e.to));
+  };
+  visit(entry);
+  for (const s of stages) visit(s.id);
+  return out;
+}
+
 export default function FlowCanvas(props: Props) {
   const editable = () => Boolean(props.onChange);
   const stages = () => props.flow.stages || [];
   const edges = () => props.flow.edges || [];
   const waitTriggers = () => props.triggers.filter((t) => t.source !== "outcome");
 
-  // The transitions that are answers rather than wiring are kept off the lane
-  // bookkeeping: they are drawn as outcomes, out of the outcome sockets.
-  const wiring = createMemo(() => edges().filter((e) => !isOutcomeEdge(e, props.outcomeProperty)));
-  const lanes = createMemo(() => longHaul(stages(), wiring()));
+  // What each arrow is, worked out once for both the layout and the drawing:
+  // its colour, its port, its caption and whether it leads back.
+  const arrows = createMemo(() => {
+    const order = modelOrder(stages(), edges(), props.flow.entryStage);
+    const rank = new Map(order.map((s, i) => [s.id, i]));
+    return edges().map((edge, index) => {
+      // An outcome answered on the card is a success or a failure like any
+      // other, and is drawn as one: green on, red back, out of the same two
+      // sockets. It rides card.changed because that is how a person's answer
+      // reaches the engine.
+      const answered = isOutcomeEdge(edge, props.outcomeProperty);
+      let kind = edgeKind(edge.on);
+      if (answered) kind = sameFold(edge.if?.value, props.outcomePassed) ? "success" : "failure";
+
+      // The caption is what decides where the card goes: the event for a wait,
+      // the condition for a fork — both where the arrow is, not three clicks
+      // away.
+      const parts: string[] = [];
+      const cond = answered ? "" : condLabel(edge);
+
+      // For card.changed the condition is not a guard on the event, it *is*
+      // the event — «set on the card» followed by «Outcome = failed» says
+      // the same thing twice, in a caption that then fits nowhere.
+      if (kind === "event" && !(edge.on === "card.changed" && cond)) {
+        parts.push(label("trigger", edge.on));
+      }
+      if (cond) parts.push(edge.on === "card.changed" ? cond : t("flows.ifCond", { cond }));
+      const caption = parts.join(" · ");
+
+      // Back is back the way a card came: to a stage it meets no later than
+      // this one. The same test ELK breaks cycles by, since both read the
+      // stages in the order modelOrder gives.
+      const back = (rank.get(edge.to) ?? 0) <= (rank.get(edge.from) ?? 0);
+      return { edge, index, id: edgeId(edge, index), kind, caption, back, answered };
+    });
+  });
+
+  // Which arrows carry their caption. An event said once per box it leads
+  // into: «MR merged» from every stage of a review flow runs into one bus, and
+  // a caption on each of them wrote it along the bus half a dozen times.
+  const captioned = createMemo(() => {
+    const said = new Set<string>();
+    const out = new Set<string>();
+    for (const a of arrows()) {
+      if (!a.caption) continue;
+      if (a.kind === "event") {
+        const key = `${a.edge.to}\u0000${a.caption}`;
+        if (said.has(key)) continue;
+        said.add(key);
+      }
+      out.add(a.id);
+    }
+    return out;
+  });
+
+  // The layout, as ELK last answered it. Asked again whenever anything it
+  // depends on changes — the key says what that is — and an answer that
+  // arrives after a newer question was asked is dropped.
+  const [laid, setLaid] = createSignal<Layout | null>(null);
+  const layoutInput = createMemo(() => {
+    const order = modelOrder(stages(), edges(), props.flow.entryStage);
+    const nodes = order.map((s) => ({
+      id: s.id,
+      width: NODE_WIDTH,
+      height: stageHeight(props.writesOf?.(s)),
+    }));
+    const known = new Set(nodes.map((n) => n.id));
+    // Edges are handed over in the order of their source, for the same reason
+    // the stages are: ELK reads the order as the direction of travel.
+    const laidEdges: LayoutEdge[] = arrows()
+      .filter((a) => known.has(a.edge.from) && known.has(a.edge.to))
+      .sort((a, b) => order.findIndex((s) => s.id === a.edge.from) - order.findIndex((s) => s.id === b.edge.from))
+      .map((a) => ({
+        id: a.id,
+        from: a.edge.from,
+        to: a.edge.to,
+        port: a.kind === "event" ? "event" : (a.kind as "success" | "failure"),
+        label: a.caption ? { width: captionWidth(a.caption), height: CAPTION_HEIGHT, text: a.caption } : undefined,
+        back: a.back,
+      }));
+    return { key: JSON.stringify([nodes, laidEdges]), nodes, edges: laidEdges };
+  });
+  createEffect(layoutInput, (input) => {
+    let current = true;
+
+    layoutFlow(input.key, input.nodes, input.edges, NODE_HEIGHT)
+      .then((result) => { if (current) setLaid(result); })
+      .catch((err) => console.error("flow layout", err));
+    return () => { current = false; };
+  });
 
   const graph = createMemo(() => {
     const tallest = stages().reduce((at, s) => Math.max(at, stageHeight(props.writesOf?.(s))), NODE_HEIGHT);
-    const positions = layout(stages(), edges(), tallest);
+    const fallback = layout(stages(), edges(), tallest);
+    const done = laid();
 
     const drawnNodes: FlowNode[] = stages().map((stage) => {
       const writes = props.writesOf?.(stage);
@@ -641,7 +754,7 @@ export default function FlowCanvas(props: Props) {
       return {
         id: stage.id,
         type: "stage",
-        position: positions.get(stage.id) || { x: 0, y: 0 },
+        position: done?.nodes.get(stage.id) ?? fallback.get(stage.id) ?? { x: 0, y: 0 },
 
         // Stated rather than measured: the box is a fixed size and its handles
         // sit at fixed points, so the arrows are drawn on the first paint.
@@ -655,8 +768,8 @@ export default function FlowCanvas(props: Props) {
         height: stageHeight(writes),
         handles: [
           { type: "target", position: Position.Left, x: 0, y: NODE_HEIGHT / 2, width: 1, height: 1 },
-          { type: "source", id: HANDLE_SUCCESS, position: Position.Right, x: NODE_WIDTH, y: NODE_HEIGHT * 0.3, width: 1, height: 1 },
-          { type: "source", id: HANDLE_FAILURE, position: Position.Right, x: NODE_WIDTH, y: NODE_HEIGHT * 0.7, width: 1, height: 1 },
+          { type: "source", id: HANDLE_SUCCESS, position: Position.Right, x: NODE_WIDTH, y: NODE_HEIGHT * PORT_SUCCESS, width: 1, height: 1 },
+          { type: "source", id: HANDLE_FAILURE, position: Position.Right, x: NODE_WIDTH, y: NODE_HEIGHT * PORT_FAILURE, width: 1, height: 1 },
           { type: "source", id: HANDLE_EVENT, position: Position.Bottom, x: NODE_WIDTH / 2, y: NODE_HEIGHT, width: 1, height: 1 },
 
           // The data ports, spread along the bottom of the row of chips. Their x
@@ -680,34 +793,10 @@ export default function FlowCanvas(props: Props) {
     });
 
     const known = new Set(stages().map((s) => s.id));
-    const drawnEdges: FlowEdge[] = edges()
-      .map((edge, index) => ({ edge, index }))
+    const drawnEdges: FlowEdge[] = arrows()
       .filter(({ edge }) => known.has(edge.from) && known.has(edge.to))
-      .map(({ edge, index }) => {
-        // An outcome answered on the card is a success or a failure like any
-        // other, and is drawn as one: green on, red back, out of the same two
-        // sockets. It rides card.changed because that is how a person's answer
-        // reaches the engine.
-        const answered = isOutcomeEdge(edge, props.outcomeProperty);
-        let kind = edgeKind(edge.on);
-        if (answered) kind = sameFold(edge.if?.value, props.outcomePassed) ? "success" : "failure";
+      .map(({ edge, id, kind, caption, back }) => {
         const color = themeColor(EDGE_TOKEN[kind]);
-
-        // The caption is what decides where the card goes: the event for a wait,
-        // the condition for a fork — both where the arrow is, not three clicks
-        // away.
-        const parts: string[] = [];
-        const cond = answered ? "" : condLabel(edge);
-
-        // For card.changed the condition is not a guard on the event, it *is*
-        // the event — «set on the card» followed by «Outcome = failed» says
-        // the same thing twice, in a caption that then fits nowhere.
-        if (kind === "event" && !(edge.on === "card.changed" && cond)) {
-          parts.push(label("trigger", edge.on));
-        }
-        if (cond) parts.push(edge.on === "card.changed" ? cond : t("flows.ifCond", { cond }));
-
-        const id = edgeId(edge, index);
         const chosen = props.selected?.kind === "edge" && props.selected.id === id;
 
         // A fork pulled from a data port arrives without its value. Amber rather
@@ -721,27 +810,32 @@ export default function FlowCanvas(props: Props) {
           source: edge.from,
           target: edge.to,
           sourceHandle: kind === "event" ? HANDLE_EVENT : kind,
-          type: "lane",
-          class: `flowedge flowedge--${kind}${chosen ? " flowedge--selected" : ""}`,
+          type: "routed",
+          class: `flowedge flowedge--${kind}${back ? " flowedge--back" : ""}${chosen ? " flowedge--selected" : ""}`,
           selected: chosen,
-          label: parts.join(" · "),
+          label: captioned().has(id) ? caption : "",
           labelStyle: unanswered ? { color: "var(--warn)", "font-weight": "600" } : undefined,
           style: {
             stroke: color,
-            "stroke-width": chosen ? "3" : "1.5",
-            "stroke-dasharray": kind === "event" ? "4 3" : undefined,
+            "stroke-width": chosen ? "2.75" : "1.75",
+            "stroke-linejoin": "round",
+            "stroke-linecap": "round",
+            "stroke-dasharray": kind === "event" ? "5 4" : undefined,
           },
-          markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color },
-          data: { lane: lanes().get(id), editable: editable() },
+          markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color },
+          data: {
+            route: done?.routes.get(id),
+            back,
+            captionAt: back ? "back" : elkCaptions({ back, port: kind === "event" ? "event" : "success" }) ? "elk" : "entry",
+            captionWidth: caption ? captionWidth(caption) : 0,
+            editable: editable(),
+          } satisfies EdgeData,
         } as FlowEdge;
       });
 
     return { drawnNodes, drawnEdges };
   });
 
-  // Stages can always be dragged apart when arrows overlap: the canvas moves
-  // them inside these stores. Where the flow is being edited the position is
-  // part of it and is saved.
   const [drawnNodes, setDrawnNodes] = createNodeStore([]) as unknown as [FlowNode[], (next: () => FlowNode[]) => void];
   const [drawnEdges, setDrawnEdges] = createEdgeStore([]) as unknown as [FlowEdge[], (next: () => FlowEdge[]) => void];
 
@@ -752,14 +846,6 @@ export default function FlowCanvas(props: Props) {
 
   const onConnect = (connection: Connection) => {
     props.onChange?.(stages(), connectEdge(edges(), connection.source, connection.target, connection.sourceHandle, waitTriggers()));
-  };
-
-  const onNodeDragStop = ({ targetNode }: { targetNode: FlowNode | null }) => {
-    if (!props.onChange || !targetNode) return;
-    props.onChange(
-      stages().map((s) => (s.id === targetNode.id ? { ...s, x: targetNode.position.x, y: targetNode.position.y } : s)),
-      edges(),
-    );
   };
 
   const onNodesDelete = (deleted: FlowNode[]) => {
@@ -823,7 +909,7 @@ export default function FlowCanvas(props: Props) {
   // source is recomputed, equal or not, and only a memo stops an equal answer
   // there. Without it every box added re-fitted the picture.
   const fitKey = createMemo(() =>
-    [props.flow.id, stages().length > 0, paneSize(), Boolean(flowHandle()), props.insetLeft ?? 0].join("|"));
+    [props.flow.id, stages().length > 0 && laid() !== null, paneSize(), Boolean(flowHandle()), props.insetLeft ?? 0].join("|"));
   createEffect(
     fitKey,
     () => {
@@ -899,7 +985,10 @@ export default function FlowCanvas(props: Props) {
         nodes={drawnNodes}
         edges={drawnEdges}
         onConnect={onConnect}
-        onNodeDragStop={onNodeDragStop}
+        // Where a box stands is the layout's, not the hand's: a box dragged
+        // aside went straight back, or — taken as a hint — pulled the row
+        // out of line with positions left over from the old editor.
+        nodesDraggable={false}
         onNodesDelete={onNodesDelete}
         onEdgesDelete={onEdgesDelete}
         onNodeClick={({ node }: { node: FlowNode }) => props.onSelect?.({ kind: "stage", id: node.id })}
