@@ -210,7 +210,7 @@ export const en: Dict = {
   "projects.name": "Name",
   "projects.kind": "Kind",
   "projects.folder": "Folder",
-  "projects.pathPlaceholder": "/path/to/project",
+  "projects.pathPlaceholder": "project folder",
   "projects.pick": "Choose…",
   "projects.folders": "Folders",
   "projects.folderName": "Name",
