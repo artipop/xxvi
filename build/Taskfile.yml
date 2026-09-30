@@ -48,7 +48,8 @@ tasks:
     generates:
       - build/nativeterm/libxxvinative.dylib
     preconditions:
-      - sh: xcrun --find metal >/dev/null 2>&1
+      # --find succeeds on the stub alone; only running it tells a missing toolchain.
+      - sh: xcrun metal --version >/dev/null 2>&1
         msg: "Ghostty's renderer needs Xcode's Metal toolchain: xcodebuild -downloadComponent MetalToolchain"
     cmds:
       # The xcframework holds one slice, named for the machine it was built on.
