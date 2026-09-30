@@ -220,7 +220,7 @@ export const ru: Dict = {
   "projects.name": "Название",
   "projects.kind": "Вид",
   "projects.folder": "Папка",
-  "projects.pathPlaceholder": "/Users/…/sources/проект",
+  "projects.pathPlaceholder": "/путь/к/проекту",
   "projects.pick": "Выбрать…",
   "projects.folders": "Папки",
   "projects.folderName": "Название",
