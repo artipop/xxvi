@@ -142,8 +142,8 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
           </select>
         </label>
       </div>
-      <div class="field">
-        <span>{list(draft.folders).length > 1 ? t("projects.folders") : t("projects.folder")}</span>
+      <div class="folders">
+        <span class="field-label">{list(draft.folders).length > 1 ? t("projects.folders") : t("projects.folder")}</span>
         <For each={list(draft.folders)}>
           {(f, i) => (
             <div class="row">

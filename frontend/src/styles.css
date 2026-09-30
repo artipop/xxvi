@@ -291,7 +291,9 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .fit { width: auto; }
 .grow { flex: 1; min-width: 0; }
 .grow-2 { flex: 2; min-width: 0; }
-.folder-name { width: 9em; flex: none; }
+.folders { display: grid; gap: 6px; margin-bottom: 10px; }
+.folders > .field-label { margin-bottom: -3px; }
+input.folder-name { width: 9em; flex: none; }
 .clickable { cursor: pointer; }
 .row h3 { margin: 0; }
 .row.check { gap: 6px; }
