@@ -431,18 +431,29 @@ func (a *App) ensureHostingFlows() {
 	if err != nil || len(agents) == 0 {
 		return
 	}
+	// Known by its entry stage as well as by name: the name is translated
+	// once the example is in (localizeSeeds), and the English one is then
+	// nowhere to be found.
 	have := map[string]bool{}
 	for _, f := range flows {
 		have[strings.ToLower(f.Name)] = true
+		have["entry:"+f.EntryStage] = true
 	}
+	added := false
 	for _, f := range HostingFlows(agents[0].Name) {
-		if have[strings.ToLower(f.Name)] {
+		if have[strings.ToLower(f.Name)] || have["entry:"+f.EntryStage] {
 			continue
 		}
 		if saved, err := a.Store.SaveFlow(f); err != nil {
 			a.log.Info("hosting flow not added", "flow", f.Name, "err", err)
 		} else {
+			added = true
 			a.Emit(EventFlows, map[string]any{"flowId": saved.ID})
+		}
+	}
+	if added {
+		if tag, err := a.Store.Setting(seedLangSetting, ""); err == nil && tag != "" && a.localizeSeeds(tag) {
+			a.Emit(EventFlows, map[string]any{})
 		}
 	}
 }

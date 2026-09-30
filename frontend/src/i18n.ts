@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createSignal, flush } from "solid-js";
 import type { Msg } from "../bindings/github.com/artipop/xxvi/internal/msg/models";
 import { en } from "./locales/en";
 import { ru } from "./locales/ru";
@@ -103,6 +103,11 @@ export function choose(c: Choice) {
 }
 
 function settle() {
+  // A signal written in Solid 2 is read back at its old value until the
+  // write is flushed: without this, everything below — and every caller that
+  // asks lang() next, like the agents' brief — got the language of the first
+  // frame rather than the one just applied.
+  flush();
   document.documentElement.lang = lang();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ chosen: choice(), system: systemTags() }));
@@ -162,12 +167,15 @@ export function propName(name: string): string {
   return has(key) ? t(key) : name;
 }
 
-/** propValue words a value of the application's own outcome field; any other
- *  value is somebody's and is shown as it is. */
+/** propValue words a value of the application's own outcome field, and of the
+ *  properties the example flows branch on; any other value is somebody's and
+ *  is shown as it is. The stored value stays the identifier either way: an
+ *  agent answers in it and an arrow compares with it. */
 export function propValue(name: string, value: string): string {
   if (name.toLowerCase() === "outcome") return label("outcome", value);
   if (name.toLowerCase() === "review") return label("review", value);
-  return value;
+  const key = `value.${name}.${value}`;
+  return has(key) ? t(key) : value;
 }
 
 // ---- messages ----

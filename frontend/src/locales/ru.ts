@@ -34,6 +34,17 @@ export const ru: Dict = {
   "prop.MR": "MR",
   "prop.Review": "Вердикт ревью",
   "prop.Remarks": "Замечания",
+  // What the example flows' stages leave on a task. Worded for show only: an
+  // agent writes, and an arrow reads, the identifier.
+  "prop.Verdict": "Вердикт",
+  "prop.Preview": "Превью",
+  "prop.Branch": "Ветка",
+  "prop.Page": "Страница",
+  "prop.Decision": "Решение",
+  "value.Verdict.pass": "прошла",
+  "value.Verdict.fail": "не прошла",
+  "value.Decision.Go": "делать",
+  "value.Decision.Cancel": "отменить",
   "cond.suffixComment": ", в ответе агента есть «{text}»",
   "cond.suffixProp": ", «{property}» = «{value}»",
   "cond.comment": "в ответе агента есть «{text}»",

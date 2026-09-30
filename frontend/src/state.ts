@@ -133,6 +133,8 @@ export async function chooseLanguage(c: Choice) {
  *  write in it: «system» is only resolved here. */
 function syncBriefLanguage() {
   API.SetBriefLanguage(langInEnglish(lang())).catch((e) => console.error(e));
+  // The example flows are written in the same language (app/seedtext.go).
+  API.LocalizeSeeds(lang()).catch((e) => console.error(e));
 }
 
 /** guard runs an action and reports a refusal instead of throwing it away. */

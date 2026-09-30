@@ -366,6 +366,15 @@ export function LaunchPlan(cardID: string, screenID: string, prefer: string): $C
 }
 
 /**
+ * LocalizeSeeds puts the example flows into the language the screen resolved
+ * to — the UI's to say, since «system» is only resolved there. Called whenever
+ * that language is applied.
+ */
+export function LocalizeSeeds(tag: string): $CancellablePromise<void> {
+    return $Call.ByID(3221472078, tag);
+}
+
+/**
  * MarkOutcome is a person answering for a stage that runs nothing: passed or
  * failed, put on the card so the flow sees it and moves.
  * 
