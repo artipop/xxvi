@@ -41,6 +41,9 @@ export default function RunPane(props: {
     const started = await guard(() => API.StartLaunch(props.cardId, props.screenId, chosen()));
     setBusy(false);
     if (!started) return;
+    // What went down before is replaced by this run, on the backend as here.
+    const p = plan();
+    if (p?.lost) setPlan({ ...p, lost: undefined });
     setRun(started);
     setRoom({ room: started.room ?? "", app: "" });
   };
@@ -74,7 +77,9 @@ export default function RunPane(props: {
       // window of ours jumping aside because a card moved is not something a
       // person asked for.
       const kind = p.chosen.kind;
-      if (props.current && p.remembered && (kind === "web" || kind === "backend")) void start();
+      // Nor one that went down unseen: its last screen is shown instead, and
+      // starting again is the person's call.
+      if (props.current && p.remembered && !p.lost && (kind === "web" || kind === "backend")) void start();
     })();
 
     // The address is read off the log: a dev server that found its port busy
@@ -130,7 +135,16 @@ export default function RunPane(props: {
         </Show>
       </div>
 
-      <Show when={run()} fallback={<Idle plan={plan()} chosen={chosen()} />}>
+      <Show when={run()} fallback={
+        <Show when={plan()?.lost} fallback={<Idle plan={plan()} chosen={chosen()} />}>
+          <div class="run-body">
+            <div class="meta">{t("run.lost")}</div>
+            <div class="run-log">
+              <TerminalPane open={() => Promise.resolve(plan()!.lost!)} ended={t("terminal.lost")} />
+            </div>
+          </div>
+        </Show>
+      }>
         <Show when={chosen().kind === "desktop" || chosen().kind === "mobile"}>
           <RoomLine screenId={props.screenId} room={room().room} app={room().app} />
         </Show>

@@ -107,6 +107,12 @@ export interface LaunchPlan {
      * Running is the screen's process, when one is up.
      */
     "running"?: LaunchRun | null;
+
+    /**
+     * Lost is the last screen of a run that went down with the application or
+     * its holder. It is shown, and not started again by itself.
+     */
+    "lost"?: TerminalHandle | null;
 }
 
 /**
@@ -171,6 +177,13 @@ export interface NotificationWords {
 export interface TerminalHandle {
     "id": string;
     "url": string;
+
+    /**
+     * Lost is a terminal that went down with the application or its holder:
+     * the socket serves its last screen, and nothing runs until the screen is
+     * started again (RestartTerminal).
+     */
+    "lost"?: boolean;
 }
 
 /**

@@ -382,6 +382,10 @@ func (s *API) Diff(cardID, ref string) (gitdiff.Diff, error) {
 type TerminalHandle struct {
 	ID  string `json:"id"`
 	URL string `json:"url"`
+	// Lost is a terminal that went down with the application or its holder:
+	// the socket serves its last screen, and nothing runs until the screen is
+	// started again (RestartTerminal).
+	Lost bool `json:"lost,omitempty"`
 }
 
 // OpenTerminal starts the shell behind one terminal screen, or hands back the
@@ -391,6 +395,19 @@ type TerminalHandle struct {
 // change, so re-reading the ribbon — which happens on every step the agent
 // takes — must not leave a second shell behind each time.
 func (s *API) OpenTerminal(cardID, screenID, command string) (TerminalHandle, error) {
+	endpoint := s.app.Terminals.Endpoint()
+	if endpoint == "" {
+		return TerminalHandle{}, msg.Err("terminal.disabled")
+	}
+	if s.app.Terminals.Lost(screenID) {
+		return s.lostHandle(screenID), nil
+	}
+	return s.RestartTerminal(cardID, screenID, command)
+}
+
+// RestartTerminal starts the screen's shell afresh over a lost one (Lost on the
+// handle): what the person asked for once they have seen how it ended.
+func (s *API) RestartTerminal(cardID, screenID, command string) (TerminalHandle, error) {
 	endpoint := s.app.Terminals.Endpoint()
 	if endpoint == "" {
 		return TerminalHandle{}, msg.Err("terminal.disabled")

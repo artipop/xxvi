@@ -78,6 +78,10 @@ type Session struct {
 	// process ends must not land after the final one and put an older screen
 	// back.
 	tailMu sync.Mutex
+	// lost says the process went without anybody seeing it end: the holder
+	// died with it, or the application closed and took it along. A screen's
+	// last screen is then kept, to be shown before anything runs there again.
+	lost bool
 	// forgotten closes once the registry has let go of a dead terminal and its
 	// tail, if any, is on disk — what Close waits for.
 	forgotten chan struct{}
@@ -150,6 +154,7 @@ func (m *Manager) Open(cardID, screenID, command string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
+	m.DropLost(screenID)
 	s := newSession(uuid.NewString(), 0, 0, m.log)
 	s.CardID, s.ScreenID, s.Command = cardID, screenID, command
 	if err := m.run(s, ptyhold.KindScreen, shellSpec(dir, command)); err != nil {
@@ -248,7 +253,7 @@ func (m *Manager) register(s *Session) {
 		m.byScreen[s.ScreenID] = s
 	}
 	m.mu.Unlock()
-	if s.keepTail {
+	if s.tailID() != "" {
 		go m.keepSaving(s)
 	}
 	go func() {
@@ -323,6 +328,7 @@ func (m *Manager) recover(lost *ptyhold.Client) {
 	if err != nil {
 		m.log.Warn("the terminal holder is gone; terminals end with the application now", "err", err)
 		for _, s := range mine {
+			s.markLost()
 			s.finish()
 		}
 		return
@@ -340,6 +346,7 @@ func (m *Manager) recover(lost *ptyhold.Client) {
 		info, ok := sizes[s.ID]
 		if !ok {
 			// Started in a holder that has died since: the process went with it.
+			s.markLost()
 			s.finish()
 			continue
 		}
@@ -395,8 +402,17 @@ func (m *Manager) forget(id string, s *Session) {
 	m.mu.Lock()
 	dir := m.keep
 	m.mu.Unlock()
-	if dir != "" && s.keepTail {
-		m.writeTail(dir, id, s, true)
+	if dir != "" {
+		switch {
+		case s.keepTail:
+			m.writeTail(dir, id, s, true)
+		case s.ScreenID != "" && s.wasLost():
+			m.writeTail(dir, s.tailID(), s, true)
+		case s.ScreenID != "":
+			// Seen to end — exited, stopped, closed by a person: there is
+			// nothing to bring back, and the next visit starts afresh.
+			m.dropTail(dir, s.tailID(), s)
+		}
 	}
 
 	m.mu.Lock()
@@ -407,6 +423,45 @@ func (m *Manager) forget(id string, s *Session) {
 		delete(m.byScreen, s.ScreenID)
 	}
 	m.mu.Unlock()
+}
+
+// dropTail removes a tail, in turn with the writes of it.
+func (m *Manager) dropTail(dir, id string, s *Session) {
+	s.tailMu.Lock()
+	defer s.tailMu.Unlock()
+	if err := os.Remove(transcriptPath(dir, id)); err != nil && !os.IsNotExist(err) {
+		m.log.Warn("could not remove the terminal tail", "terminal", id, "err", err)
+	}
+}
+
+// LostID is the id the last screen of a screen's lost terminal is served under
+// (Lost). Not the terminal's own: that one is gone with it, and the screen is
+// what the ribbon knows.
+func LostID(screenID string) string { return "screen:" + screenID }
+
+// Lost reports whether the screen's terminal went down unseen — the holder
+// died, or the application closed without one — and its last screen was kept.
+// Such a screen shows that rather than running its command again by itself: a
+// command is somebody's, and running it again is their call, as it is in
+// zellij's resurrection.
+func (m *Manager) Lost(screenID string) bool {
+	if s := m.OnScreen(screenID); s != nil && s.Alive() {
+		return false
+	}
+	return m.transcript(LostID(screenID)) != nil
+}
+
+// DropLost forgets a screen's lost terminal: what runs there next replaces it.
+func (m *Manager) DropLost(screenID string) {
+	m.mu.Lock()
+	dir := m.keep
+	m.mu.Unlock()
+	if dir == "" {
+		return
+	}
+	if err := os.Remove(transcriptPath(dir, LostID(screenID))); err != nil && !os.IsNotExist(err) {
+		m.log.Warn("could not remove the terminal tail", "screen", screenID, "err", err)
+	}
 }
 
 // keepSaving writes the tail of a running terminal while it draws. The write at
@@ -433,7 +488,7 @@ func (m *Manager) keepSaving(s *Session) {
 			continue
 		}
 		saved = spoke
-		m.writeTail(dir, s.ID, s, false)
+		m.writeTail(dir, s.tailID(), s, false)
 	}
 }
 
@@ -573,6 +628,12 @@ func (m *Manager) Close() {
 	}
 	holder := m.holder
 	m.mu.Unlock()
+	for _, s := range doomed {
+		// Closed because we are, not because anybody asked it to.
+		if s.ScreenID != "" {
+			s.markLost()
+		}
+	}
 	closeAll(doomed)
 	for _, s := range doomed {
 		s.waitBrief()
@@ -911,6 +972,31 @@ func (s *Session) finish() {
 
 // outlivesUs reports a terminal that goes on after the application closes: a
 // screen's, run by a holder.
+// tailID is where the terminal's tail is kept, "" when it is not: a run's under
+// its own id, a screen's under the screen (LostID) — the next shell there has an
+// id of its own.
+func (s *Session) tailID() string {
+	switch {
+	case s.keepTail:
+		return s.ID
+	case s.ScreenID != "":
+		return LostID(s.ScreenID)
+	}
+	return ""
+}
+
+func (s *Session) markLost() {
+	s.mu.Lock()
+	s.lost = true
+	s.mu.Unlock()
+}
+
+func (s *Session) wasLost() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lost
+}
+
 func (s *Session) outlivesUs() bool {
 	_, ok := s.eng.(held)
 	return ok && s.ScreenID != ""

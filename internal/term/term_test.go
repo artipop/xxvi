@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -327,8 +328,8 @@ func TestScreenShellKeepsNoTail(t *testing.T) {
 	case <-time.After(15 * time.Second):
 		t.Fatal("шелл должен был закончиться и уйти из реестра")
 	}
-	if m.transcript(s.ID) != nil {
-		t.Fatal("терминал экрана не оставляет хвоста")
+	if m.transcript(s.ID) != nil || m.Lost("screen-1") {
+		t.Fatal("терминал экрана, закончившийся на глазах, не оставляет хвоста")
 	}
 }
 
@@ -834,5 +835,107 @@ func TestRunningTerminalKeepsItsTailOnDisk(t *testing.T) {
 	}
 	if !s.Alive() {
 		t.Fatal("терминал должен быть ещё жив — хвост записан по ходу, а не в конце")
+	}
+}
+
+// A screen whose terminal went down with the holder keeps its last screen, and
+// its command is not run again until somebody opens it anew — as zellij does
+// on resurrection.
+func TestAScreenLostWithTheHolderKeepsItsLastScreen(t *testing.T) {
+	m := manager(t)
+	m.KeepIn(t.TempDir())
+	s, err := m.Open("card", "screen", "echo было на экране; sleep 30")
+	if err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	for !strings.Contains(string(s.History()), "было на экране") {
+		time.Sleep(20 * time.Millisecond)
+	}
+	proc, err := os.FindProcess(m.client().Pid())
+	if err != nil {
+		t.Fatalf("найти держателя: %v", err)
+	}
+	if err := proc.Kill(); err != nil {
+		t.Fatalf("убить держателя: %v", err)
+	}
+	select {
+	case <-s.forgotten:
+	case <-time.After(10 * time.Second):
+		t.Fatal("терминал умершего держателя должен закончиться")
+	}
+	if !m.Lost("screen") {
+		t.Fatal("экран, потерянный с держателем, должен это помнить")
+	}
+	if !strings.Contains(string(m.transcript(LostID("screen"))), "было на экране") {
+		t.Fatal("сохранённый экран должен нести напечатанное")
+	}
+
+	again, err := m.Open("card", "screen", "echo заново; sleep 30")
+	if err != nil {
+		t.Fatalf("открыть заново: %v", err)
+	}
+	t.Cleanup(again.Close)
+	if m.Lost("screen") {
+		t.Fatal("новый запуск заменяет потерянный экран")
+	}
+}
+
+// Without a holder a screen's shell ends with the application — because the
+// application closed, not because anybody asked — and is kept as lost.
+func TestWithoutAHolderAScreenClosedWithTheApplicationIsLost(t *testing.T) {
+	m := unheld(t)
+	m.KeepIn(t.TempDir())
+	s, err := m.Open("card", "screen", "echo до выхода; sleep 30")
+	if err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	for !strings.Contains(string(s.History()), "до выхода") {
+		time.Sleep(20 * time.Millisecond)
+	}
+	m.Close()
+	if !m.Lost("screen") {
+		t.Fatal("экран, закрытый вместе с приложением, должен остаться потерянным, а не законченным")
+	}
+}
+
+// The lost screen is served through the socket like any finished terminal —
+// under an escaped address, since a screen id carries «|».
+func TestALostScreenIsServedThroughTheSocket(t *testing.T) {
+	m := unheld(t)
+	m.KeepIn(t.TempDir())
+	if err := m.Listen(); err != nil {
+		t.Fatalf("слушать: %v", err)
+	}
+	screen := "42|terminal"
+	s, err := m.Open("card", screen, "echo последний экран; sleep 30")
+	if err != nil {
+		t.Fatalf("открыть терминал: %v", err)
+	}
+	for !strings.Contains(string(s.History()), "последний экран") {
+		time.Sleep(20 * time.Millisecond)
+	}
+	m.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, m.Endpoint()+url.PathEscape(LostID(screen)), nil)
+	if err != nil {
+		t.Fatalf("подключиться к потерянному экрану: %v", err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+	seen, exited := "", false
+	for !exited {
+		kind, data, err := conn.Read(ctx)
+		if err != nil {
+			t.Fatalf("читать: %v (получено %q)", err, seen)
+		}
+		if kind == websocket.MessageBinary {
+			seen += string(data)
+		} else {
+			exited = strings.Contains(string(data), "exit")
+		}
+	}
+	if !strings.Contains(seen, "последний экран") {
+		t.Fatalf("сокет должен отдать последний экран: %q", seen)
 	}
 }

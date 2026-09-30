@@ -494,6 +494,14 @@ export function ResetNativeTerminals(): $CancellablePromise<void> {
 }
 
 /**
+ * RestartTerminal starts the screen's shell afresh over a lost one (Lost on the
+ * handle): what the person asked for once they have seen how it ended.
+ */
+export function RestartTerminal(cardID: string, screenID: string, command: string): $CancellablePromise<$models.TerminalHandle> {
+    return $Call.ByID(4148187250, cardID, screenID, command);
+}
+
+/**
  * RestartToUpdate closes this application and brings back the newer one.
  * Everything a card was in the middle of is in the database; a running agent is
  * not, and is closed the way quitting closes it.

@@ -298,6 +298,9 @@ export const en: Dict = {
   // ---- terminal ----
   "terminal.shellEnded": "the shell has ended",
   "terminal.reconnecting": "reconnecting…",
+  "terminal.lost": "closed along with the application",
+  "terminal.lostHint": "This is the last screen: the terminal closed along with the application. Its command is not started again by itself.",
+  "terminal.restart": "Start again",
 
   // ---- diff ----
   "fileStatus.added": "new",
@@ -481,6 +484,7 @@ export const en: Dict = {
   "run.restartTitle": "Stop and start again with the same command",
   "run.stop": "Stop",
   "run.ended": "the process has exited",
+  "run.lost": "The run closed along with the application — its last screen is below. «Start» begins it again.",
   "run.about.web": "The dev server starts, and the page opens here as soon as it prints its address.",
   "run.about.backend": "The service starts, in Docker if the project has it. Below the log: a request form and buttons for HTTP clients.",
   "run.about.desktop": "The application opens in its own window to the right of XXVI. Close it, and XXVI takes the screen back.",

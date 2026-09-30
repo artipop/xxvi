@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/artipop/xxvi/internal/launch"
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/xxvi/internal/term"
 )
 
 // The run screen (model.ScreenRun): the card's working copy started the way
@@ -71,6 +73,9 @@ type LaunchPlan struct {
 	Docker  bool     `json:"docker"`
 	// Running is the screen's process, when one is up.
 	Running *LaunchRun `json:"running,omitempty"`
+	// Lost is the last screen of a run that went down with the application or
+	// its holder. It is shown, and not started again by itself.
+	Lost *TerminalHandle `json:"lost,omitempty"`
 }
 
 // LaunchRun is a started profile.
@@ -115,6 +120,9 @@ func (s *API) LaunchPlan(cardID, screenID, prefer string) (LaunchPlan, error) {
 				App:      st.app,
 			}
 		}
+	} else if s.app.Terminals.Lost(screenID) {
+		lost := s.lostHandle(screenID)
+		plan.Lost = &lost
 	}
 	return plan, nil
 }
@@ -223,6 +231,13 @@ func (s *API) OpenClient(name string) error { return launch.OpenClient(name) }
 
 func (s *API) handle(id string) TerminalHandle {
 	return TerminalHandle{ID: id, URL: s.app.Terminals.Endpoint() + id}
+}
+
+// lostHandle serves a screen's lost terminal. Escaped: a screen id has «|» in
+// it, which a URL does not carry as it is.
+func (s *API) lostHandle(screenID string) TerminalHandle {
+	id := term.LostID(screenID)
+	return TerminalHandle{ID: id, URL: s.app.Terminals.Endpoint() + url.PathEscape(id), Lost: true}
 }
 
 func roomState(err error) string {

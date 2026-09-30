@@ -841,7 +841,39 @@ function ContinueBar(props: { cardId: string }): JSX.Element {
   );
 }
 
-// Folded to one line: the screen above is the step, and this is what the agent
+// A terminal screen. One that went down with the application or its holder
+// comes back as its last screen with nothing running — its command is somebody's,
+// and running it again is theirs to say — until «start again».
+function ScreenTerminal(props: { cardId: string; screenId: string; command: string }): JSX.Element {
+  const [restarts, setRestarts] = createSignal(0);
+  const [lost, setLost] = createSignal(false);
+  const open = async () => {
+    const handle = restarts() > 0
+      ? await API.RestartTerminal(props.cardId, props.screenId, props.command)
+      : await API.OpenTerminal(props.cardId, props.screenId, props.command);
+    setLost(!!handle.lost);
+    return handle;
+  };
+  return (
+    <>
+      {/* Keyed by the restart: a new shell is a new terminal, not the lost one
+          coming back to life. */}
+      <For each={[restarts()]}>
+        {() => <TerminalPane open={open} ended={lost() ? t("terminal.lost") : undefined} />}
+      </For>
+      <Show when={lost()}>
+        <div class="screen-continue">
+          <div class="row">
+            <span class="meta grow">{t("terminal.lostHint")}</span>
+            <button class="btn primary tiny" onClick={() => setRestarts(restarts() + 1)}>{t("terminal.restart")}</button>
+          </div>
+        </div>
+      </Show>
+    </>
+  );
+}
+
+// Folded to one line: the screen above is the step,// Folded to one line: the screen above is the step, and this is what the agent
 // said about it — read after the work, not instead of it.
 function Report(props: { report: Msg }): JSX.Element {
   const [open, setOpen] = createSignal(false);
@@ -887,9 +919,7 @@ function Body(props: { screen: ScreenView; cardId: string; current: boolean }): 
       </Match>
       <Match when={props.screen.kind === "terminal"}>
         <Loading fallback={<div class="screen-note">{t("ribbon.terminalOpening")}</div>}>
-          <TerminalPane
-            open={() => API.OpenTerminal(props.cardId, props.screen.id, props.screen.ref ?? "")}
-          />
+          <ScreenTerminal cardId={props.cardId} screenId={props.screen.id} command={props.screen.ref ?? ""} />
         </Loading>
       </Match>
     </Switch>
