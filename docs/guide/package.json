@@ -1,0 +1,13 @@
+{
+    "name": "xxvi-guide",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vitepress dev --port 5175 --strictPort",
+        "build": "vitepress build",
+        "preview": "vitepress preview"
+    },
+    "devDependencies": {
+        "vitepress": "^1.6.4"
+    }
+}
