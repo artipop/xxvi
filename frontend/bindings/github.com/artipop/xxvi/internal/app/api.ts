@@ -200,6 +200,13 @@ export function DeleteProject(id: string): $CancellablePromise<void> {
 }
 
 /**
+ * DeleteProxy removes an entry no agent uses.
+ */
+export function DeleteProxy(name: string): $CancellablePromise<void> {
+    return $Call.ByID(2638986944, name);
+}
+
+/**
  * DeleteSource removes a source. The cards it brought stay: they are work, and
  * the source is only where they came from.
  */
@@ -573,6 +580,15 @@ export function SaveFlow(flow: model$0.Flow): $CancellablePromise<model$0.Flow> 
  */
 export function SaveProject(p: model$0.Project): $CancellablePromise<model$0.Project> {
     return $Call.ByID(4242958159, p);
+}
+
+/**
+ * SaveProxy adds or replaces an entry. oldName is the name it was opened
+ * under, empty for a new one, so renaming is an edit. A blank password on an
+ * existing entry means "unchanged".
+ */
+export function SaveProxy(oldName: string, p: model$0.Proxy): $CancellablePromise<model$0.Proxy> {
+    return $Call.ByID(2185562538, oldName, p);
 }
 
 /**

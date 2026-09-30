@@ -20,6 +20,7 @@ export type {
     Match,
     Project,
     PropertyWrite,
+    Proxy,
     Rule,
     Screen,
     Source,

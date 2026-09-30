@@ -1064,6 +1064,10 @@ func (s *API) CheckAgent(name string) (acp.AgentCheck, error) {
 type AgentsView struct {
 	Agents   []model.Agent       `json:"agents"`
 	Adapters []acp.AdapterStatus `json:"adapters"`
+	// Proxies are the network paths an agent can go through. The password is
+	// not sent: the form shows it blank and keeps the stored one when it is
+	// left so.
+	Proxies []model.Proxy `json:"proxies"`
 }
 
 // Agents is the registry with the adapter check beside it, because "is this
@@ -1073,7 +1077,14 @@ func (s *API) Agents() (AgentsView, error) {
 	if err != nil {
 		return AgentsView{}, err
 	}
-	return AgentsView{Agents: list, Adapters: acp.AdapterStatuses()}, nil
+	proxies, err := s.app.Store.Proxies()
+	if err != nil {
+		return AgentsView{}, err
+	}
+	for i := range proxies {
+		proxies[i].Password = ""
+	}
+	return AgentsView{Agents: list, Adapters: acp.AdapterStatuses(), Proxies: proxies}, nil
 }
 
 // SaveAgent adds or replaces a registry entry.
@@ -1084,6 +1095,33 @@ func (s *API) SaveAgent(a model.Agent) (model.Agent, error) {
 	}
 	s.app.Emit(EventAgents, map[string]any{"agent": saved.Name})
 	return saved, nil
+}
+
+// SaveProxy adds or replaces an entry. oldName is the name it was opened
+// under, empty for a new one, so renaming is an edit. A blank password on an
+// existing entry means "unchanged".
+func (s *API) SaveProxy(oldName string, p model.Proxy) (model.Proxy, error) {
+	if p.Password == "" && strings.TrimSpace(oldName) != "" {
+		if prev, err := s.app.Store.Proxy(oldName); err == nil && strings.TrimSpace(prev.Username) == strings.TrimSpace(p.Username) {
+			p.Password = prev.Password
+		}
+	}
+	saved, err := s.app.Store.SaveProxy(oldName, p)
+	if err != nil {
+		return model.Proxy{}, err
+	}
+	s.app.Emit(EventAgents, map[string]any{"proxy": saved.Name})
+	saved.Password = ""
+	return saved, nil
+}
+
+// DeleteProxy removes an entry no agent uses.
+func (s *API) DeleteProxy(name string) error {
+	if err := s.app.Store.DeleteProxy(name); err != nil {
+		return err
+	}
+	s.app.Emit(EventAgents, map[string]any{"proxy": name})
+	return nil
 }
 
 // DeleteAgent removes an entry.

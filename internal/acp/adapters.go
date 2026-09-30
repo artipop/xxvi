@@ -450,10 +450,15 @@ func resolveArgv0(argv []string) []string {
 	return out
 }
 
-// spawnEnv is the environment one agent process gets on top of ours, and what
-// it must not inherit.
+// spawnEnv is the environment one agent process gets on top of ours. The
+// proxy's variables come first and the agent's own Env last, so Env can
+// override or blank any of them — how one agent opts out of an inherited proxy.
+// Appended after ours, they win: a duplicate name resolves to the last one.
 func spawnEnv(a model.Agent) []string {
-	env := make([]string, 0, len(a.Env))
+	var env []string
+	if a.Network != nil {
+		env = a.Network.Env()
+	}
 	for k, v := range a.Env {
 		if k = strings.TrimSpace(k); k != "" {
 			env = append(env, k+"="+v)

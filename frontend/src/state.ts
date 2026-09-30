@@ -19,7 +19,7 @@ export const [flows, setFlows] = createSignal<Flow[]>([]);
 export const [sources, setSources] = createSignal<Source[]>([]);
 // The flow editor's palette: the kinds of node, as rows a person edits.
 export const [templates, setTemplates] = createSignal<StageTemplate[]>([]);
-export const [agents, setAgents] = createSignal<AgentsView>({ agents: [], adapters: [] });
+export const [agents, setAgents] = createSignal<AgentsView>({ agents: [], adapters: [], proxies: [] });
 export const [attention, setAttention] = createSignal<Attention[]>([]);
 export const [projects, setProjects] = createSignal<Project[]>([]);
 

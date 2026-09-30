@@ -32,6 +32,12 @@ export interface Agent {
      * what the stage and the card ask of it.
      */
     "prompt"?: string;
+
+    /**
+     * Proxy names an entry of the proxy registry this agent's traffic goes
+     * through. Empty means the app's own network.
+     */
+    "proxy"?: string;
     "env"?: { [_ in string]?: string } | null;
     "args"?: string[] | null;
 
@@ -498,6 +504,37 @@ export interface Project {
 export interface PropertyWrite {
     "property": string;
     "required"?: boolean;
+}
+
+/**
+ * Proxy is one named network path: where an agent's traffic goes and the trust
+ * material that goes with it. Agents name an entry instead of carrying their
+ * own, so one configuration serves several of them and is changed in one place.
+ */
+export interface Proxy {
+    "name": string;
+
+    /**
+     * http(s)/socks5 → HTTP(S)_PROXY, ALL_PROXY
+     */
+    "url"?: string;
+
+    /**
+     * comma-separated hosts → NO_PROXY
+     */
+    "noProxy"?: string;
+
+    /**
+     * path to the PEM bundle of a TLS-inspecting proxy: the variables below take a file, not its text
+     */
+    "caCert"?: string;
+
+    /**
+     * Username and Password are kept apart from the URL so they are typed raw;
+     * percent-encoding is applied when the URL is composed.
+     */
+    "username"?: string;
+    "password"?: string;
 }
 
 /**

@@ -23,6 +23,13 @@ import * as store$0 from "../store/models.js";
 export interface AgentsView {
     "agents": model$0.Agent[] | null;
     "adapters": acp$0.AdapterStatus[] | null;
+
+    /**
+     * Proxies are the network paths an agent can go through. The password is
+     * not sent: the form shows it blank and keeps the stored one when it is
+     * left so.
+     */
+    "proxies": model$0.Proxy[] | null;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { Agent } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { Agent, Proxy } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 import type { AgentCheck } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
 import { agents, guard, loadAgents, vocabulary } from "../state";
 import { say, t } from "../i18n";
@@ -70,6 +70,7 @@ export default function AgentsView() {
                 <span class="title">{a.name}</span>
                 <span class="tag">{a.kind}</span>
                 <Show when={a.model}><span class="tag">{a.model}</span></Show>
+                <Show when={a.proxy}><span class="tag">{t("proxies.via", { proxy: a.proxy! })}</span></Show>
                 <div class="spacer" />
                 <CheckButton name={a.name} />
                 <button class="btn quiet"
@@ -86,7 +87,111 @@ export default function AgentsView() {
           </Show>
         )}
       </For>
+
+      <ProxiesSection />
     </>
+  );
+}
+
+type EditingProxy = { proxy: Proxy; original: string };
+
+// Named network paths. An agent picks one by name, so a proxy is described
+// once and shared; a rename carries the agents that use it along.
+function ProxiesSection(): JSX.Element {
+  const [editing, setEditing] = createSignal<EditingProxy | null>(null);
+  const blank = (): Proxy => ({ name: "", url: "", noProxy: "", caCert: "", username: "", password: "" } as Proxy);
+  return (
+    <>
+      <div class="list-head">
+        <h2>{t("proxies.title")}</h2>
+        <div class="spacer" />
+        <button class="btn" disabled={Boolean(editing())} onClick={() => setEditing({ proxy: blank(), original: "" })}>
+          {t("proxies.new")}
+        </button>
+      </div>
+      <div class="meta">{t("proxies.note")}</div>
+
+      <Show when={editing() && editing()!.original === ""}>
+        <ProxyForm proxy={editing()!.proxy} original="" onDone={() => setEditing(null)} />
+      </Show>
+
+      <For each={agents().proxies}>
+        {(p) => (
+          <Show when={editing()?.original !== p.name}
+                fallback={<ProxyForm proxy={editing()!.proxy} original={p.name} onDone={() => setEditing(null)} />}>
+            <div class="card">
+              <div class="row wrap">
+                <span class="title">{p.name}</span>
+                <Show when={p.url}><span class="tag mono">{p.url}</span></Show>
+                <Show when={p.username}><span class="tag">{p.username}</span></Show>
+                <Show when={p.caCert}><span class="tag">{t("proxies.hasCA")}</span></Show>
+                <div class="spacer" />
+                <button class="btn quiet"
+                        onClick={() => setEditing({ proxy: JSON.parse(JSON.stringify(p)), original: p.name })}>
+                  {t("common.edit")}
+                </button>
+                <button class="btn quiet" onClick={async () => { await guard(() => API.DeleteProxy(p.name)); await loadAgents(); }}>
+                  {t("common.delete")}
+                </button>
+              </div>
+              <Show when={p.noProxy}><div class="body mono">NO_PROXY={p.noProxy}</div></Show>
+            </div>
+          </Show>
+        )}
+      </For>
+    </>
+  );
+}
+
+function ProxyForm(props: { proxy: Proxy; original: string; onDone: () => void }): JSX.Element {
+  const [p, setP] = createSignal<Proxy>(props.proxy);
+  const patch = (x: Partial<Proxy>) => setP({ ...p(), ...x });
+  const save = async () => {
+    const saved = await guard(() => API.SaveProxy(props.original, p()));
+    if (saved) { await loadAgents(); props.onDone(); }
+  };
+  return (
+    <div class="card">
+      <h3>{t("proxies.proxy")}</h3>
+      <div class="grid2">
+        <label class="field">
+          <span>{t("proxies.name")}</span>
+          <input type="text" value={p().name} onInput={(e) => patch({ name: e.currentTarget.value })} />
+        </label>
+        <label class="field">
+          <span>{t("proxies.url")}</span>
+          <input type="text" placeholder="http://host:3128" value={p().url ?? ""}
+                 onInput={(e) => patch({ url: e.currentTarget.value })} />
+        </label>
+      </div>
+      <div class="grid2">
+        <label class="field">
+          <span>{t("proxies.username")}</span>
+          <input type="text" autocomplete="off" value={p().username ?? ""}
+                 onInput={(e) => patch({ username: e.currentTarget.value })} />
+        </label>
+        <label class="field">
+          <span>{t("proxies.password")}</span>
+          <input type="password" autocomplete="new-password" value={p().password ?? ""}
+                 placeholder={props.original ? t("proxies.passwordKept") : ""}
+                 onInput={(e) => patch({ password: e.currentTarget.value })} />
+        </label>
+      </div>
+      <label class="field">
+        <span>{t("proxies.noProxy")}</span>
+        <input type="text" placeholder="localhost,127.0.0.1,.corp.example" value={p().noProxy ?? ""}
+               onInput={(e) => patch({ noProxy: e.currentTarget.value })} />
+      </label>
+      <label class="field">
+        <span>{t("proxies.caCert")}</span>
+        <input type="text" value={p().caCert ?? ""} onInput={(e) => patch({ caCert: e.currentTarget.value })} />
+      </label>
+      <div class="row actions">
+        <div class="spacer" />
+        <button class="btn quiet" onClick={props.onDone}>{t("common.cancel")}</button>
+        <button class="btn primary" onClick={save}>{t("common.save")}</button>
+      </div>
+    </div>
   );
 }
 
@@ -168,6 +273,14 @@ function AgentForm(props: { agent: Agent; onDone: () => void }) {
           <input type="text" value={a().binPath ?? ""} onInput={(e) => patch({ binPath: e.currentTarget.value })} />
         </label>
       </div>
+
+      <label class="field">
+        <span>{t("proxies.agentProxy")}</span>
+        <select value={a().proxy ?? ""} onChange={(e) => patch({ proxy: e.currentTarget.value })}>
+          <option value="">{t("proxies.none")}</option>
+          <For each={agents().proxies}>{(p) => <option value={p.name}>{p.name}</option>}</For>
+        </select>
+      </label>
 
       <Show when={a().kind === "acp"}>
         <label class="field">

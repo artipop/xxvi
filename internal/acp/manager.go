@@ -377,7 +377,7 @@ func (m *Manager) connect(s *session) (*acpsdk.ClientSideConnection, acpsdk.Sess
 	})
 	if err != nil {
 		cleanup()
-		return nil, "", nil, fmt.Errorf("initialize: %w", err)
+		return nil, "", nil, scrub(s.agent, fmt.Errorf("initialize: %w", err))
 	}
 	caps := init.AgentCapabilities
 	s.revivable = reviveBy(s.agent.Kind, caps) != ""
@@ -397,7 +397,7 @@ func (m *Manager) connect(s *session) (*acpsdk.ClientSideConnection, acpsdk.Sess
 	}
 	if err != nil {
 		cleanup()
-		return nil, "", nil, err
+		return nil, "", nil, scrub(s.agent, err)
 	}
 	// Mode and model are asked for again on a revived conversation too:
 	// claude-agent-acp and codex-acp both open it in their defaults, whatever
@@ -410,6 +410,16 @@ func (m *Manager) connect(s *session) (*acpsdk.ClientSideConnection, acpsdk.Sess
 		m.log.Warn("could not record the ACP session id", "session", s.id, "err", err)
 	}
 	return conn, sess.id, cleanup, nil
+}
+
+// scrub hides the proxy password in an error: a CLI that cannot reach its proxy
+// may echo the URL back, and the text goes on to a comment and the log. An
+// error with a message code is left as it is — it carries no CLI text.
+func scrub(a model.Agent, err error) error {
+	if a.Network == nil || a.Network.Password == "" || err == nil || msg.Of(err).Code != msg.CodeInternal {
+		return err
+	}
+	return errors.New(a.Network.Redact(err.Error()))
 }
 
 // agentSession is what session/new, session/resume and session/load have in

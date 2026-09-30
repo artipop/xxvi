@@ -128,6 +128,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	st.UseSecrets(hosting.Keyring{})
 	a := &App{DataDir: dataDir, Store: st, log: log}
 
 	// A session left running by a previous run is not still working: a row that

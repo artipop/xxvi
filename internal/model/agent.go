@@ -36,6 +36,13 @@ type Agent struct {
 	// what the stage and the card ask of it.
 	Prompt string `json:"prompt,omitempty"`
 
+	// Proxy names an entry of the proxy registry this agent's traffic goes
+	// through. Empty means the app's own network.
+	Proxy string `json:"proxy,omitempty"`
+	// Network is that entry resolved by the store, for spawning. Not sent to
+	// the window: it carries the password.
+	Network *Proxy `json:"-"`
+
 	Env  map[string]string `json:"env,omitempty"`
 	Args []string          `json:"args,omitempty"`
 

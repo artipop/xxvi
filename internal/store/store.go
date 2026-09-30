@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/artipop/xxvi/internal/msg"
@@ -25,6 +26,50 @@ import (
 type Store struct {
 	db *sqlx.DB
 	d  Dialect
+	// secrets holds what must not sit in the database file: the passwords of
+	// proxies. The window's own keychain in the app, memory until one is set.
+	secrets Secrets
+}
+
+// Secrets is where passwords are kept, by key. hosting.Keyring is the system's
+// own and satisfies it.
+type Secrets interface {
+	Token(key string) (string, error)
+	SetToken(key, value string) error
+	DeleteToken(key string) error
+}
+
+// UseSecrets replaces where passwords are kept.
+func (s *Store) UseSecrets(secrets Secrets) { s.secrets = secrets }
+
+// memorySecrets keeps passwords for as long as the process lives: a store that
+// was never given a keychain, which is a test.
+type memorySecrets struct {
+	mu sync.Mutex
+	m  map[string]string
+}
+
+func (s *memorySecrets) Token(k string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.m[k], nil
+}
+
+func (s *memorySecrets) SetToken(k, v string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.m == nil {
+		s.m = map[string]string{}
+	}
+	s.m[k] = v
+	return nil
+}
+
+func (s *memorySecrets) DeleteToken(k string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, k)
+	return nil
 }
 
 // Open opens (creating if needed) the database at path and brings the schema up
@@ -53,7 +98,7 @@ func Open(path string) (*Store, error) {
 			return nil, fmt.Errorf("prepare connection (%s): %w", stmt, err)
 		}
 	}
-	s := &Store{db: db, d: d}
+	s := &Store{db: db, d: d, secrets: &memorySecrets{}}
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
@@ -75,7 +120,7 @@ func OpenMemory() (*Store, error) {
 			return nil, err
 		}
 	}
-	s := &Store{db: db, d: d}
+	s := &Store{db: db, d: d, secrets: &memorySecrets{}}
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
