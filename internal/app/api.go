@@ -218,6 +218,15 @@ func (s *API) MoveTo(cardID, stageID string) (CardView, error) {
 	return s.Card(cardID)
 }
 
+// ReturnToFlow puts a card taken off its flow back on the stage it left, in
+// the conversation it had there.
+func (s *API) ReturnToFlow(cardID string) (CardView, error) {
+	if err := s.app.Engine.Return(cardID); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(cardID)
+}
+
 // RemoveFromFlow takes a card off its flow and back into the inbox.
 func (s *API) RemoveFromFlow(cardID string) (CardView, error) {
 	if err := s.app.Engine.RemoveFromFlow(cardID); err != nil {

@@ -61,6 +61,10 @@ type Runner interface {
 	// Cancel stops whatever is running for a card. A cancelled session produces
 	// no outcome: somebody intervened, so the flow waits for them.
 	Cancel(cardID string, reason msg.Msg)
+	// Leave is Cancel for a card going back to the inbox: a conversation in a
+	// terminal is first asked to describe the task as it stands (Described),
+	// then closed. Returns at once, like Start.
+	Leave(cardID string, reason msg.Msg)
 }
 
 // Emitter pushes events to the UI. Implementations must be safe to call before
@@ -248,12 +252,66 @@ func (e *Engine) RemoveFromFlow(cardID string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	e.cancel(cardID, msg.New("cancel.leftFlow"))
 	if err := e.store.LeaveFlow(cardID, model.StateInbox); err != nil {
 		return err
 	}
+	if e.runner != nil {
+		e.runner.Leave(cardID, msg.New("cancel.leftFlow"))
+	}
 	e.record(cardID, model.EntryMove, msg.New("journal.leftFlow"))
 	e.emitCard(cardID)
+	return nil
+}
+
+// Described is what a runner calls when the agent of a card leaving its flow
+// has said what the task now is (Runner.Leave). It becomes the card's text:
+// the card waits in the inbox for somebody who was not in that conversation.
+func (e *Engine) Described(cardID, text string) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if _, err := e.store.UpdateCard(cardID, store.CardEdit{Body: &text}); err != nil {
+		e.log.Warn("could not write the card's description", "card", cardID, "err", err)
+		return
+	}
+	e.record(cardID, model.EntryMove, msg.New("journal.described"))
+	e.emitCard(cardID)
+}
+
+// Return puts a card taken off its flow back on the stage it left, and the
+// stage's conversation goes on where it stopped: a terminal stage resumes the
+// last one it had (acp's opening). TakeIntoWork would start the flow over from
+// its entry, a stage that has nothing of what was said.
+func (e *Engine) Return(cardID string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	card, err := e.store.Card(cardID)
+	if err != nil {
+		return err
+	}
+	if card.State != model.StateInbox {
+		return msg.Err("card.notInInbox", "card", card.Title)
+	}
+	last, ok, err := e.store.LastFlowEvent(cardID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return msg.Err("card.neverInWork", "card", card.Title)
+	}
+	flow, err := e.store.Flow(last.FlowID)
+	if err != nil {
+		return err
+	}
+	stage, ok := flow.Stage(last.ToStage)
+	if !ok {
+		return msg.Err("stage.notInFlow", "stage", last.ToStage, "flow", flow.Name)
+	}
+	e.enterStage(card, flow, stage, "", msg.New("move.returned"))
 	return nil
 }
 

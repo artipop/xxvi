@@ -495,6 +495,14 @@ export function RestartToUpdate(): $CancellablePromise<void> {
 }
 
 /**
+ * ReturnToFlow puts a card taken off its flow back on the stage it left, in
+ * the conversation it had there.
+ */
+export function ReturnToFlow(cardID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(2475077336, cardID);
+}
+
+/**
  * Ribbon is one card's strip of screens.
  */
 export function Ribbon(cardID: string): $CancellablePromise<engine$0.RibbonView> {

@@ -77,6 +77,8 @@ export const msgEn: Dict = {
   "msg.card.noTitle": "The card has no title",
   "msg.card.notFound": "The card «{card}» was not found",
   "msg.card.alreadyInWork": "The card «{card}» is already in work",
+  "msg.card.notInInbox": "The card «{card}» is not in the inbox",
+  "msg.card.neverInWork": "The card «{card}» has never been in work",
   "msg.card.doneCannotDrop": "The card «{card}» is already done — it cannot be deleted",
   "msg.card.projectLocked": "Work on this card is already under way on the branch `{branch}` — its project cannot change",
   "msg.card.workModeLocked": "Work on this card is already under way on the branch `{branch}` — how it works in the folder cannot change",
@@ -229,6 +231,7 @@ export const msgEn: Dict = {
   // ---- why a card moved ----
   "msg.move.taken": "taken into work",
   "msg.move.byHand": "moved by hand",
+  "msg.move.returned": "returned from the inbox",
   "msg.move.cardChanged": (a) =>
     `«${propName(String(a.property))}» set to «${propValue(String(a.property), String(a.value ?? ""))}» on the card`,
   "msg.move.on": on,
@@ -250,6 +253,7 @@ export const msgEn: Dict = {
 
   // ---- the journal ----
   "msg.journal.leftFlow": "The card was taken off the flow and went back to the inbox.",
+  "msg.journal.described": "The agent described the task — the card's description was replaced.",
   "msg.journal.dropped": "The card was deleted.",
   "msg.journal.stageGone": "Flow «{flow}»: the stage is gone from the route — the card stays where it is.",
   "msg.journal.noEdge": (a) => `Flow «${a.flow}»: the stage «${a.stage}» has no transition on «${on(a)}» — the card stays where it is.`,

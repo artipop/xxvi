@@ -66,6 +66,10 @@ type Step struct {
 	// Hook takes what the CLI says about itself (hook.go). Optional: a CLI
 	// without hooks is watched by its silence instead.
 	Hook func(HookEvent)
+	// Describe takes the card's description, written when the card leaves its
+	// flow for the inbox. Optional. The tool is there from the start rather
+	// than added when it is needed: a CLI reads the list of tools once.
+	Describe func(text string) error
 }
 
 // Server is the loopback listener and the grants open on it.
@@ -230,8 +234,35 @@ func newServer(step Step) *mcp.Server {
 		}
 		return textResult("Step recorded. The card has moved on — there will be no further instructions for it."), nil, nil
 	})
+	if step.Describe != nil {
+		mcp.AddTool(srv, &mcp.Tool{
+			Name:        "describe_card",
+			Description: describeCard,
+		}, func(_ context.Context, _ *mcp.CallToolRequest, in describeInput) (*mcp.CallToolResult, any, error) {
+			text := strings.TrimSpace(in.Description)
+			if text == "" {
+				return errorResult("The description is empty."), nil, nil
+			}
+			if err := step.Describe(text); err != nil {
+				return errorResult("%v", err), nil, nil
+			}
+			return textResult("Description saved. The session is being closed."), nil, nil
+		})
+	}
 	return srv
 }
+
+type describeInput struct {
+	Description string `json:"description" jsonschema:"the task as it stands now, in the language of the conversation"`
+}
+
+// describeCard keeps the tool out of the agent's own initiative: it is the
+// answer to one request the application types into the terminal, and a
+// description written mid-task would overwrite the person's own words.
+const describeCard = "Only when the application asks for it in this conversation: the card is going back to the inbox, " +
+	"and this writes its description — what the task is, what has been done, what is left and what was decided, " +
+	"so that somebody who was not in this conversation can pick it up. It replaces the card's text. " +
+	"Never call it on your own, and never instead of finish_step."
 
 // whenToFinish is said in both places for the same reason as lastCall. Left to
 // judge «done» by feel, an agent closed the step after its first answer —

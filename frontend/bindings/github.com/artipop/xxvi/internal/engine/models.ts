@@ -119,6 +119,12 @@ export interface RibbonView {
      * the segment the card stands in.
      */
     "focusId"?: string;
+
+    /**
+     * Returnable is a card taken off its flow into the inbox, which can go
+     * back to the stage it left (Engine.Return).
+     */
+    "returnable"?: boolean;
 }
 
 /**

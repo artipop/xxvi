@@ -76,6 +76,8 @@ export const msgRu: Dict = {
   "msg.card.noTitle": "У карточки нет заголовка",
   "msg.card.notFound": "Карточка «{card}» не найдена",
   "msg.card.alreadyInWork": "Карточка «{card}» уже в работе",
+  "msg.card.notInInbox": "Карточка «{card}» не во входящих",
+  "msg.card.neverInWork": "Карточка «{card}» ещё не была в работе",
   "msg.card.doneCannotDrop": "Карточка «{card}» уже сделана — удалить её нельзя",
   "msg.card.projectLocked": "Работа по карточке уже идёт в ветке `{branch}` — проект у неё не меняется",
   "msg.card.workModeLocked": "Работа по карточке уже идёт в ветке `{branch}` — способ работы с папкой у неё не меняется",
@@ -228,6 +230,7 @@ export const msgRu: Dict = {
   // ---- why a card moved ----
   "msg.move.taken": "взята в работу",
   "msg.move.byHand": "переведена вручную",
+  "msg.move.returned": "возвращена из входящих",
   "msg.move.cardChanged": (a) =>
     `на карточке выбрано «${propName(String(a.property))}» = «${propValue(String(a.property), String(a.value ?? ""))}»`,
   "msg.move.on": on,
@@ -249,6 +252,7 @@ export const msgRu: Dict = {
 
   // ---- the journal ----
   "msg.journal.leftFlow": "Карточка снята с флоу и вернулась во входящие.",
+  "msg.journal.described": "Агент описал задачу — описание карточки заменено.",
   "msg.journal.dropped": "Карточка удалена.",
   "msg.journal.stageGone": "Флоу «{flow}»: стадия исчезла из маршрута — карточка осталась на месте.",
   "msg.journal.noEdge": (a) => `Флоу «${a.flow}»: у стадии «${a.stage}» нет перехода по событию «${on(a)}» — карточка осталась на месте.`,

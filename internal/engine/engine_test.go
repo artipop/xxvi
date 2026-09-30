@@ -68,6 +68,8 @@ func (r *fakeRunner) Cancel(cardID string, reason msg.Msg) {
 	delete(r.running, cardID)
 }
 
+func (r *fakeRunner) Leave(cardID string, reason msg.Msg) { r.Cancel(cardID, reason) }
+
 // finish ends the card's session the way a real one would: release the place,
 // then report the outcome.
 func (r *fakeRunner) finish(cardID, outcome, agentText string) {
@@ -605,6 +607,57 @@ func TestRemoveFromFlowReturnsTheCardToTheInbox(t *testing.T) {
 	}
 	if got := f.stageOf(t, card.ID); got != "" {
 		t.Fatalf("положение должно быть очищено, получено %q", got)
+	}
+}
+
+// Back from the inbox, the card lands on the stage it left, not on the
+// flow's entry: that stage's conversation is where the work is.
+func TestReturnPutsTheCardBackOnTheStageItLeft(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Т")
+	f.engine.TakeIntoWork(card.ID, f.flow.ID)
+	f.runner.finish(card.ID, model.TriggerSuccess, "")
+	if got := f.stageOf(t, card.ID); got != "review" {
+		t.Fatalf("карточка должна дойти до проверки, стоит на %q", got)
+	}
+	if err := f.engine.RemoveFromFlow(card.ID); err != nil {
+		t.Fatalf("снять с флоу: %v", err)
+	}
+
+	if err := f.engine.Return(card.ID); err != nil {
+		t.Fatalf("вернуть: %v", err)
+	}
+	if f.stateOf(t, card.ID) != model.StateFlow || f.stageOf(t, card.ID) != "review" {
+		t.Fatalf("карточка возвращается туда, где была: %s на %q", f.stateOf(t, card.ID), f.stageOf(t, card.ID))
+	}
+	if err := f.engine.Return(card.ID); err == nil {
+		t.Fatal("карточку в работе возвращать неоткуда")
+	}
+}
+
+func TestReturnRefusesACardNeverInWork(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Т")
+	if err := f.engine.Return(card.ID); err == nil {
+		t.Fatal("карточке без флоу возвращаться некуда")
+	}
+}
+
+// What the agent says the task has become is the card's text from then on.
+func TestDescribedReplacesTheCardText(t *testing.T) {
+	f := setup(t, devFlow())
+	card := f.card(t, "Т")
+	f.engine.Described(card.ID, "  Схема готова, осталось перенести запросы.  ")
+	got, err := f.store.Card(card.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Body != "Схема готова, осталось перенести запросы." {
+		t.Fatalf("описание карточки: %q", got.Body)
+	}
+	f.engine.Described(card.ID, "   ")
+	if got, _ := f.store.Card(card.ID); got.Body == "" {
+		t.Fatal("пустое описание не стирает написанное")
 	}
 }
 

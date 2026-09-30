@@ -73,6 +73,9 @@ type Reporter interface {
 	// Abandoned is a step a person walked out of: the terminal was closed
 	// before it reported. Nothing on the stage can pick it up again.
 	Abandoned(cardID string)
+	// Described is the task as the agent of a card leaving its flow put it
+	// (Manager.Leave).
+	Described(cardID, text string)
 }
 
 // Emitter pushes events to the UI.
@@ -181,6 +184,12 @@ func (m *Manager) Start(job engine.Job) error {
 	}
 
 	m.mu.Lock()
+	// A card put back in work while its last conversation is still writing
+	// its description: two CLIs in one conversation would write over each
+	// other.
+	if old := m.byCard[s.card.ID]; old != nil {
+		old.cancel()
+	}
 	m.active[s.id] = s
 	m.byCard[s.card.ID] = s
 	m.mu.Unlock()
@@ -239,6 +248,25 @@ func (m *Manager) Cancel(cardID string, reason msg.Msg) {
 	}
 	m.log.Info("cancelling session", "session", s.id, "card", cardID, "reason", reason.String())
 	s.cancel()
+}
+
+// Leave stops what is running for a card going back to the inbox. A
+// conversation in a terminal is asked first to describe the task for whoever
+// picks the card up (watchTerminal); anything else has nobody to ask and is
+// cancelled.
+func (m *Manager) Leave(cardID string, reason msg.Msg) {
+	m.mu.Lock()
+	s := m.byCard[cardID]
+	m.mu.Unlock()
+	if s == nil {
+		return
+	}
+	if s.work != model.WorkTerminal || s.currentStatus() != store.StatusRunning {
+		m.Cancel(cardID, reason)
+		return
+	}
+	m.log.Info("card leaving its flow, asking for a description", "session", s.id, "card", cardID)
+	s.leave()
 }
 
 // ---- the session lifecycle ----
@@ -659,6 +687,8 @@ type session struct {
 	// conversation is the vendor's id of the conversation a terminal run is
 	// holding, as last recorded.
 	conversation string
+	// leaving is closed when the card leaves its flow (Manager.Leave).
+	leaving chan struct{}
 
 	seq atomic.Int64
 }
@@ -729,6 +759,37 @@ func (s *session) wasAbandoned() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.abandoned
+}
+
+func (s *session) leaveSignal() <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.leaving == nil {
+		s.leaving = make(chan struct{})
+	}
+	return s.leaving
+}
+
+func (s *session) leave() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.leaving == nil {
+		s.leaving = make(chan struct{})
+	}
+	select {
+	case <-s.leaving:
+	default:
+		close(s.leaving)
+	}
+}
+
+func (s *session) isLeaving() bool {
+	select {
+	case <-s.leaveSignal():
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *session) wasCancelled() bool {

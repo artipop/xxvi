@@ -403,7 +403,7 @@ export default function Ribbon(): JSX.Element {
           {/* A finished job visited for its results: nothing on it moves any
               more, and the bar says so rather than leaving a stage name off. */}
           <Show when={current() && current()!.id === closedRibbon()}>
-            <span class="ribbon-stage"> · {t("ribbon.closed")}</span>
+            <span class="ribbon-stage"> · {current()!.returnable ? t("ribbon.inInbox") : t("ribbon.closed")}</span>
           </Show>
         </span>
         <div class="spacer" />
@@ -418,6 +418,12 @@ export default function Ribbon(): JSX.Element {
             closed={current()!.id === closedRibbon()}
             onJournal={() => setJournal(!journal())}
           />
+        </Show>
+        <Show when={current()?.returnable}>
+          <button class="btn primary tiny" title={t("ribbon.returnHint")}
+                  onClick={() => void guard(() => API.ReturnToFlow(current()!.cardId)).then(() => loadRibbons())}>
+            {t("ribbon.return")}
+          </button>
         </Show>
         <Show when={behind()}>
           <button

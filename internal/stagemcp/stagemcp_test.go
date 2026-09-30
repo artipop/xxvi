@@ -16,6 +16,11 @@ import (
 // tool, the way a vendor CLI handed the config file would.
 func call(t *testing.T, s *Server, token string, args map[string]any) (*mcp.CallToolResult, error) {
 	t.Helper()
+	return callTool(t, s, token, "finish_step", args)
+}
+
+func callTool(t *testing.T, s *Server, token, tool string, args map[string]any) (*mcp.CallToolResult, error) {
+	t.Helper()
 	transport := &mcp.StreamableClientTransport{
 		Endpoint:   s.URL(),
 		HTTPClient: &http.Client{Transport: bearer{token: token}},
@@ -26,7 +31,7 @@ func call(t *testing.T, s *Server, token string, args map[string]any) (*mcp.Call
 		return nil, err
 	}
 	defer sess.Close()
-	return sess.CallTool(context.Background(), &mcp.CallToolParams{Name: "finish_step", Arguments: args})
+	return sess.CallTool(context.Background(), &mcp.CallToolParams{Name: tool, Arguments: args})
 }
 
 type bearer struct{ token string }
@@ -208,4 +213,35 @@ func content(res *mcp.CallToolResult) string {
 		}
 	}
 	return b.String()
+}
+
+// A card leaving its flow is described by the conversation that worked it, and
+// the words reach the step as they were written.
+func TestDescriptionReachesItsStep(t *testing.T) {
+	s := serve(t)
+	got := make(chan string, 1)
+	token := s.Grant(Step{
+		Report:   func(Report) error { return nil },
+		Describe: func(text string) error { got <- text; return nil },
+	})
+	res, err := callTool(t, s, token, "describe_card", map[string]any{"description": "  Переезд на ORM: схема готова, миграции — нет.  "})
+	if err != nil {
+		t.Fatalf("вызвать инструмент: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("вызов не должен быть отказом: %+v", res.Content)
+	}
+	if text := <-got; text != "Переезд на ORM: схема готова, миграции — нет." {
+		t.Fatalf("описание доехало не тем: %q", text)
+	}
+}
+
+// A step that takes no description has no such tool to call.
+func TestNoDescriptionToolWithoutTaker(t *testing.T) {
+	s := serve(t)
+	token := s.Grant(Step{Report: func(Report) error { return nil }})
+	res, err := callTool(t, s, token, "describe_card", map[string]any{"description": "что-то"})
+	if err == nil && !res.IsError {
+		t.Fatal("без Describe инструмента быть не должно")
+	}
 }

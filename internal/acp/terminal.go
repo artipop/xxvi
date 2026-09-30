@@ -144,6 +144,7 @@ func (m *Manager) runTerminal(s *session) {
 	// Buffered generously and never blocked on: a hook holds the CLI's turn
 	// until it is answered, and the watcher is the only reader.
 	hooked := make(chan stagemcp.HookEvent, 64)
+	described := make(chan string, 1)
 	token := tools.Grant(stagemcp.Step{
 		CardTitle: s.card.Title,
 		StageName: s.stage.Name,
@@ -159,6 +160,17 @@ func (m *Manager) runTerminal(s *session) {
 				return nil
 			default:
 				return errors.New("this step is already finished")
+			}
+		},
+		Describe: func(text string) error {
+			if !s.isLeaving() {
+				return errors.New("nobody asked for a description: the card is still in work")
+			}
+			select {
+			case described <- text:
+				return nil
+			default:
+				return errors.New("the description is already saved")
 			}
 		},
 		Hook: func(ev stagemcp.HookEvent) {
@@ -224,7 +236,7 @@ func (m *Manager) runTerminal(s *session) {
 		go deliverPrompt(m, s, sess)
 	}
 
-	report, err := m.watchTerminal(ctx, s, sess, reported, hooked)
+	report, err := m.watchTerminal(ctx, s, sess, reported, hooked, described)
 
 	// An id we chose is only a conversation once the CLI has kept one under
 	// it. Its hooks usually say so; when they never spoke, a CLI that stayed
@@ -292,7 +304,7 @@ func (m *Manager) runTerminal(s *session) {
 // nothing, as its silence does.
 func (m *Manager) watchTerminal(
 	ctx context.Context, s *session, sess *term.Session,
-	reported <-chan stagemcp.Report, hooked <-chan stagemcp.HookEvent,
+	reported <-chan stagemcp.Report, hooked <-chan stagemcp.HookEvent, described <-chan string,
 ) (stagemcp.Report, error) {
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
@@ -310,11 +322,31 @@ func (m *Manager) watchTerminal(
 		}
 	}
 	defer wait("")
+	leave := s.leaveSignal()
+	var leaveBy <-chan time.Time
 
 	for {
 		select {
 		case report := <-reported:
 			return report, nil
+
+		case <-leave:
+			// The card went back to the inbox. The conversation is the one
+			// place that knows what the task has become, so it is asked to
+			// say so before it is closed — and closed anyway if it does not.
+			leave = nil
+			leaveBy = time.After(leaveWait)
+			go askToDescribe(m, s, sess, state == cliAsking)
+
+		case text := <-described:
+			if m.to != nil {
+				m.to.Described(s.card.ID, text)
+			}
+			s.cancel()
+
+		case <-leaveBy:
+			m.log.Info("no description came, closing the terminal", "session", s.id)
+			s.cancel()
 
 		case <-sess.Done():
 			// A CLI that closed without reporting: it never started, or
@@ -622,6 +654,34 @@ func deliverPrompt(m *Manager, s *session, sess *term.Session) {
 	}
 	if err := sess.Write([]byte("\x1b[200~" + s.prompt + "\x1b[201~\r")); err != nil {
 		m.log.Warn("could not type the brief into the terminal", "session", s.id, "err", err)
+	}
+}
+
+// leaveWait is how long a conversation is given to describe its card. A turn
+// under way finishes first and the request waits behind it.
+const leaveWait = 3 * time.Minute
+
+const leaveRequest = "The person has taken this card off its flow and put it back in the inbox. " +
+	"Call describe_card once with a description of the task as it stands, drawn from this conversation: " +
+	"what it is about, what has been done, what is left and what was decided — for somebody who was not here. " +
+	"Write it in the language of this conversation. Do nothing else: the session is closed right after."
+
+// askToDescribe types the request into the terminal. A CLI asking for
+// permission would take the Enter after it as the answer, so the question is
+// dismissed first.
+func askToDescribe(m *Manager, s *session, sess *term.Session, asking bool) {
+	if asking {
+		if err := sess.Write([]byte("\x1b")); err != nil {
+			return
+		}
+		select {
+		case <-sess.Done():
+			return
+		case <-time.After(time.Second):
+		}
+	}
+	if err := sess.Write([]byte("\x1b[200~" + leaveRequest + "\x1b[201~\r")); err != nil {
+		m.log.Warn("could not ask the terminal for a description", "session", s.id, "err", err)
 	}
 }
 

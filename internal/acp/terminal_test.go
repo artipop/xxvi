@@ -446,3 +446,23 @@ func TestTheTrustQuestionIsSeenOnScreen(t *testing.T) {
 		t.Error("обычный экран — не вопрос о доверии")
 	}
 }
+
+// Leaving is said once and heard by whoever asks later: the watcher may not
+// be in its loop yet when the card goes, and a second move to the inbox must
+// not panic on a closed channel.
+func TestLeavingIsHeardOnceAndLate(t *testing.T) {
+	s := &session{id: "run"}
+	if s.isLeaving() {
+		t.Fatal("сессия не уходит, пока её не попросили")
+	}
+	s.leave()
+	s.leave()
+	select {
+	case <-s.leaveSignal():
+	default:
+		t.Fatal("уход должен быть слышен и после того, как о нём сказали")
+	}
+	if !s.isLeaving() {
+		t.Fatal("сессия уходит")
+	}
+}

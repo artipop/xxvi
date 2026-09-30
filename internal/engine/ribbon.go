@@ -115,6 +115,9 @@ type RibbonView struct {
 	// FocusID is where the ribbon flies when a step ends: the first screen of
 	// the segment the card stands in.
 	FocusID string `json:"focusId,omitempty"`
+	// Returnable is a card taken off its flow into the inbox, which can go
+	// back to the stage it left (Engine.Return).
+	Returnable bool `json:"returnable,omitempty"`
 }
 
 // Ribbons is every card in work, whole, in the order the work screen shows
@@ -176,6 +179,7 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 		return RibbonView{}, err
 	}
 	view.FlowID, view.FlowName = flow.ID, flow.Name
+	view.Returnable = card.State == model.StateInbox
 
 	state, onFlow, err := e.store.FlowState(cardID)
 	if err != nil {
