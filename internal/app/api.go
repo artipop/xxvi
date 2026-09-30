@@ -510,29 +510,6 @@ func (s *API) FlowOverview(flowID string) (engine.FlowOverview, error) {
 	return s.app.Engine.Overview(flowID)
 }
 
-// FlowCards lists the cards travelling a flow, with the stage each stands on.
-func (s *API) FlowCards(flowID string) ([]StageCard, error) {
-	cards, stageOf, err := s.app.Store.CardsOnFlow(flowID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]StageCard, 0, len(cards))
-	for _, c := range cards {
-		out = append(out, StageCard{
-			Card: c, StageID: stageOf[c.ID],
-			Asking: s.app.Agents.WaitingFor(c.ID),
-		})
-	}
-	return out, nil
-}
-
-// StageCard is a card as the flow view draws it.
-type StageCard struct {
-	Card    model.Card `json:"card"`
-	StageID string     `json:"stageId"`
-	Asking  bool       `json:"asking,omitempty"`
-}
-
 // Vocabulary is the closed sets the editor offers. Sent from here so the UI can
 // never offer a trigger or an action the engine does not implement. Only the
 // members are sent: what each is called is the UI's to say.
@@ -1049,6 +1026,32 @@ func (s *API) DeleteAgent(name string) error {
 	return nil
 }
 
+// ---- stage templates ----
+
+// StageTemplates is the flow editor's palette (model.StageTemplate).
+func (s *API) StageTemplates() ([]model.StageTemplate, error) { return s.app.Store.StageTemplates() }
+
+// SaveStageTemplate adds a template or edits one. The stages already made from
+// it keep what they were given: a template is where a node starts, not a
+// setting it goes on following.
+func (s *API) SaveStageTemplate(t model.StageTemplate) (model.StageTemplate, error) {
+	saved, err := s.app.Store.SaveStageTemplate(t)
+	if err != nil {
+		return model.StageTemplate{}, err
+	}
+	s.app.Emit(EventTemplates, map[string]any{"template": saved.ID})
+	return saved, nil
+}
+
+// DeleteStageTemplate removes a template from the palette.
+func (s *API) DeleteStageTemplate(id string) error {
+	if err := s.app.Store.DeleteStageTemplate(id); err != nil {
+		return err
+	}
+	s.app.Emit(EventTemplates, map[string]any{"template": id})
+	return nil
+}
+
 // ---- what is waiting for a person ----
 
 // Attention is everything waiting for a person, oldest first: an agent's
@@ -1098,4 +1101,6 @@ const (
 	EventSources  = "sources"
 	EventAgents   = "agents"
 	EventProjects = "projects"
+	// EventTemplates is the flow editor's palette changing.
+	EventTemplates = "templates"
 )

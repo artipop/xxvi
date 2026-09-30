@@ -134,10 +134,10 @@ func (s *Store) SaveFlow(f model.Flow) (model.Flow, error) {
 		}
 		for i, st := range f.Stages {
 			if _, err := tx.Exec(`
-				INSERT INTO stage (id, flow_id, ord, name, action, work, prompt, max_running, final, x, y, writes_json, reads_json, screens_json)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				INSERT INTO stage (id, flow_id, ord, name, action, work, prompt, max_running, final, x, y, writes_json, reads_json, screens_json, template)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				st.ID, f.ID, i, st.Name, st.Action, st.Work, st.Prompt, st.MaxRunning, st.Final, st.X, st.Y,
-				encodeJSON(st.Writes), encodeJSON(st.Reads), encodeJSON(st.Screens)); err != nil {
+				encodeJSON(st.Writes), encodeJSON(st.Reads), encodeJSON(st.Screens), st.Template); err != nil {
 				return err
 			}
 			for j, name := range st.Crew {
@@ -250,6 +250,7 @@ type stageRow struct {
 	WritesJSON  string  `db:"writes_json"`
 	ReadsJSON   string  `db:"reads_json"`
 	ScreensJSON string  `db:"screens_json"`
+	Template    string  `db:"template"`
 }
 
 type edgeRow struct {
@@ -281,6 +282,7 @@ func (s *Store) loadGraph(r flowRow) (model.Flow, error) {
 		stage := model.Stage{
 			ID: st.ID, Name: st.Name, Action: st.Action, Work: st.Work, Prompt: st.Prompt,
 			Crew: crews[st.ID], MaxRunning: st.MaxRunning, Final: st.Final, X: st.X, Y: st.Y,
+			Template: st.Template,
 		}
 		decodeJSON(st.WritesJSON, &stage.Writes)
 		decodeJSON(st.ReadsJSON, &stage.Reads)

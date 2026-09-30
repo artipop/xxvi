@@ -275,6 +275,14 @@ type Stage struct {
 	// hand-written flow that reuses an id is refused by name.
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	// Template is the stage template the node was made from (StageTemplate),
+	// which is what the canvas draws it as: its icon, its colour, its name for
+	// the kind of thing this is. The engine does not read it — what a stage
+	// does is still its own action and screens, copied from the template when
+	// it was picked — so a template edited or deleted later changes how the box
+	// looks and nothing about how the card moves. Empty is read as
+	// BuiltinTemplateOf and settled on save.
+	Template string `json:"template,omitempty"`
 
 	Action string `json:"action"`
 	// Work says where an agent stage runs: in the card's terminal, where a

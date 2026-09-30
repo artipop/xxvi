@@ -286,30 +286,53 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 /*
  * Enough for the canvas to be legible in this application's own vocabulary, and
  * no more: the boxes, the sockets, the output chips and the arrow's controls.
- * Solid Flow pans and zooms the layer itself, so the frame is a fixed height
- * with nothing scrolling inside it.
+ * Solid Flow pans and zooms the layer itself, so the frame fills whatever holds
+ * it with nothing scrolling inside it.
  */
 
 .canvas {
-  position: relative; height: 560px; overflow: hidden;
-  background: var(--panel);
-  border: 1px solid var(--line); border-radius: var(--radius);
+  position: relative; height: 100%; overflow: hidden;
+  background: var(--bg);
 }
 
+/* A node is its template's tile, its own name, and one line of what exactly it
+ * runs or opens. The accent is the template's colour, carried in --kind. */
 .flowbox {
-  position: relative; width: 190px; box-sizing: border-box;
+  position: relative; width: 232px; min-height: 68px; box-sizing: border-box;
   background: var(--panel-2); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 8px 10px; user-select: none;
+  border-radius: 10px; padding: 10px 12px; user-select: none;
+  box-shadow: inset 3px 0 0 var(--kind, var(--line));
 }
-.flowbox--selected { border-color: var(--accent); }
-.flowbox--agent { box-shadow: inset 3px 0 0 var(--accent); }
-.flowbox--publish, .flowbox--verdict { box-shadow: inset 3px 0 0 var(--ansi-blue); }
+.flowbox--selected { border-color: var(--kind, var(--accent)); box-shadow: inset 3px 0 0 var(--kind), 0 0 0 1px var(--kind); }
 .flowbox--final { border-style: dashed; }
-.flowbox__name { font-weight: 600; font-size: 13px; }
+.flowbox__head { display: flex; align-items: center; gap: 10px; }
+.flowbox__text { min-width: 0; flex: 1; }
+.flowbox__name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .flowbox__entry { color: var(--ok); }
-.flowbox__action { font-size: 11px; color: var(--faint); margin-top: 2px; }
-.flowbox__crew { color: var(--dim); }
-.flowbox__count { position: absolute; top: 6px; right: 8px; font-size: 11px; color: var(--dim); }
+.flowbox__action {
+  font-size: 11px; color: var(--faint); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.flowbox__kind { color: var(--kind, var(--dim)); }
+.flowbox__detail { font-family: var(--mono); font-size: 10.5px; }
+
+/* The template's picture: an SVG file drawn as a mask, so one set of icons
+ * takes every template's colour. */
+.node-icon {
+  display: block; width: 20px; height: 20px; flex: none;
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+.kind-tile {
+  display: inline-grid; place-items: center; flex: none;
+  width: 36px; height: 36px; border-radius: 9px;
+  color: var(--kind);
+  background: color-mix(in srgb, var(--kind) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--kind) 30%, transparent);
+}
+.kind-tile--big { width: 46px; height: 46px; border-radius: 11px; }
+.kind-tile--big .node-icon { width: 26px; height: 26px; }
 
 /* What the stage leaves on the card. A chip is also the port a fork is pulled
  * from, so it has to look like something you can grab. */
@@ -324,18 +347,20 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 }
 .flowbox__write--branchable { color: var(--text); border-color: var(--accent); }
 
-.flowbox__out { width: 8px; height: 8px; border: none; }
-.flowbox__out--success { background: #3db887; }
-.flowbox__out--failure { background: #d24b4e; }
-.flowbox__out--event { background: #8b8d94; }
-.flowbox__out--write { background: var(--accent); }
+/* Qualified by the box: the library's stylesheet comes with the canvas' lazy
+ * chunk, after this one, and would otherwise paint every socket its own. */
+.flowbox .flowbox__out { width: 8px; height: 8px; border: none; }
+.flowbox .flowbox__out--success { background: #3db887; }
+.flowbox .flowbox__out--failure { background: #d24b4e; }
+.flowbox .flowbox__out--event { background: #8b8d94; }
+.flowbox .flowbox__out--write { background: var(--accent); }
 
 /* The caption of an awaited event. It is an HTML box over the canvas rather
  * than SVG text, so it is painted, not filled — and the paint is on our own
  * span rather than on the library's wrapper, because an arrow's ends are
  * wrapped in that same class: a background there put a panel-coloured square
  * over the stage the end sits on. */
-.solid-flow__edge-label { background: transparent; font-size: 10px; }
+.canvas .solid-flow__edge-label { background: transparent; padding: 0; font-size: 10px; }
 .flowedge__label {
   color: var(--faint); background: var(--panel);
   padding: 1px 4px; border-radius: 3px;
@@ -379,6 +404,9 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
    * The lift is an edge, the same one every other surface here is given. */
   --xy-controls-box-shadow: 0 0 0 1px var(--line);
 }
+
+/* The zoom plate moves out from under the palette when it is open. */
+.canvas .solid-flow__panel.left { left: var(--inset-left, 0px); }
 
 .solid-flow__controls {
   border-radius: var(--radius);
@@ -892,10 +920,190 @@ input[type="checkbox"].switch:checked::after { left: 14px; background: var(--bg)
 
 /* ---- flow editor layout ---- */
 
-.flow-editor { display: flex; align-items: flex-start; gap: 14px; }
-.flow-editor__canvas { flex: 1; min-width: 0; }
-.flow-editor__side { width: 340px; flex: none; }
-.list-item { padding: 4px 0; cursor: pointer; }
+/* The whole window but the sidebar, like the ribbon: a bar the window is held
+ * by, a line of what this flow is called, and the canvas under both. The
+ * palette and the inspector float over the canvas rather than beside it, so
+ * the canvas keeps the width. */
+.flowpage { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+.flowpage__head { flex: none; border-bottom: 1px solid var(--line); background: var(--panel); }
+.flowpage__flows {
+  height: 44px; display: flex; align-items: center; gap: 4px;
+  padding: 0 14px 0 84px; overflow-x: auto; scrollbar-width: none;
+  --wails-draggable: drag;
+}
+.flowtab {
+  --wails-draggable: no-drag;
+  flex: none; border: 1px solid transparent; background: none; color: var(--dim);
+  border-radius: 999px; padding: 4px 12px; font-size: 12.5px; cursor: pointer; white-space: nowrap;
+}
+.flowtab:hover { color: var(--text); background: var(--panel-2); }
+.flowtab.on { color: var(--text); background: var(--panel-2); border-color: var(--line); }
+.flowtab--new { color: var(--accent); }
+
+.flowpage__meta { display: flex; align-items: center; gap: 10px; padding: 0 14px 10px 14px; }
+.flowpage__meta input[type="text"] { background: transparent; border-color: transparent; }
+.flowpage__meta input[type="text"]:hover { border-color: var(--line); }
+.flowpage__meta input[type="text"]:focus { background: var(--bg); }
+.flowpage__name { flex: 0 1 320px; font-size: 16px; font-weight: 600; }
+.flowpage__desc { flex: 1 1 360px; color: var(--dim); }
+.flowpage__meta .btn, .flowpage__meta .meta { white-space: nowrap; }
+
+.flowpage__body { position: relative; flex: 1; min-height: 0; }
+
+/* Floating panels share one surface: raised off the canvas by an edge and a
+ * shadow, since a panel the colour of what it floats over reads as drawing. */
+.palette, .flowpage__inspector, .flowpage__paletteOpen {
+  position: absolute; z-index: 4;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+}
+.flowpage__paletteOpen { top: 14px; left: 14px; padding: 7px 14px; border-radius: 999px; }
+
+.palette {
+  top: 14px; left: 14px; bottom: 14px; width: 292px;
+  display: flex; flex-direction: column; padding: 12px;
+}
+.palette__head { display: flex; align-items: center; margin-bottom: 10px; }
+.palette__fold { padding: 2px 9px; font-size: 16px; line-height: 1; }
+.palette__grid {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-content: start;
+  margin: 0 -4px; padding: 0 4px 4px;
+}
+.palette__help { margin-top: 10px; font-size: 12px; color: var(--faint); }
+.palette__help summary { cursor: pointer; color: var(--dim); }
+.palette__help p { margin: 6px 0 0; line-height: 1.45; }
+
+/* A template as a card: big enough to be picked by its picture, dragged by any
+ * of it. The pencil turns up on hover, since editing is the rarer thing. */
+.kind-card {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 11px 10px 10px; min-height: 104px; box-sizing: border-box;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  color: var(--text); text-align: left; cursor: grab; font: inherit;
+}
+.kind-card:hover { border-color: color-mix(in srgb, var(--kind, var(--accent)) 55%, var(--line)); }
+.kind-card:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.kind-card:active { cursor: grabbing; }
+.kind-card__name { font-weight: 600; font-size: 12.5px; line-height: 1.2; }
+.kind-card__note {
+  flex: none; font-size: 11px; color: var(--faint); line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.kind-card__edit {
+  position: absolute; top: 6px; right: 6px;
+  width: 24px; height: 24px; border-radius: 6px; border: 0;
+  background: none; color: var(--faint); cursor: pointer; opacity: 0;
+}
+.kind-card:hover .kind-card__edit, .kind-card__edit:focus-visible { opacity: 1; }
+.kind-card__edit:hover { color: var(--text); background: var(--panel); }
+.kind-card--new {
+  cursor: pointer; justify-content: center; align-items: center; text-align: center;
+  background: none; border-style: dashed; color: var(--dim);
+}
+.kind-card--new:hover { color: var(--text); border-color: var(--accent); }
+.kind-card__plus { font-size: 22px; line-height: 1; color: var(--accent); }
+
+.flowpage__inspector {
+  top: 14px; right: 14px; bottom: 14px; width: 380px;
+  overflow-y: auto; overscroll-behavior: contain;
+}
+.inspector { padding: 14px 16px 16px; }
+.inspector__head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.inspector__title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+input[type="text"].inspector__name {
+  font-size: 15px; font-weight: 600; padding: 3px 6px; margin-left: -7px;
+  background: transparent; border-color: transparent;
+}
+input[type="text"].inspector__name:hover { border-color: var(--line); }
+input[type="text"].inspector__name:focus { background: var(--bg); }
+.inspector__title .meta { padding-left: 0; }
+.inspector__close { align-self: flex-start; font-size: 18px; line-height: 1; padding: 2px 8px; }
+.inspector__note { margin: 10px 0 14px; font-size: 12px; line-height: 1.45; color: var(--dim); }
+.inspector__foot { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); gap: 6px; }
+.inspector__foot .btn { white-space: nowrap; }
+.inspector .field { margin-bottom: 14px; }
+.inspector textarea { min-height: 90px; }
+
+/* Which template a stage is, switched in place: the icons in their colours,
+ * the chosen one on its tile. */
+.kind-strip { display: flex; flex-wrap: wrap; gap: 2px; }
+.kind-strip__item {
+  width: 32px; height: 32px; display: grid; place-items: center;
+  border: 1px solid transparent; border-radius: 8px; background: none;
+  color: var(--faint); cursor: pointer;
+}
+.kind-strip__item .node-icon { width: 18px; height: 18px; }
+.kind-strip__item:hover { color: var(--kind); background: var(--panel-2); }
+.kind-strip__item.on {
+  color: var(--kind);
+  background: color-mix(in srgb, var(--kind) 16%, transparent);
+  border-color: color-mix(in srgb, var(--kind) 40%, transparent);
+}
+
+/* A choice of two or three, as one control rather than a select: every answer
+ * is in sight. */
+.segmented {
+  display: inline-flex; padding: 2px; gap: 2px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+}
+/* Five answers in the inspector's width: equal columns, a little tighter. */
+.segmented--wrap { display: grid; grid-template-columns: repeat(5, 1fr); }
+.segmented--wrap button { padding: 4px 2px; font-size: 12px; }
+.segmented button {
+  border: 0; background: none; color: var(--dim); cursor: pointer;
+  padding: 4px 10px; border-radius: 6px; font-size: 12.5px;
+}
+.segmented button:hover { color: var(--text); }
+.segmented button.on { background: var(--panel-2); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
+.segmented + .meta { display: block; margin-top: 6px; }
+
+.agent-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.agent-pick {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 7px 10px; border-radius: 8px; cursor: pointer; text-align: left;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+}
+.agent-pick:hover { border-color: #3f4560; }
+.agent-pick.on { border-color: var(--accent); background: #1b3230; }
+.agent-pick__name { font-weight: 600; font-size: 12.5px; }
+.agent-pick__kind { font-size: 11px; color: var(--faint); }
+
+.icon-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.icon-grid__item {
+  aspect-ratio: 1; display: grid; place-items: center;
+  border: 1px solid transparent; border-radius: 8px; background: none;
+  color: var(--dim); cursor: pointer;
+}
+.icon-grid__item:hover { background: var(--panel-2); color: var(--text); }
+.icon-grid__item.on {
+  color: var(--kind); border-color: color-mix(in srgb, var(--kind) 45%, transparent);
+  background: color-mix(in srgb, var(--kind) 16%, transparent);
+}
+
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.swatch {
+  width: 22px; height: 22px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25);
+}
+.swatch.on { border-color: var(--text); }
+input[type="color"].swatch--pick {
+  appearance: none; -webkit-appearance: none; background: none;
+  border: 1px dashed var(--dim); overflow: hidden;
+}
+input[type="color"].swatch--pick::-webkit-color-swatch-wrapper { padding: 2px; }
+input[type="color"].swatch--pick::-webkit-color-swatch { border: 0; border-radius: 50%; }
+
+/* What saving said, and what the dataflow check found: at the bottom of the
+ * canvas, between the two panels, where the eye comes back after «Save». */
+.flowpage__notes {
+  position: absolute; z-index: 4; left: 320px; right: 408px; bottom: 14px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.flowpage__notes .error, .flowpage__notes .warn-note {
+  margin: 0; background: var(--panel); box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+}
 
 /* ---- source rules ---- */
 

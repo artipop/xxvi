@@ -124,6 +124,11 @@ func ValidateFlow(f Flow, agents []Agent) (Flow, error) {
 		}
 		s.Screens = screens
 
+		s.Template = strings.TrimSpace(s.Template)
+		if s.Template == "" {
+			s.Template = BuiltinTemplateOf(s)
+		}
+
 		seenID[s.ID], seenName[lower] = true, true
 		f.Stages[i] = s
 	}

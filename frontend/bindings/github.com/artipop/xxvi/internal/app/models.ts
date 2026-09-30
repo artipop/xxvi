@@ -165,15 +165,6 @@ export interface NotificationWords {
 }
 
 /**
- * StageCard is a card as the flow view draws it.
- */
-export interface StageCard {
-    "card": model$0.Card;
-    "stageId": string;
-    "asking"?: boolean;
-}
-
-/**
  * TerminalHandle is what a terminal screen needs to connect: which terminal,
  * and where its socket is.
  */

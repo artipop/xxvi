@@ -21,10 +21,11 @@ import {
   useViewport,
 } from "@dschz/solid-flow";
 
-import type { Edge, Flow, Stage, Trigger } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { Edge, Flow, Stage, StageTemplate, Trigger } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
 
 import "@dschz/solid-flow/dist/style.css";
-import { actionLabel, label, propName, propValue, t } from "../i18n";
+import { label, propName, propValue, t } from "../i18n";
+import { Tile, nodeDetail, ownsScreen, templateName, templateOf } from "./templates";
 
 // The flow as a graph. Pan, zoom and drag are Solid Flow's; the layout is ours.
 //
@@ -34,8 +35,8 @@ import { actionLabel, label, propName, propValue, t } from "../i18n";
 // where the dataflow becomes visible, instead of being assembled in a panel out
 // of a list of property names.
 
-export const NODE_WIDTH = 190;
-export const NODE_HEIGHT = 58;
+export const NODE_WIDTH = 232;
+export const NODE_HEIGHT = 68;
 
 // How much taller a stage stands when it declares outputs: one row of chips,
 // which are also the ports a conditional arrow is pulled from.
@@ -63,17 +64,8 @@ const GAP_Y = 24;
 const LANE = 26;
 
 // How far under the lowest of the two stages the first lane runs — clear of a
-// box, which is 58 tall and 80 with outputs on it.
+// box, which is 68 tall and 90 with outputs on it.
 const LANE_BASE = 48;
-
-// StageCount is how many cards stand on a stage right now — the viewer's half of
-// the canvas.
-export type StageCount = {
-  stageId: string;
-  cards: number;
-  running: number;
-  queued: number;
-};
 
 // StageWrite is one property the stage leaves on the card, as the box draws it.
 // `branchable` is whether an arrow can ask about it: an arrow asks "is it this
@@ -83,12 +75,21 @@ export type StageWrite = {
   branchable: boolean;
 };
 
+export type CanvasApi = {
+  // right overrides the right inset: a box added by a click is selected, and
+  // the inspector that opens for it covers the right whether or not it is open
+  // yet.
+  visibleCentre: (right?: number) => { x: number; y: number } | undefined;
+};
+
 export type Selection = { kind: "stage" | "edge"; id: string } | null;
 
 type Props = {
   flow: Flow;
   triggers: Trigger[];
-  counts?: StageCount[];
+
+  // The palette, which is what a box is drawn as: its icon, colour and name.
+  templates: StageTemplate[];
 
   // The name of the field a person answers a stage in. Transitions asking about
   // it are drawn as the outcomes they are rather than as waits — see
@@ -107,6 +108,19 @@ type Props = {
 
   selected?: Selection;
   onSelect?: (selection: Selection) => void;
+
+  // A template dropped from the palette, at the point of the flow it landed on.
+  onDropKind?: (template: string, at: { x: number; y: number }) => void;
+
+  // How much of the canvas' left edge something floats over, in pixels. The
+  // picture is fitted clear of it, and the zoom plate moves out from under it.
+  insetLeft?: number;
+  // …and of its right edge, which only a fit made while it is covered minds.
+  insetRight?: number;
+
+  // Hands out what the editor needs of the canvas: where a box added by a
+  // click should stand to be seen.
+  onApi?: (api: CanvasApi) => void;
 };
 
 // sameFold is two names being the same name — trimmed and case-insensitive, the
@@ -279,58 +293,55 @@ function edgeKind(on: string): string {
 
 type StageData = {
   name: string;
-  action: string;
-  actionLabel: string;
-  crew?: string[] | null;
-  count?: StageCount;
+  template?: StageTemplate;
+  kind: string;
+  kindLabel: string;
+  detail: string;
   writes?: StageWrite[];
   entry?: boolean;
   editable?: boolean;
   selected?: boolean;
 };
 
-// StageBox is one stage: what runs when a card lands there, who works it, what
-// it leaves on the card, and how many cards stand on it.
+// StageBox is one stage: what kind of node it is, what it runs or opens, and
+// what it leaves on the card.
 const StageBox = (props: NodeProps) => {
   const data = () => props.data as unknown as StageData;
-  const count = () => data().count;
   const classes = () =>
-    ["flowbox", `flowbox--${data().action || "none"}`, data().selected ? "flowbox--selected" : ""]
+    ["flowbox", `flowbox--${data().kind}`, data().selected ? "flowbox--selected" : ""]
       .filter(Boolean)
       .join(" ");
 
   return (
-    <div class={classes()}>
+    <div class={classes()} style={{ "--kind": data().template?.color || "#949aab" }}>
       <Handle type="target" position="left" isConnectable={Boolean(data().editable)} />
 
-      <div class="flowbox__name">
-        {data().name || "—"}
-        <Show when={data().entry}>
-          <span class="flowbox__entry" title={t("flows.entryStage")}> ▸</span>
-        </Show>
+      <div class="flowbox__head">
+        <Tile tpl={data().template} />
+        <div class="flowbox__text">
+          <div class="flowbox__name">
+            {data().name || "—"}
+            <Show when={data().entry}>
+              <span class="flowbox__entry" title={t("flows.entryStage")}> ▸</span>
+            </Show>
+          </div>
+          <div class="flowbox__action">
+            <span class="flowbox__kind">{data().kindLabel}</span>
+            <Show when={data().detail}>
+              <span class="flowbox__detail">{` · ${data().detail}`}</span>
+            </Show>
+          </div>
+        </div>
       </div>
-      <div class="flowbox__action">
-        {data().actionLabel}
-        <Show when={data().crew && data().crew!.length > 0}>
-          <span class="flowbox__crew">{` · ${data().crew!.join(", ")}`}</span>
-        </Show>
-      </div>
-      <Show when={count() && count()!.cards > 0}>
-        <span class="flowbox__count">
-          {count()!.cards}
-          <Show when={count()!.running > 0}><span class="flowbox__running"> ▶</span></Show>
-          <Show when={count()!.queued > 0}><span class="flowbox__queued"> ⏸</span></Show>
-        </span>
-      </Show>
 
       <Handle
         id={HANDLE_SUCCESS} type="source" position="right"
-        style={{ top: "30%" }} class="flowbox__out flowbox__out--success"
+        style={{ top: `${NODE_HEIGHT * 0.3}px` }} class="flowbox__out flowbox__out--success"
         isConnectable={Boolean(data().editable)}
       />
       <Handle
         id={HANDLE_FAILURE} type="source" position="right"
-        style={{ top: "70%" }} class="flowbox__out flowbox__out--failure"
+        style={{ top: `${NODE_HEIGHT * 0.7}px` }} class="flowbox__out flowbox__out--failure"
         isConnectable={Boolean(data().editable)}
       />
       <Handle
@@ -379,6 +390,10 @@ const nodeTypes = { stage: StageBox };
 // at 0.78 and 4px at minZoom, which is a thing to grab that a hand cannot land
 // on.
 const GRAB = 20;
+
+// DRAG_KIND is the type a palette card puts on the drag, so the canvas takes a
+// node kind and nothing else a person drags over it.
+export const DRAG_KIND = "application/x-xxvi-stage-kind";
 const MARK = 9;
 
 // How thick the mark's own ring is drawn, in screen pixels — divided like the
@@ -478,8 +493,15 @@ const edgeTypes = { lane: LaneEdge };
 // What a box measured is read off a record rather than asked for: Solid Flow 1.0
 // dropped the imperative getters, because a getter hands back a snapshot and the
 // record is the store the canvas keeps its answers in.
+type FitOptions = {
+  padding?: number | { top?: `${number}px`; right?: `${number}px`; bottom?: `${number}px`; left?: `${number}px` };
+  maxZoom?: number;
+  nodes?: Array<{ id: string }>;
+};
+
 type FlowHandle = {
-  fitView?: (options?: { padding?: number; maxZoom?: number; nodes?: Array<{ id: string }> }) => Promise<boolean> | void;
+  screenToFlowPosition?: (at: { x: number; y: number }) => { x: number; y: number };
+  fitView?: (options?: FitOptions) => Promise<boolean> | void;
   internalNodes?: Record<string, { measured?: { width?: number; height?: number } } | undefined>;
 };
 
@@ -491,6 +513,24 @@ type FlowHandle = {
 // makes one stage change size depending on which flow it is on.
 const FIT_VIEW = { padding: 0.16, maxZoom: 1 };
 
+// FIT_MARGIN is the room left around the picture when something floats over
+// one side of the canvas: the stated inset, and this much more on every side.
+const FIT_MARGIN = 48;
+
+type Inset = { left: number; right: number };
+
+// fitOptions keeps the picture out from under whatever floats over the
+// canvas' edges — the palette, the inspector — so a flow is fitted to the part
+// of the canvas that is actually visible.
+function fitOptions(inset: Inset): FitOptions {
+  if (inset.left <= 0 && inset.right <= 0) return FIT_VIEW;
+  const m = `${FIT_MARGIN}px` as const;
+  return {
+    maxZoom: 1,
+    padding: { top: m, bottom: m, left: `${inset.left + FIT_MARGIN}px`, right: `${inset.right + FIT_MARGIN}px` },
+  };
+}
+
 // How many frames a re-fit waits for the canvas to measure the boxes it has just
 // been handed. Generous, because being late costs nothing and being early costs
 // the whole picture: `fitView` fits to what the canvas *knows*, and it learns a
@@ -499,13 +539,13 @@ const FIT_VIEW = { padding: 0.16, maxZoom: 1 };
 // never measured does not spin for ever.
 const FIT_FRAMES = 30;
 
-const fitWhenMeasured = (handle: FlowHandle, ids: string[], frame: number) => {
+const fitWhenMeasured = (handle: FlowHandle, ids: string[], inset: Inset, frame: number) => {
   const measured = ids.every((id) => (handle.internalNodes?.[id]?.measured?.width || 0) > 0);
   if (!measured && frame < FIT_FRAMES) {
-    requestAnimationFrame(() => fitWhenMeasured(handle, ids, frame + 1));
+    requestAnimationFrame(() => fitWhenMeasured(handle, ids, inset, frame + 1));
     return;
   }
-  void handle.fitView?.({ ...FIT_VIEW, nodes: ids.map((id) => ({ id })) });
+  void handle.fitView?.({ ...fitOptions(inset), nodes: ids.map((id) => ({ id })) });
 };
 
 // CanvasHook runs inside the canvas' context and hands its API out.
@@ -569,13 +609,6 @@ export function condLabel(edge: Edge): string {
   return `${propName(cond.property ?? "")} = ${propValue(cond.property ?? "", cond.value)}`;
 }
 
-// stageLabel names what a stage does. Kept short: this is a box on a canvas, not
-// a form field.
-export function stageLabel(stage: Stage): string {
-  if (stage.final) return t("flows.final");
-  return actionLabel(stage.action);
-}
-
 export default function FlowCanvas(props: Props) {
   const editable = () => Boolean(props.onChange);
   const stages = () => props.flow.stages || [];
@@ -595,11 +628,11 @@ export default function FlowCanvas(props: Props) {
       const writes = props.writesOf?.(stage);
       const data: StageData = {
         name: stage.name,
-        action: stage.final ? "final" : stage.action || "none",
-        actionLabel: stageLabel(stage),
-        crew: stage.crew,
+        template: templateOf(stage, props.templates),
+        kind: stage.final ? "final" : stage.action || "none",
+        kindLabel: templateName(templateOf(stage, props.templates)),
+        detail: nodeDetail(stage, ownsScreen(templateOf(stage, props.templates))),
         writes,
-        count: props.counts?.find((c) => c.stageId === stage.id),
         entry: props.flow.entryStage === stage.id,
         editable: editable(),
         selected: props.selected?.kind === "stage" && props.selected.id === stage.id,
@@ -776,18 +809,51 @@ export default function FlowCanvas(props: Props) {
   // canvas is built: the editor opens on one flow and every click replaces every
   // box. So the fit is redone rather than configured once.
   //
-  // Keyed on the *set* of stages and never on where they are: a fit in the
-  // middle of a drag would pull the canvas out from under the pointer. The
-  // handle is in the key because it arrives from inside the canvas and is not
+  // Keyed on *which flow* this is, and not on its stages: a fit in the middle of
+  // a drag would pull the canvas out from under the pointer, and one after every
+  // box added shrank the picture each time a person built a flow out to the
+  // right. A new box is put where it can be seen instead (onApi). Whether there
+  // is anything to fit is in the key too, for the flow whose stages arrive after
+  // it does; the handle, because it arrives from inside the canvas and is not
   // there on the first run.
-  const shape = createMemo(() => drawnNodes.map((n) => n.id).join("|"));
   const [paneSize, setPaneSize] = createSignal("");
+  //
+  // The key is a memo of a string: an effect applies again every time its
+  // source is recomputed, equal or not, and only a memo stops an equal answer
+  // there. Without it every box added re-fitted the picture.
+  const fitKey = createMemo(() =>
+    [props.flow.id, stages().length > 0, paneSize(), Boolean(flowHandle()), props.insetLeft ?? 0].join("|"));
   createEffect(
-    () => [shape(), paneSize(), stages().map((s) => s.id), flowHandle()] as const,
-    ([, , ids, handle]) => {
-      if (handle?.fitView && ids.length > 0) fitWhenMeasured(handle, ids, 0);
+    fitKey,
+    () => {
+      // Everything but the key is read here, untracked. The right inset among
+      // them: the inspector opening is no reason to move the picture, but a
+      // fit that happens while it is open should not put a box under it.
+      const handle = flowHandle();
+      const ids = stages().map((s) => s.id);
+      if (handle?.fitView && ids.length > 0) {
+        fitWhenMeasured(handle, ids, { left: props.insetLeft ?? 0, right: props.insetRight ?? 0 }, 0);
+      }
     },
   );
+
+  // Where a new box should go to be seen: the middle of the part of the canvas
+  // no panel covers, in the flow's own coordinates, less half a box so the box
+  // and not its corner lands there.
+  createEffect(flowHandle, (handle) => {
+    if (!handle?.screenToFlowPosition || !props.onApi) return;
+    const toFlow = handle.screenToFlowPosition;
+    props.onApi({
+      visibleCentre: (rightInset?: number) => {
+        const box = pane()?.getBoundingClientRect();
+        if (!box) return undefined;
+        const left = box.left + (props.insetLeft ?? 0);
+        const right = box.right - (rightInset ?? props.insetRight ?? 0);
+        const at = toFlow({ x: (left + right) / 2, y: box.top + box.height / 2 });
+        return { x: Math.round(at.x - NODE_WIDTH / 2), y: Math.round(at.y - NODE_HEIGHT / 2) };
+      },
+    });
+  });
 
   // …and when the canvas itself changes size. A window resized leaves the
   // picture where it was: correct for the box it was fitted to and off centre in
@@ -807,8 +873,27 @@ export default function FlowCanvas(props: Props) {
     return () => observer.disconnect();
   });
 
+  // A card from the palette dragged onto the canvas becomes a node where it was
+  // let go — the box's corner under the pointer, less half a box so the pointer
+  // ends up on the middle of it rather than on its edge.
+  const onDragOver = (e: DragEvent) => {
+    if (!props.onDropKind || !e.dataTransfer?.types.includes(DRAG_KIND)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
+  const onDrop = (e: DragEvent) => {
+    const kind = e.dataTransfer?.getData(DRAG_KIND);
+    const toFlow = flowHandle()?.screenToFlowPosition;
+    if (!kind || !props.onDropKind || !toFlow) return;
+    e.preventDefault();
+    const at = toFlow({ x: e.clientX, y: e.clientY });
+    props.onDropKind(kind, { x: Math.round(at.x - NODE_WIDTH / 2), y: Math.round(at.y - NODE_HEIGHT / 2) });
+  };
+
   return (
-    <div ref={setPane} class={`canvas${editable() ? " canvas--editable" : ""}`} data-testid="flow-canvas">
+    <div ref={setPane} class={`canvas${editable() ? " canvas--editable" : ""}`} data-testid="flow-canvas"
+         style={{ "--inset-left": `${props.insetLeft ?? 0}px` }}
+         onDragOver={onDragOver} onDrop={onDrop}>
       <SolidFlow
         nodes={drawnNodes}
         edges={drawnEdges}
@@ -828,7 +913,7 @@ export default function FlowCanvas(props: Props) {
         edgesFocusable={editable()}
         deleteKey={editable() ? ["Backspace", "Delete"] : null}
         fitView={true}
-        fitViewOptions={FIT_VIEW}
+        fitViewOptions={fitOptions({ left: props.insetLeft ?? 0, right: 0 })}
         minZoom={0.3}
 
         // Solid Flow is MIT and its own attribution says to feel free to

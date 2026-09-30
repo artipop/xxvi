@@ -23,6 +23,7 @@ export type {
     Screen,
     Source,
     Stage,
+    StageTemplate,
     Trigger,
     Wait
 } from "./models.js";

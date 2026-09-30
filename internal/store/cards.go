@@ -457,34 +457,6 @@ func (s *Store) CardsOnStage(flowID string) (map[string]int, error) {
 	return out, nil
 }
 
-// CardsOnFlow lists the cards currently travelling a flow, with their stage.
-func (s *Store) CardsOnFlow(flowID string) ([]model.Card, map[string]string, error) {
-	var rows []cardRow
-	if err := s.db.Select(&rows, `
-		SELECT c.* FROM card c
-		JOIN card_flow cf ON cf.card_id = c.id
-		WHERE cf.flow_id = ?
-		ORDER BY cf.entered_at`, flowID); err != nil {
-		return nil, nil, err
-	}
-	cards, err := s.withProps(rows)
-	if err != nil {
-		return nil, nil, err
-	}
-	var places []struct {
-		CardID  string `db:"card_id"`
-		StageID string `db:"stage_id"`
-	}
-	if err := s.db.Select(&places, `SELECT card_id, stage_id FROM card_flow WHERE flow_id = ?`, flowID); err != nil {
-		return nil, nil, err
-	}
-	stageOf := make(map[string]string, len(places))
-	for _, p := range places {
-		stageOf[p.CardID] = p.StageID
-	}
-	return cards, stageOf, nil
-}
-
 // ---- properties ----
 
 func (s *Store) props(cardID string) (map[string]string, error) {
