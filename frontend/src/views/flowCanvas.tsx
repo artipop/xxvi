@@ -676,6 +676,22 @@ export default function FlowCanvas(props: Props) {
     });
   });
 
+  // Rules are the events that lead to one stage from several: «wherever the
+  // task stands, a merged MR ends it». Drawn as an arrow from every stage they
+  // were nine dashed lines on the review flow, one meaning each three times
+  // over, and the reader lost the flow in them. They are said once instead,
+  // above the canvas, with the stages they apply to.
+  const rules = createMemo(() => {
+    const byKey = new Map<string, ReturnType<typeof arrows>>();
+    for (const a of arrows()) {
+      if (a.kind !== "event") continue;
+      const key = `${a.edge.on}\u0000${a.edge.to}\u0000${a.caption}`;
+      byKey.set(key, [...(byKey.get(key) ?? []), a]);
+    }
+    return [...byKey.values()].filter((group) => new Set(group.map((a) => a.edge.from)).size > 1);
+  });
+  const ruled = createMemo(() => new Set(rules().flatMap((group) => group.map((a) => a.id))));
+
   // Which arrows carry their caption. An event said once per box it leads
   // into: «MR merged» from every stage of a review flow runs into one bus, and
   // a caption on each of them wrote it along the bus half a dozen times.
@@ -709,7 +725,7 @@ export default function FlowCanvas(props: Props) {
     // Edges are handed over in the order of their source, for the same reason
     // the stages are: ELK reads the order as the direction of travel.
     const laidEdges: LayoutEdge[] = arrows()
-      .filter((a) => known.has(a.edge.from) && known.has(a.edge.to))
+      .filter((a) => known.has(a.edge.from) && known.has(a.edge.to) && !ruled().has(a.id))
       .sort((a, b) => order.findIndex((s) => s.id === a.edge.from) - order.findIndex((s) => s.id === b.edge.from))
       .map((a) => ({
         id: a.id,
@@ -796,7 +812,7 @@ export default function FlowCanvas(props: Props) {
 
     const known = new Set(stages().map((s) => s.id));
     const drawnEdges: FlowEdge[] = arrows()
-      .filter(({ edge }) => known.has(edge.from) && known.has(edge.to))
+      .filter(({ edge, id }) => known.has(edge.from) && known.has(edge.to) && !ruled().has(id))
       .map(({ edge, id, kind, caption, back }) => {
         const color = themeColor(EDGE_TOKEN[kind]);
         const chosen = props.selected?.kind === "edge" && props.selected.id === id;
@@ -1032,6 +1048,30 @@ export default function FlowCanvas(props: Props) {
         <Controls showLock={false} />
         <CanvasHook onReady={setFlowHandle} />
       </SolidFlow>
+
+      <Show when={rules().length > 0}>
+        {/* Clear of the folded palette's button as well as of the open palette. */}
+        <div class="flowrules" style={{ left: `${Math.max(props.insetLeft ?? 0, 110) + 14}px`, right: `${(props.insetRight ?? 0) + 14}px` }}>
+          <For each={rules()}>
+            {(group) => {
+              const first = () => group[0];
+              const target = () => stages().find((st) => st.id === first().edge.to)?.name ?? first().edge.to;
+              const from = () => group.map((a) => stages().find((st) => st.id === a.edge.from)?.name ?? a.edge.from);
+              const chosen = () => props.selected?.kind === "edge" && group.some((a) => a.id === props.selected!.id);
+              return (
+                <button class={`flowrule${chosen() ? " flowrule--selected" : ""}`}
+                        title={t("flows.ruleFromAll", { stages: from().map((n) => `«${n}»`).join(", ") })}
+                        onClick={() => props.onSelect?.({ kind: "edge", id: first().id })}>
+                  <span class="flowrule__when">{first().caption || label("trigger", first().edge.on)}</span>
+                  <span class="flowrule__arrow" aria-hidden="true">→</span>
+                  <span class="flowrule__to">«{target()}»</span>
+                  <span class="flowrule__from">{t("flows.ruleFrom", { n: String(from().length) })}</span>
+                </button>
+              );
+            }}
+          </For>
+        </div>
+      </Show>
     </div>
   );
 }

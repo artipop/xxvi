@@ -494,6 +494,27 @@ input.folder-name { width: 9em; flex: none; }
   --xy-controls-box-shadow: 0 0 0 1px var(--line);
 }
 
+/* The rules above the canvas: events that lead to one stage from several,
+ * said once instead of drawn from each. Dashed, like the event arrows they
+ * stand for. */
+.flowrules {
+  position: absolute; top: 14px; z-index: 3;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+  pointer-events: none;
+}
+.flowrule {
+  pointer-events: auto;
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  background: var(--panel); color: var(--text); font: inherit; font-size: 12px;
+  border: 1px dashed var(--dim);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+}
+.flowrule:hover { border-color: var(--text); }
+.flowrule--selected { border-style: solid; border-color: var(--accent); }
+.flowrule__when { font-weight: 600; }
+.flowrule__arrow, .flowrule__from { color: var(--dim); }
+
 /* The zoom plate moves out from under the palette when it is open. */
 .canvas .solid-flow__panel.left { left: var(--inset-left, 0px); }
 
