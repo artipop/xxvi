@@ -300,7 +300,7 @@ function Editor(props: {
             <Show when={saveError()}>
               <div class="error">
                 <pre>{saveError()}</pre>
-                <button class="btn quiet" onClick={() => setSaveError("")}>×</button>
+                <button class="btn quiet tiny" onClick={() => setSaveError("")}>×</button>
               </div>
             </Show>
             <Show when={unwritten().length > 0}>

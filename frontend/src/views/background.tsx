@@ -8,7 +8,7 @@ import { plural, t } from "../i18n";
 /** BackgroundNotice says what the last run of the application left running.
  *  Closing it leaves shells and started projects running on purpose, and this
  *  is where somebody who forgot them finds out, once, at the start. */
-export function BackgroundNotice(props: { floating?: boolean }): JSX.Element {
+export function BackgroundNotice(): JSX.Element {
   const [left, setLeft] = createSignal<BackgroundTerminal[]>([]);
   const [hidden, setHidden] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
@@ -25,7 +25,7 @@ export function BackgroundNotice(props: { floating?: boolean }): JSX.Element {
 
   return (
     <Show when={!hidden() && left().length > 0}>
-      <div class={`notice ${props.floating ? "floating" : ""}`}>
+      <div class="notice">
         <div class="notice-text">
           <b>{plural("background.running", left().length)}</b>
           <span class="meta">

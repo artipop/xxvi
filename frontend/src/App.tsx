@@ -39,13 +39,15 @@ export default function App(): JSX.Element {
         when={!whole()}
         fallback={
           <div class="full">
-            <Show when={error()}>
-              <div class="error floating">
-                <pre>{error()}</pre>
-                <button class="btn quiet" onClick={() => setError("")}>×</button>
-              </div>
-            </Show>
-            <BackgroundNotice floating />
+            <div class="floating-notes">
+              <Show when={error()}>
+                <div class="error">
+                  <pre>{error()}</pre>
+                  <button class="btn quiet tiny" onClick={() => setError("")}>×</button>
+                </div>
+              </Show>
+              <BackgroundNotice />
+            </div>
             <Show when={tab() === "ribbon"} fallback={<FlowsView />}>
               <RibbonView />
             </Show>
@@ -57,7 +59,7 @@ export default function App(): JSX.Element {
             <Show when={error()}>
               <div class="error">
                 <pre>{error()}</pre>
-                <button class="btn quiet" onClick={() => setError("")}>×</button>
+                <button class="btn quiet tiny" onClick={() => setError("")}>×</button>
               </div>
             </Show>
             <BackgroundNotice />
