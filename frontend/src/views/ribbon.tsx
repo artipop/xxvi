@@ -7,12 +7,13 @@ import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
 import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
 import {
-  attention, closedRibbon, done, guard, inWorkspace, leaveRibbons, list, loadAttention, loadRibbons, openRibbon, projects, report,
+  attention, closedRibbon, done, guard, inWork, inWorkspace, leaveRibbons, list, loadAttention, loadRibbons, openRibbon, projects, report,
   ribbons, setOpenRibbon, setTab, setWorkspace, showRibbon, workRibbons, workspace, openOutside,
 } from "../state";
 import { QuestionForm } from "./attention";
 import { JournalOf } from "./journal";
 import { Compose } from "./compose";
+import Markdown from "./markdown";
 import { entryText, label, propName, questionText, say, t } from "../i18n";
 import { MarkButtons, RemarksForm, sendMark } from "./marks";
 import { Icon } from "../icons";
@@ -697,6 +698,9 @@ function Pane(props: {
   onRelease: () => void;
 }): JSX.Element {
   const waiting = () => list(props.screen?.waiting);
+  // A step that has not started (its stage is full) has no screen, and the
+  // strip would show nothing of the task that was just typed.
+  const task = () => inWork().find((c) => c.card.id === props.cardId)?.card.body;
   const [back, setBack] = createSignal<Mark | null>(null);
 
   return (
@@ -787,6 +791,9 @@ function Pane(props: {
             <div class="screen-note">
               {t("ribbon.stageGone", { stage: props.segment.stageId })}
             </div>
+          </Match>
+          <Match when={!props.screen && props.segment.current && task()}>
+            <div class="screen-note"><Markdown text={task()!} /></div>
           </Match>
           <Match when={!props.screen}>
             <div class="screen-note">{t("ribbon.nothingShown")}</div>
