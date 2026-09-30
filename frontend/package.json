@@ -7,7 +7,8 @@
     "dev": "vite",
     "build:dev": "tsc --noEmit && vite build --minify false --mode development",
     "build": "tsc --noEmit && vite build --mode production",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dschz/solid-flow": "1.0.0-next.22",

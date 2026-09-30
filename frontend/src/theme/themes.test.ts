@@ -1,16 +1,15 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { AA, AA_MARK, contrast, parseColor, type RGB } from "./color";
 import { parseTheme } from "./config";
 import { THEME_FAMILIES } from "./themes";
 import { themeTokens } from "./tokens";
+import css from "../styles.css?raw";
 
 // styles.css paints the first frame and the config every frame after it, so
 // the two disagreeing is a palette that changes as the page finishes loading.
 // And every half of every theme has to read — including the ones written for
 // another product.
 
-const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 const rootBlock = /:root\s*\{([\s\S]*?)\n\}/.exec(css)![1];
 const declared = (token: string) => new RegExp(`${token}:\\s*([^;]+);`).exec(rootBlock)?.[1].trim();
 

@@ -23,7 +23,7 @@ export function themeTokens(theme: ParsedTheme): ThemeTokens {
   // on a desk, or the only depth a screen has. Half the way to white barely
   // moves an off-white and would flood a black, hence two lifts.
   const panel = c.surfaceBg ?? lifted(bg, text, dark);
-  const panel2 = c.raisedBg ?? mix(text, panel, 0.05);
+  const panel2 = c.raisedBg ?? toward(text, panel, 0.05);
 
   // Words sit on the ground and on panels alike, so a colour meant as a word
   // has to read on both.
@@ -36,8 +36,10 @@ export function themeTokens(theme: ParsedTheme): ThemeTokens {
     "--bg": toHex(bg),
     "--panel": toHex(panel),
     "--panel-2": toHex(panel2),
-    "--line": toHex(c.borderColor ?? mix(text, bg, dark ? 0.12 : 0.14)),
-    "--line-strong": toHex(c.borderStrongColor ?? mix(text, bg, 0.22)),
+    // From the panel, not the ground: a border is drawn on a panel, and one
+    // mixed from a darker ground can come out the panel's own colour.
+    "--line": toHex(c.borderColor ?? mix(text, panel, 0.14)),
+    "--line-strong": toHex(c.borderStrongColor ?? mix(text, panel, 0.26)),
     "--text": toHex(text),
     "--dim": toHex(word(c.dimColor ?? mix(text, bg, 0.6))),
     // Quieter than a word on purpose — a timestamp, a count — but still a
@@ -62,4 +64,13 @@ function lifted(bg: RGB, text: RGB, dark: boolean): RGB {
     if (contrast(text, surface) >= AA) return surface;
   }
   return bg;
+}
+
+// A step toward the ink, as far as the ink still reads on it.
+function toward(text: RGB, surface: RGB, most: number): RGB {
+  for (let step = most; step > 0; step -= 0.01) {
+    const raised = mix(text, surface, step);
+    if (contrast(text, raised) >= AA) return raised;
+  }
+  return surface;
 }
