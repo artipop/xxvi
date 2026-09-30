@@ -131,8 +131,11 @@ static BOOL isControl(NSString *t) {
   k.mods = modsOf(e.modifierFlags);
   // Control and ⌘ never make text; whatever else is held is taken to have.
   k.consumed_mods = modsOf(e.modifierFlags & ~(NSEventModifierFlagControl | NSEventModifierFlagCommand));
-  NSString *un = [e charactersByApplyingModifiers:0];
-  if (un.length > 0) k.unshifted_codepoint = [un characterAtIndex:0];
+  // A modifier on its own has no characters, and asking it for them throws.
+  if (e.type == NSEventTypeKeyDown || e.type == NSEventTypeKeyUp) {
+    NSString *un = [e charactersByApplyingModifiers:0];
+    if (un.length > 0) k.unshifted_codepoint = [un characterAtIndex:0];
+  }
   k.composing = composing;
   if (text.length > 0) k.text = text.UTF8String;
   ghostty_surface_key(self.surface, k);
@@ -215,7 +218,9 @@ static BOOL isControl(NSString *t) {
 // ---- NSTextInputClient ----
 
 - (void)insertText:(id)string replacementRange:(NSRange)range {
-  NSString *text = [string isKindOfClass:[NSAttributedString class]] ? [string string] : string;
+  // A copy: an attributed string's text is its own mutable storage, which
+  // AppKit empties once the key is over — before keyDown gets to send it.
+  NSString *text = [([string isKindOfClass:[NSAttributedString class]] ? [string string] : string) copy];
   [self unmarkText];
   if (committed) [committed addObject:text];
   // Outside a key: the input method's own window, dictation.
