@@ -23,7 +23,11 @@ export const NODE_COLORS = [
   "#4fb8ad", "#7bc47f", "#e0a458", "#e06c75", "#c38ee0", "#6aa2e8", "#2496ed", "#d9c36a", "#c9cdd6", "#949aab",
 ];
 
-const FALLBACK_COLOR = "#949aab";
+/** KIND_FALLBACK colours a template that has none: the theme's quiet ink, so
+ *  it follows the theme where a template's own colour cannot. */
+export const KIND_FALLBACK = "var(--dim)";
+/** PICKER_FALLBACK is the same for the colour input, which takes only hex. */
+export const PICKER_FALLBACK = "#949aab";
 
 /** NodeIcon draws an icon file in the colour of the text around it: the file is
  *  a mask, so one set of pictures takes every template's accent. */
@@ -37,7 +41,7 @@ export function NodeIcon(props: { icon?: string }): JSX.Element {
 export function Tile(props: { tpl?: StageTemplate; big?: boolean }): JSX.Element {
   return (
     <span class={`kind-tile${props.big ? " kind-tile--big" : ""}`}
-          style={{ "--kind": props.tpl?.color || FALLBACK_COLOR }}>
+          style={{ "--kind": props.tpl?.color || KIND_FALLBACK }}>
       <NodeIcon icon={props.tpl?.icon} />
     </span>
   );

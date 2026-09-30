@@ -4,7 +4,7 @@ import type { Edge, Flow, PropertyWrite, Screen, Stage, StageTemplate } from "..
 import { agents, flows, guard, list, loadFlows, loadTemplates, templates, vocabulary } from "../state";
 import FlowCanvas, { type CanvasApi, DRAG_KIND, NODE_HEIGHT, NODE_WIDTH, type Selection, type StageWrite, condLabel, edgeIndexOf } from "./flowCanvas";
 import {
-  NODE_COLORS, NODE_ICONS, NodeIcon, Tile, applyTemplate, newStage, ownsScreen, shapeOf, templateName, templateNote,
+  KIND_FALLBACK, NODE_COLORS, NODE_ICONS, NodeIcon, PICKER_FALLBACK, Tile, applyTemplate, newStage, ownsScreen, shapeOf, templateName, templateNote,
   templateOf,
 } from "./templates";
 import { errorText, label, propName, t } from "../i18n";
@@ -360,7 +360,7 @@ function Palette(props: {
             {(tpl) => (
               <div class="kind-card" role="button" tabindex="0" draggable="true"
                    title={templateNote(tpl)}
-                   style={{ "--kind": tpl.color || "#949aab" }}
+                   style={{ "--kind": tpl.color || KIND_FALLBACK }}
                    onClick={() => props.onAdd(tpl)}
                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); props.onAdd(tpl); } }}
                    onDragStart={(e) => {
@@ -556,7 +556,7 @@ function StagePanel(props: {
           <For each={templates()}>
             {(x) => (
               <button class={`kind-strip__item ${x.id === tpl()?.id ? "on" : ""}`}
-                      style={{ "--kind": x.color || "#949aab" }}
+                      style={{ "--kind": x.color || KIND_FALLBACK }}
                       role="radio" aria-checked={x.id === tpl()?.id ? "true" : "false"}
                       title={templateName(x)} aria-label={templateName(x)}
                       onClick={() => setTemplate(x)}>
@@ -868,7 +868,7 @@ function TemplatePanel(props: {
 
       <div class="field">
         <span class="field-label">{t("flows.icon")}</span>
-        <div class="icon-grid" style={{ "--kind": draft.color || "#949aab" }}>
+        <div class="icon-grid" style={{ "--kind": draft.color || KIND_FALLBACK }}>
           <For each={NODE_ICONS}>
             {(icon) => (
               <button class={`icon-grid__item ${draft.icon === icon ? "on" : ""}`} title={icon} aria-label={icon}
@@ -889,7 +889,7 @@ function TemplatePanel(props: {
                       aria-label={c} title={c} onClick={() => set({ color: c })} />
             )}
           </For>
-          <input type="color" class="swatch swatch--pick" value={draft.color || "#949aab"}
+          <input type="color" class="swatch swatch--pick" value={draft.color || PICKER_FALLBACK}
                  aria-label={t("flows.color")} onInput={(e) => set({ color: e.currentTarget.value })} />
         </div>
       </div>

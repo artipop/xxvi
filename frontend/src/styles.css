@@ -1,20 +1,61 @@
-/* One dark theme, stated once. The application is a desk: dense, quiet, and
-   nothing moves that was not asked to. */
+/* The application is a desk: dense, quiet, and nothing moves that was not
+   asked to. */
 
+/* The palette below is the dark half of the XXVI theme, and it is only the
+   first paint: theme/index.ts writes the same names onto the document element
+   for whichever theme is chosen, and theme/themes.test.ts holds this block to
+   the config it was taken from. Every colour a rule paints with is one of
+   these or is mixed from them, so a theme that sets these sets everything. */
 :root {
+  color-scheme: dark;
+
   --bg: #111216;
   --panel: #171920;
   --panel-2: #1d202a;
   --line: #282c38;
+  --line-strong: #3a4056;
   --text: #e6e8ee;
   --dim: #949aab;
   --faint: #656b7c;
   --accent: #4fb8ad;
+  --on-accent: #111216;
   --ok: #7bc47f;
   --warn: #e0a458;
   --bad: #e06c75;
-  --radius: 8px;
+  --shadow: rgba(0, 0, 0, .45);
+
+  /* Mixed rather than listed, so a theme cannot forget one. The wash is a
+     state laid over the ground, the edge is its border, and the text is what
+     is written on the wash. */
+  --accent-wash: color-mix(in srgb, var(--accent) 18%, var(--bg));
+  --accent-edge: color-mix(in srgb, var(--accent) 45%, var(--bg));
+  --accent-text: color-mix(in srgb, var(--accent) 35%, var(--text));
+  --warn-wash: color-mix(in srgb, var(--warn) 10%, var(--bg));
+  --warn-edge: color-mix(in srgb, var(--warn) 28%, var(--bg));
+  --bad-wash: color-mix(in srgb, var(--bad) 12%, var(--bg));
+  --bad-edge: color-mix(in srgb, var(--bad) 36%, var(--bg));
+  --bad-text: color-mix(in srgb, var(--bad) 50%, var(--text));
+
+  /* A radius follows what the thing is, not one number for everything: a
+     label or a one-line marker is a pill, a control a finger presses or types
+     into is --radius-control, a surface that holds other things is
+     --radius-surface, and something smaller than a control is --radius-mark.
+     An icon tile is rounded by a quarter of its side, so it keeps its shape
+     at any size. Raw content — a diff, a terminal, a stream — has square
+     corners: it is not the application's chrome. A control inside a padded
+     surface keeps the curve concentric: surface = control + padding. */
+  --radius-mark: 4px;
+  --radius-control: 6px;
+  --radius-surface: 10px;
+
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  /* The terminal is dark under every theme: it is a real tty, and programs
+     choose their colours for a dark screen. Ghostty is given the same two
+     (internal/nativeterm/native/view_darwin.m), so neither engine changes
+     with the theme. */
+  --term-bg: #111216;
+  --term-text: #e6e8ee;
 
   /* The sixteen colours a terminal program asks for by number, for xterm.js
      where it draws the terminal (views/xterm.ts). xterm's own are made for a
@@ -90,7 +131,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   position: relative;
   display: flex; align-items: center; justify-content: center; gap: 10px;
   width: 36px; height: 36px; flex: none;
-  border-radius: var(--radius);
+  border-radius: var(--radius-control);
   background: none; border: 0; cursor: pointer; text-align: left;
   color: var(--dim);
 }
@@ -112,11 +153,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* Narrow, the count and the update dot sit on the icon's corner. */
 .sidebar:not(.wide) .nav .count {
   position: absolute; top: 1px; right: 0;
-  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px;
+  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px;
   font-size: 10px; line-height: 15px; text-align: center; font-weight: 600;
   background: var(--line); color: var(--dim);
 }
-.sidebar:not(.wide) .nav .count.alert { background: var(--warn); color: var(--bg); }
+.sidebar:not(.wide) .nav .count.alert { background: var(--warn); color: var(--on-accent); }
 .sidebar:not(.wide) .nav .mark { position: absolute; top: 5px; right: 5px; margin: 0; }
 .sidebar:not(.wide) .nav .count + .mark { top: auto; bottom: 5px; }
 
@@ -125,8 +166,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   transform: translate(4px, -50%);
   display: flex; align-items: baseline; gap: 8px;
   padding: 5px 13px; border-radius: 999px;
-  background: var(--panel-2); border: 1px solid #3a4056;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+  background: var(--panel-2); border: 1px solid var(--line-strong);
+  box-shadow: 0 6px 18px var(--shadow);
   color: var(--text); font-size: 12.5px; font-weight: 500; white-space: nowrap;
   opacity: 0; pointer-events: none;
   transition: opacity .12s, transform .12s;
@@ -152,13 +193,13 @@ h3 { font-size: 13px; margin: 0 0 6px; font-weight: 600; color: var(--dim); }
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-surface);
   padding: 12px 14px;
   margin-bottom: 8px;
 }
 .card.clickable { cursor: pointer; }
 .card-title { margin-top: 6px; font-size: 16px; }
-.card.clickable:hover { border-color: #3a4056; }
+.card.clickable:hover { border-color: var(--line-strong); }
 
 .row { display: flex; align-items: center; gap: 10px; }
 .row.wrap { flex-wrap: wrap; }
@@ -183,18 +224,18 @@ a.tag { text-decoration: none; }
 
 button.btn, a.btn {
   background: var(--panel-2); border: 1px solid var(--line);
-  border-radius: 6px; padding: 5px 11px; cursor: pointer; color: var(--text);
+  border-radius: var(--radius-control); padding: 5px 11px; cursor: pointer; color: var(--text);
 }
 a.btn { text-decoration: none; white-space: nowrap; }
-button.btn:hover, a.btn:hover { border-color: #3f4560; }
-button.btn.primary { background: #1b3230; border-color: #2f5b56; color: #cdece7; }
+button.btn:hover, a.btn:hover { border-color: var(--line-strong); }
+button.btn.primary { background: var(--accent-wash); border-color: var(--accent-edge); color: var(--accent-text); }
 button.btn.quiet, a.btn.quiet { background: none; color: var(--dim); }
 button.btn.quiet:hover, a.btn.quiet:hover { color: var(--text); }
 button.btn:disabled { opacity: .45; cursor: default; }
 
 input[type="text"], input[type="password"], textarea, select {
   background: var(--bg); border: 1px solid var(--line);
-  border-radius: 6px; padding: 5px 8px; width: 100%;
+  border-radius: var(--radius-control); padding: 5px 8px; width: 100%;
 }
 input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
 textarea { resize: vertical; min-height: 60px; }
@@ -202,15 +243,15 @@ textarea { resize: vertical; min-height: 60px; }
 input[type="checkbox"] {
   appearance: none; -webkit-appearance: none;
   width: 16px; height: 16px; flex: none;
-  margin: 0; border: 1px solid var(--line); border-radius: 4px;
+  margin: 0; border: 1px solid var(--line); border-radius: var(--radius-mark);
   background: var(--panel-2); cursor: pointer;
   display: inline-grid; place-content: center;
 }
-input[type="checkbox"]:hover { border-color: #3f4560; }
+input[type="checkbox"]:hover { border-color: var(--line-strong); }
 input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
 input[type="checkbox"]:checked::after {
   content: ""; width: 4px; height: 8px;
-  border: solid var(--bg); border-width: 0 2px 2px 0;
+  border: solid var(--on-accent); border-width: 0 2px 2px 0;
   transform: rotate(45deg) translate(-1px, -1px);
 }
 input[type="checkbox"]:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
@@ -249,8 +290,8 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .empty { color: var(--faint); padding: 18px 0; }
 
 .error {
-  background: #2a1c1e; border: 1px solid #5c3238; color: #f0b8bc;
-  border-radius: var(--radius); padding: 9px 12px; margin-bottom: 14px;
+  background: var(--bad-wash); border: 1px solid var(--bad-edge); color: var(--bad-text);
+  border-radius: var(--radius-surface); padding: 9px 12px; margin-bottom: 14px;
   display: flex; gap: 10px; align-items: flex-start;
 }
 .error pre { margin: 0; white-space: pre-wrap; font: inherit; flex: 1; }
@@ -259,7 +300,7 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
    error's shape, in the panel's colours. */
 .notice {
   background: var(--panel-2); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 9px 12px; margin-bottom: 14px;
+  border-radius: var(--radius-surface); padding: 9px 12px; margin-bottom: 14px;
   display: flex; gap: 10px; align-items: center;
 }
 /* The count on a line of its own, where nothing cuts it; what the terminals
@@ -275,11 +316,11 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .strip { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 .strip .stage {
   border: 1px solid var(--line); background: var(--panel-2);
-  border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--faint);
+  border-radius: var(--radius-control); padding: 4px 10px; font-size: 12px; color: var(--faint);
   cursor: pointer;
 }
 .strip .stage.done { color: var(--dim); }
-.strip .stage.current { border-color: var(--accent); color: var(--text); background: #142c29; }
+.strip .stage.current { border-color: var(--accent); color: var(--text); background: var(--accent-wash); }
 .strip .stage.final { border-style: dashed; }
 
 /* ---- flow editor canvas ---- */
@@ -300,7 +341,7 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .flowbox {
   position: relative; width: 232px; min-height: 68px; box-sizing: border-box;
   background: var(--panel-2); border: 1px solid var(--line);
-  border-radius: 10px; padding: 10px 12px; user-select: none;
+  border-radius: var(--radius-surface); padding: 10px 12px; user-select: none;
   box-shadow: inset 3px 0 0 var(--kind, var(--line));
 }
 .flowbox--selected { border-color: var(--kind, var(--accent)); box-shadow: inset 3px 0 0 var(--kind), 0 0 0 1px var(--kind); }
@@ -326,12 +367,12 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 }
 .kind-tile {
   display: inline-grid; place-items: center; flex: none;
-  width: 36px; height: 36px; border-radius: 9px;
+  width: 36px; height: 36px; border-radius: 25%;
   color: var(--kind);
   background: color-mix(in srgb, var(--kind) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--kind) 30%, transparent);
 }
-.kind-tile--big { width: 46px; height: 46px; border-radius: 11px; }
+.kind-tile--big { width: 46px; height: 46px; }
 .kind-tile--big .node-icon { width: 26px; height: 26px; }
 
 /* What the stage leaves on the card. A chip is also the port a fork is pulled
@@ -350,9 +391,9 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 /* Qualified by the box: the library's stylesheet comes with the canvas' lazy
  * chunk, after this one, and would otherwise paint every socket its own. */
 .flowbox .flowbox__out { width: 8px; height: 8px; border: none; }
-.flowbox .flowbox__out--success { background: #3db887; }
-.flowbox .flowbox__out--failure { background: #d24b4e; }
-.flowbox .flowbox__out--event { background: #8b8d94; }
+.flowbox .flowbox__out--success { background: var(--ok); }
+.flowbox .flowbox__out--failure { background: var(--bad); }
+.flowbox .flowbox__out--event { background: var(--dim); }
 .flowbox .flowbox__out--write { background: var(--accent); }
 
 /* The caption of an awaited event. It is an HTML box over the canvas rather
@@ -363,7 +404,7 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .canvas .solid-flow__edge-label { background: transparent; padding: 0; font-size: 10px; }
 .flowedge__label {
   color: var(--faint); background: var(--panel);
-  padding: 1px 4px; border-radius: 3px;
+  padding: 1px 4px; border-radius: var(--radius-mark);
 }
 
 /* The end of an arrow, shown while it is selected: the box is what the pointer
@@ -400,6 +441,15 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
   --xy-controls-button-color: var(--dim);
   --xy-controls-button-color-hover: var(--text);
 
+  /* The rest of what the library paints by `light-dark()`: without these it
+   * would follow `color-scheme` to its own greys, not to the theme. */
+  --xy-background-color: transparent;
+  --xy-background-pattern-color: var(--line-strong);
+  --xy-edge-stroke: var(--dim);
+  --xy-edge-stroke-selected: var(--text);
+  --xy-connectionline-stroke: var(--dim);
+  --xy-edge-label-color: var(--faint);
+
   /* A dark theme has no use for a drop shadow — nothing under it goes darker.
    * The lift is an edge, the same one every other surface here is given. */
   --xy-controls-box-shadow: 0 0 0 1px var(--line);
@@ -409,14 +459,14 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 .canvas .solid-flow__panel.left { left: var(--inset-left, 0px); }
 
 .solid-flow__controls {
-  border-radius: var(--radius);
+  border-radius: var(--radius-control);
   overflow: hidden; /* so the square buttons stop at the rounded corner */
 }
 
 /* The dataflow check: a condition reading a property nothing produces. Not an
  * error — hence the warn colour rather than the error one. */
 .warn-note {
-  border: 1px solid var(--warn); border-radius: var(--radius);
+  border: 1px solid var(--warn); border-radius: var(--radius-surface);
   padding: 8px 10px; margin-bottom: 10px;
   font-size: 12px; color: var(--warn);
 }
@@ -425,12 +475,12 @@ label.field > span, .field-label { display: block; color: var(--dim); font-size:
 
 .panel {
   background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 14px;
+  border-radius: var(--radius-surface); padding: 14px;
 }
 .panel + .panel { margin-top: 12px; }
 
 .question {
-  margin-top: 10px; border: 1px solid #4a3d22; background: #241f14; border-radius: var(--radius); padding: 12px;
+  margin-top: 10px; border: 1px solid var(--warn-edge); background: var(--warn-wash); border-radius: var(--radius-surface); padding: 12px;
   display: flex; flex-direction: column; align-items: stretch; gap: 8px;
 }
 .question .options { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -497,11 +547,11 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   min-width: 200px; padding: 4px;
   background: var(--panel-2);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-surface);
 }
 .menu button {
   display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 5px 9px; border: 0; border-radius: 6px;
+  padding: 5px 9px; border: 0; border-radius: var(--radius-control);
   background: none; color: var(--dim); cursor: pointer; text-align: left;
   font-size: 13px; letter-spacing: 0; font-weight: 400;
 }
@@ -528,8 +578,8 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   position: absolute; top: calc(var(--bar) + 8px); right: 14px; bottom: 14px; z-index: 4;
   width: min(460px, calc(100% - 28px));
   display: flex; flex-direction: column;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-surface);
+  box-shadow: 0 10px 30px var(--shadow);
 }
 .ribbon-journal > header { padding: 8px 12px; border-bottom: 1px solid var(--line); }
 .ribbon-journal > header h3 { margin: 0; }
@@ -584,7 +634,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .compose-session .meta { flex: none; font-variant-numeric: tabular-nums; }
 .compose-session-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Two ways to begin, one of which is always chosen. */
-.compose-mode { display: flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.compose-mode { display: flex; border: 1px solid var(--line); border-radius: var(--radius-control); overflow: hidden; }
 .compose-mode button {
   background: none; border: 0; border-radius: 0; padding: 4px 12px;
   color: var(--dim); cursor: pointer;
@@ -642,7 +692,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   display: flex; flex-direction: column; min-height: 0;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-surface);
   overflow: hidden;
 }
 /* The focused column is the only one at full strength: which one you are on
@@ -676,11 +726,11 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   border-bottom: 1px solid var(--line);
   font-size: 12px; color: var(--dim);
 }
-.screen-problems.now { color: var(--warn); background: #241f14; border-bottom-color: #4a3d22; }
+.screen-problems.now { color: var(--warn); background: var(--warn-wash); border-bottom-color: var(--warn-edge); }
 .screen-problems p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .screen-problems p + p { margin-top: 4px; }
 .screen-problems p.review, .screen-problems.now p.review { color: var(--text); }
-.screen-problems p.source, .screen-problems.now p.source { color: var(--ansi-blue); }
+.screen-problems p.source, .screen-problems.now p.source { color: var(--accent); }
 
 .screen-remarks { flex: 0 0 auto; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
 .remarks-form { display: flex; flex-direction: column; gap: 8px; }
@@ -721,7 +771,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 }
 .rail-dot {
   width: 5px; height: 16px; padding: 0;
-  border: 0; border-radius: 3px; cursor: pointer;
+  border: 0; border-radius: 999px; cursor: pointer;
   background: var(--line);
 }
 .rail-dot:hover { background: var(--faint); }
@@ -771,7 +821,8 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
    a box that grows to its content would agree with itself and with nothing
    else. */
 .terminal { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
-.terminal-host { flex: 1; min-height: 0; padding: 6px 8px; }
+/* xterm reads --bg and --text off this box, so they are the terminal's here. */
+.terminal-host { --bg: var(--term-bg); --text: var(--term-text); flex: 1; min-height: 0; padding: 6px 8px; background: var(--bg); }
 .terminal-host .xterm { height: 100%; }
 .terminal .meta { padding: 4px 10px; border-top: 1px solid var(--line); }
 
@@ -841,7 +892,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .update-status--error { color: var(--bad); }
 
 .update-progress {
-  height: 4px; border-radius: 2px;
+  height: 4px; border-radius: 999px;
   background: var(--line); overflow: hidden;
 }
 .update-progress__bar { height: 100%; background: var(--accent); transition: width .2s linear; }
@@ -850,7 +901,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
  * lines somebody laid out, and re-wrapping them is losing what they said. */
 .update-notes {
   margin: 0; padding: 8px 10px; max-height: 220px; overflow: auto;
-  border: 1px solid var(--line); border-radius: var(--radius);
+  border: 1px solid var(--line); border-radius: var(--radius-control);
   font-family: var(--mono); font-size: 12px; color: var(--dim);
   white-space: pre-wrap;
 }
@@ -872,7 +923,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .settings-group {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-surface);
 }
 .settings-group > * + * { border-top: 1px solid var(--line); }
 
@@ -912,7 +963,7 @@ input[type="checkbox"].switch::after {
   transition: left .12s, background-color .12s;
 }
 input[type="checkbox"].switch:checked { background: var(--accent); border-color: var(--accent); }
-input[type="checkbox"].switch:checked::after { left: 14px; background: var(--bg); }
+input[type="checkbox"].switch:checked::after { left: 14px; background: var(--on-accent); }
 
 @media (prefers-reduced-motion: reduce) {
   input[type="checkbox"].switch, input[type="checkbox"].switch::after { transition: none; }
@@ -955,8 +1006,8 @@ input[type="checkbox"].switch:checked::after { left: 14px; background: var(--bg)
  * shadow, since a panel the colour of what it floats over reads as drawing. */
 .palette, .flowpage__inspector, .flowpage__paletteOpen {
   position: absolute; z-index: 4;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-surface);
+  box-shadow: 0 10px 30px var(--shadow);
 }
 .flowpage__paletteOpen { top: 14px; left: 14px; padding: 7px 14px; border-radius: 999px; }
 
@@ -980,7 +1031,7 @@ input[type="checkbox"].switch:checked::after { left: 14px; background: var(--bg)
 .kind-card {
   position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
   padding: 11px 10px 10px; min-height: 104px; box-sizing: border-box;
-  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-surface);
   color: var(--text); text-align: left; cursor: grab; font: inherit;
 }
 .kind-card:hover { border-color: color-mix(in srgb, var(--kind, var(--accent)) 55%, var(--line)); }
@@ -993,7 +1044,7 @@ input[type="checkbox"].switch:checked::after { left: 14px; background: var(--bg)
 }
 .kind-card__edit {
   position: absolute; top: 6px; right: 6px;
-  width: 24px; height: 24px; border-radius: 6px; border: 0;
+  width: 24px; height: 24px; border-radius: var(--radius-control); border: 0;
   background: none; color: var(--faint); cursor: pointer; opacity: 0;
 }
 .kind-card:hover .kind-card__edit, .kind-card__edit:focus-visible { opacity: 1; }
@@ -1031,7 +1082,7 @@ input[type="text"].inspector__name:focus { background: var(--bg); }
 .kind-strip { display: flex; flex-wrap: wrap; gap: 2px; }
 .kind-strip__item {
   width: 32px; height: 32px; display: grid; place-items: center;
-  border: 1px solid transparent; border-radius: 8px; background: none;
+  border: 1px solid transparent; border-radius: 25%; background: none;
   color: var(--faint); cursor: pointer;
 }
 .kind-strip__item .node-icon { width: 18px; height: 18px; }
@@ -1046,14 +1097,14 @@ input[type="text"].inspector__name:focus { background: var(--bg); }
  * is in sight. */
 .segmented {
   display: inline-flex; padding: 2px; gap: 2px;
-  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: calc(var(--radius-control) + 2px);
 }
 /* Five answers in the inspector's width: equal columns, a little tighter. */
 .segmented--wrap { display: grid; grid-template-columns: repeat(5, 1fr); }
 .segmented--wrap button { padding: 4px 2px; font-size: 12px; }
 .segmented button {
   border: 0; background: none; color: var(--dim); cursor: pointer;
-  padding: 4px 10px; border-radius: 6px; font-size: 12.5px;
+  padding: 4px 10px; border-radius: var(--radius-control); font-size: 12.5px;
 }
 .segmented button:hover { color: var(--text); }
 .segmented button.on { background: var(--panel-2); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
@@ -1062,18 +1113,18 @@ input[type="text"].inspector__name:focus { background: var(--bg); }
 .agent-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .agent-pick {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
-  padding: 7px 10px; border-radius: 8px; cursor: pointer; text-align: left;
+  padding: 7px 10px; border-radius: var(--radius-control); cursor: pointer; text-align: left;
   background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
 }
-.agent-pick:hover { border-color: #3f4560; }
-.agent-pick.on { border-color: var(--accent); background: #1b3230; }
+.agent-pick:hover { border-color: var(--line-strong); }
+.agent-pick.on { border-color: var(--accent); background: var(--accent-wash); }
 .agent-pick__name { font-weight: 600; font-size: 12.5px; }
 .agent-pick__kind { font-size: 11px; color: var(--faint); }
 
 .icon-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
 .icon-grid__item {
   aspect-ratio: 1; display: grid; place-items: center;
-  border: 1px solid transparent; border-radius: 8px; background: none;
+  border: 1px solid transparent; border-radius: 25%; background: none;
   color: var(--dim); cursor: pointer;
 }
 .icon-grid__item:hover { background: var(--panel-2); color: var(--text); }
@@ -1102,7 +1153,7 @@ input[type="color"].swatch--pick::-webkit-color-swatch { border: 0; border-radiu
   display: flex; flex-direction: column; gap: 6px;
 }
 .flowpage__notes .error, .flowpage__notes .warn-note {
-  margin: 0; background: var(--panel); box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  margin: 0; background: var(--panel); box-shadow: 0 10px 30px var(--shadow);
 }
 
 /* ---- source rules ---- */
@@ -1134,5 +1185,5 @@ input[type="color"].swatch--pick::-webkit-color-swatch { border: 0; border-radiu
 .run-response { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
 .run-response pre {
   margin: 0; padding: 8px; background: var(--bg); border: 1px solid var(--line);
-  border-radius: 6px; overflow: auto; white-space: pre; max-height: 40vh;
+  border-radius: var(--radius-control); overflow: auto; white-space: pre; max-height: 40vh;
 }

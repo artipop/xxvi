@@ -3,6 +3,7 @@ import { chooseLanguage } from "../state";
 import { choice, CHOICES, LANG_NAMES, systemLang, t, type Choice } from "../i18n";
 import UpdatesSection from "./updates";
 import { nativeAvailable, TERMINAL_ENGINE } from "./native";
+import { chooseThemeFamily, chooseThemeMode, THEME_FAMILIES, THEME_MODES, themeFamilyId, themeMode } from "../theme";
 
 // What is set once for this machine and then left alone. Each section keeps its
 // own words and its own way of saving; this screen only puts them in one place.
@@ -37,6 +38,24 @@ export default function SettingsView() {
                 )}
               </For>
             </select>
+          </div>
+          <div class="setting-row">
+            <span class="setting-title">{t("settings.theme")}</span>
+            <select value={themeFamilyId()} onChange={(e) => chooseThemeFamily(e.currentTarget.value)}>
+              <For each={THEME_FAMILIES}>{(f) => <option value={f.id}>{f.name}</option>}</For>
+            </select>
+          </div>
+          <div class="setting-row">
+            <span class="setting-title">{t("settings.themeMode")}</span>
+            <div class="segmented">
+              <For each={THEME_MODES}>
+                {(m) => (
+                  <button class={themeMode() === m ? "on" : ""} onClick={() => chooseThemeMode(m)}>
+                    {t(`settings.themeMode.${m}`)}
+                  </button>
+                )}
+              </For>
+            </div>
           </div>
           {/* Only where there is a choice: Ghostty's native library is on macOS. */}
           <Show when={native()}>

@@ -25,7 +25,8 @@ import type { Edge, Flow, Stage, StageTemplate, Trigger } from "../../bindings/g
 
 import "@dschz/solid-flow/dist/style.css";
 import { label, propName, propValue, t } from "../i18n";
-import { Tile, nodeDetail, ownsScreen, templateName, templateOf } from "./templates";
+import { themeColor } from "../theme";
+import { KIND_FALLBACK, Tile, nodeDetail, ownsScreen, templateName, templateOf } from "./templates";
 
 // The flow as a graph. Pan, zoom and drag are Solid Flow's; the layout is ours.
 //
@@ -275,12 +276,12 @@ function layout(stages: Stage[], edges: Edge[], rowHeight: number): Map<string, 
 }
 
 // An arrow and its head must be one colour, and the head is drawn from a shared
-// SVG marker that no class of ours can reach — so the colours are literals here
-// rather than CSS variables.
-const EDGE_COLOR: Record<string, string> = {
-  success: "#3db887",
-  failure: "#d24b4e",
-  event: "#8b8d94",
+// SVG marker that no class of ours can reach — so the colour is the token's
+// value, read off the page, rather than the variable.
+const EDGE_TOKEN: Record<string, string> = {
+  success: "--ok",
+  failure: "--bad",
+  event: "--dim",
 };
 
 // edgeKind styles a transition by what produces it: the stage's own outcome, or
@@ -313,7 +314,7 @@ const StageBox = (props: NodeProps) => {
       .join(" ");
 
   return (
-    <div class={classes()} style={{ "--kind": data().template?.color || "#949aab" }}>
+    <div class={classes()} style={{ "--kind": data().template?.color || KIND_FALLBACK }}>
       <Handle type="target" position="left" isConnectable={Boolean(data().editable)} />
 
       <div class="flowbox__head">
@@ -690,7 +691,7 @@ export default function FlowCanvas(props: Props) {
         const answered = isOutcomeEdge(edge, props.outcomeProperty);
         let kind = edgeKind(edge.on);
         if (answered) kind = sameFold(edge.if?.value, props.outcomePassed) ? "success" : "failure";
-        const color = EDGE_COLOR[kind];
+        const color = themeColor(EDGE_TOKEN[kind]);
 
         // The caption is what decides where the card goes: the event for a wait,
         // the condition for a fork — both where the arrow is, not three clicks
@@ -724,7 +725,7 @@ export default function FlowCanvas(props: Props) {
           class: `flowedge flowedge--${kind}${chosen ? " flowedge--selected" : ""}`,
           selected: chosen,
           label: parts.join(" · "),
-          labelStyle: unanswered ? { color: "#d9903d", "font-weight": "600" } : undefined,
+          labelStyle: unanswered ? { color: "var(--warn)", "font-weight": "600" } : undefined,
           style: {
             stroke: color,
             "stroke-width": chosen ? "3" : "1.5",
