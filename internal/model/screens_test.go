@@ -79,6 +79,14 @@ func TestUnresolvedScreenRefsWarnsAboutWhatNobodyWrites(t *testing.T) {
 		t.Fatalf("экран смотрит на свойство, которого никто не пишет: %v", got)
 	}
 
+	// The MR is the application's to write — a publish opens it, a review
+	// source brings it — so a screen on it is not a screen on nothing.
+	f.Stages[2].Screens = []Screen{{Kind: ScreenBrowser, Ref: "{MR}"}}
+	if got := f.UnresolvedScreenRefs(); len(got) != 0 {
+		t.Fatalf("«MR» пишет само приложение: %v", got)
+	}
+	f.Stages[2].Screens = []Screen{{Kind: ScreenBrowser, Ref: "{Стенд}"}}
+
 	// It is a warning, not a refusal: a person may well set the value by hand.
 	if _, err := ValidateFlow(f, []Agent{{Name: "Claude", Kind: KindClaude}}); err != nil {
 		t.Fatalf("непрописанное свойство экрана — предупреждение, а не отказ: %v", err)

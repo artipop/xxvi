@@ -167,6 +167,12 @@ function Editor(props: {
   const writesOf = (stage: Stage): StageWrite[] =>
     list(stage.writes).map((w) => ({ name: w.property, branchable: true }));
 
+  // The properties the application writes itself, mirroring model.IsAppProperty:
+  // the outcome, the MR a publish opens or a review source brings, the verdict
+  // sent to it. Reading one of them is not reading something nobody writes.
+  const appProperty = (name: string) =>
+    [vocabulary().outcomeProperty, "MR", "Review"].some((p) => sameFold(p, name));
+
   // The dataflow check: a conditional arrow reading a property no stage of this
   // flow declares it writes. Not an error — the value may be a person's own
   // answer — but a flow built on a property nothing produces is a flow that
@@ -178,7 +184,7 @@ function Editor(props: {
     for (const e of edges()) {
       const name = e.if?.property?.trim();
       if (!name || e.on === "card.changed") continue;
-      if (sameFold(name, vocabulary().outcomeProperty)) continue;
+      if (appProperty(name)) continue;
       if (written.has(name.toLowerCase()) || out.some((n) => sameFold(n, name))) continue;
       out.push(name);
     }
@@ -188,15 +194,18 @@ function Editor(props: {
   // The same check for screens: a window pointing at a property nobody writes
   // is a window that quietly stays blank, and a blank window with no reason is
   // worse than a sentence here.
+  //
+  // Said per stage: «a screen opens a property» left the reader to find which
+  // screen, on which box, and what «opens» meant.
   const unresolved = createMemo(() => {
     const written = new Set(stages().flatMap((s) => list(s.writes).map((w) => w.property.trim().toLowerCase())));
-    const out: string[] = [];
+    const out: Array<{ stage: string; property: string }> = [];
     for (const stage of stages()) {
       for (const sc of list(stage.screens)) {
         for (const name of refNames(sc.ref ?? "")) {
-          if (sameFold(name, vocabulary().outcomeProperty)) continue;
-          if (written.has(name.toLowerCase()) || out.some((n) => sameFold(n, name))) continue;
-          out.push(name);
+          if (appProperty(name)) continue;
+          if (written.has(name.toLowerCase()) || out.some((o) => o.stage === stage.name && sameFold(o.property, name))) continue;
+          out.push({ stage: stage.name, property: name });
         }
       }
     }
@@ -301,7 +310,9 @@ function Editor(props: {
             </Show>
             <Show when={unresolved().length > 0}>
               <div class="warn-note">
-                {t("flows.unresolved", { properties: unresolved().map((n) => `«${propName(n)}»`).join(", ") })}
+                <For each={unresolved()}>
+                  {(u) => <div>{t("flows.unresolved", { stage: u.stage, property: propName(u.property) })}</div>}
+                </For>
               </div>
             </Show>
           </div>

@@ -199,6 +199,15 @@ func IsOutcomeProperty(name string) bool {
 	return strings.EqualFold(strings.TrimSpace(name), OutcomeProperty)
 }
 
+// IsAppProperty reports a property the application writes itself rather than a
+// stage declaring it: the outcome of every stage, the MR a publish opens or a
+// review source brings, and the verdict sent to it. A flow that reads one of
+// these is not reading something nobody writes.
+func IsAppProperty(name string) bool {
+	n := strings.TrimSpace(name)
+	return IsOutcomeProperty(n) || strings.EqualFold(n, MRProperty) || strings.EqualFold(n, ReviewProperty)
+}
+
 // Trigger describes one edge trigger. The list doubles as the editor's
 // dropdown, so the UI can never offer a trigger the engine does not implement;
 // what it is called is the UI's, keyed by Kind.
@@ -630,7 +639,7 @@ func (f Flow) UnwrittenConditions() []string {
 		}
 		// A person's answer is not a stage's output, and neither is the field
 		// the engine fills in for every stage.
-		if e.On == TriggerCardChanged || IsOutcomeProperty(e.If.Property) {
+		if e.On == TriggerCardChanged || IsAppProperty(e.If.Property) {
 			continue
 		}
 		key := strings.ToLower(strings.TrimSpace(e.If.Property))
@@ -702,7 +711,7 @@ func (f Flow) UnresolvedScreenRefs() []string {
 		for _, sc := range s.Screens {
 			for _, name := range ScreenRefs(sc.Ref) {
 				key := strings.ToLower(strings.TrimSpace(name))
-				if written[key] || seen[key] || IsOutcomeProperty(name) {
+				if written[key] || seen[key] || IsAppProperty(name) {
 					continue
 				}
 				seen[key] = true
