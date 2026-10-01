@@ -1,5 +1,9 @@
 import {defineConfig} from 'vitepress'
 
+// Who the guide is published for; deffun's own build is the default. The
+// composing project (../../../deffun) passes the other profiles' names.
+const holder = process.env.PROFILE_NAME ?? 'deffun'
+
 // The XXVI guide, kept in this repository beside the product it describes.
 // VitePress, the theme and the place in a deploy are the same as in the other
 // deffun guides, so there is one set of habits for all of them.
@@ -72,7 +76,7 @@ export default defineConfig({
 
         footer: {
             message: 'Руководство пользователя XXVI',
-            copyright: '© 2026 deffun',
+            copyright: `© 2026 ${holder}`,
         },
 
         notFound: {
