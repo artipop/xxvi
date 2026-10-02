@@ -209,8 +209,6 @@ export const ru: Dict = {
   "agents.model": "Модель",
   "agents.binPath": "Путь к бинарнику (если не на PATH)",
   "agents.command": "Команда запуска — весь argv ACP-агента, через пробел",
-  "agents.autoAllow": "Что можно без спроса — по одному в строке, например Bash(git *)",
-  "agents.autoAllowNote": "Если пусто: читать можно без спроса, менять нельзя, об остальном агент спросит.",
   "proxies.title": "Прокси",
   "proxies.new": "Новая конфигурация",
   "proxies.note": "Агент выбирает конфигурацию по имени; при запуске она превращается в HTTP(S)_PROXY, NO_PROXY и переменные CA.",

@@ -74,7 +74,7 @@ export default function AgentsView() {
                 <div class="spacer" />
                 <CheckButton name={a.name} />
                 <button class="btn quiet"
-                        onClick={() => setEditing({ agent: JSON.parse(JSON.stringify(a)), original: a.name })}>
+                        onClick={() => { forgetCheck(a.name); setEditing({ agent: JSON.parse(JSON.stringify(a)), original: a.name }); }}>
                   {t("common.edit")}
                 </button>
                 <button class="btn quiet" onClick={async () => { await guard(() => API.DeleteAgent(a.name)); await loadAgents(); }}>
@@ -202,6 +202,14 @@ function ProxyForm(props: { proxy: Proxy; onDone: () => void }): JSX.Element {
 // the agent, and one run through npx or uvx downloads itself first.
 const [checks, setChecks] = createSignal<Record<string, AgentCheck>>({});
 
+// A check describes the agent as it was when asked: once the entry is opened
+// for editing (another kind, another model) it would be talking about a
+// different agent, so it is dropped rather than left on the card.
+const forgetCheck = (name: string) => {
+  const { [name]: _, ...rest } = checks();
+  setChecks(rest);
+};
+
 function CheckButton(props: { name: string }): JSX.Element {
   const [busy, setBusy] = createSignal(false);
   const check = async () => {
@@ -242,7 +250,8 @@ function AgentForm(props: { agent: Agent; onDone: () => void }) {
 
   const save = async () => {
     const saved = await guard(() => API.SaveAgent(a()));
-    if (saved) { await loadAgents(); props.onDone(); }
+    if (saved) {
+      forgetCheck(a().name); await loadAgents(); props.onDone(); }
   };
 
   return (
@@ -292,13 +301,6 @@ function AgentForm(props: { agent: Agent; onDone: () => void }) {
                  onInput={(e) => patch({ command: e.currentTarget.value.split(" ").filter(Boolean) })} />
         </label>
       </Show>
-
-      <label class="field">
-        <span>{t("agents.autoAllow")}</span>
-        <textarea value={(a().autoAllowTools ?? []).join("\n")}
-                  onInput={(e) => patch({ autoAllowTools: e.currentTarget.value.split("\n").map((s) => s.trim()).filter(Boolean) })} />
-      </label>
-      <div class="meta">{t("agents.autoAllowNote")}</div>
 
       <div class="row actions">
         <div class="spacer" />

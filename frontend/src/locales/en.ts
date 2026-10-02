@@ -199,8 +199,6 @@ export const en: Dict = {
   "agents.model": "Model",
   "agents.binPath": "Binary path (if not on PATH)",
   "agents.command": "Launch command — the whole argv of the ACP agent, space-separated",
-  "agents.autoAllow": "Allowed without asking — one per line, for example Bash(git *)",
-  "agents.autoAllowNote": "If empty: reading is allowed without asking, changing is not, the agent asks about the rest.",
   "proxies.title": "Proxies",
   "proxies.new": "New configuration",
   "proxies.note": "An agent picks a configuration by name; at launch it becomes HTTP(S)_PROXY, NO_PROXY and the CA variables.",
