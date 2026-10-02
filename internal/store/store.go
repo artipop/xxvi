@@ -31,7 +31,7 @@ type Store struct {
 	secrets Secrets
 }
 
-// Secrets is where passwords are kept, by key. hosting.Keyring is the system's
+// Secrets is where passwords are kept, by key. secrets.Keyring is the system's
 // own and satisfies it.
 type Secrets interface {
 	Token(key string) (string, error)

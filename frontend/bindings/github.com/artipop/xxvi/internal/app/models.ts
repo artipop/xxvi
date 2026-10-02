@@ -15,6 +15,9 @@ import * as launch$0 from "../launch/models.js";
 import * as model$0 from "../model/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as sources$0 from "../sources/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as store$0 from "../store/models.js";
 
 /**
@@ -175,6 +178,17 @@ export interface NotificationWords {
     "remindPaused": string;
     "remindAgent": string;
     "remindMany": string;
+}
+
+/**
+ * SourcePlugin is a plugin a source can be made from, as the source form needs
+ * it: what to call it and what to ask.
+ */
+export interface SourcePlugin {
+    "name": string;
+    "title"?: string;
+    "fields"?: sources$0.Field[] | null;
+    "needsToken": boolean;
 }
 
 /**

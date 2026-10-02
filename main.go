@@ -32,9 +32,9 @@ import (
 	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/nativeterm"
 	"github.com/artipop/xxvi/internal/ptyhold"
+	"github.com/artipop/xxvi/internal/sources/kaiten"
 	"github.com/artipop/xxvi/internal/stagemcp"
 	"github.com/artipop/xxvi/internal/userpath"
-	"github.com/artipop/xxvi/internal/sources/kaiten"
 )
 
 //go:embed all:frontend/dist

@@ -12,8 +12,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"unsafe"
 	"time"
+	"unsafe"
 
 	"github.com/artipop/xxvi/internal/acp"
 	"github.com/artipop/xxvi/internal/appmcp"
@@ -134,7 +134,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	st.UseSecrets(hosting.Keyring{})
+	st.UseSecrets(secrets.Keyring{})
 	a := &App{DataDir: dataDir, Store: st, log: log}
 
 	// A session left running by a previous run is not still working: a row that

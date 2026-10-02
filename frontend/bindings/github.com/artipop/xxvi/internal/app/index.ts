@@ -15,6 +15,7 @@ export type {
     LaunchPlan,
     LaunchRun,
     NotificationWords,
+    SourcePlugin,
     TerminalHandle,
     UpdateState,
     Vocabulary
