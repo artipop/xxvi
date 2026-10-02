@@ -134,7 +134,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
             <div class="screen-error">{sessionsError()}</div>
           </Show>
           <Show when={projectID() && !sessionsError() && !sessions()}>
-            <p class="empty">{t("compose.sessionsLoading")}</p>
+            <p class="empty loading"><span class="spinner" />{t("compose.sessionsLoading")}</p>
           </Show>
           <Show when={sessions()?.length === 0}>
             <p class="empty">{t("compose.sessionsNone")}</p>

@@ -683,6 +683,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   background: var(--bg); padding: 8px 0;
 }
 .compose-sessions .empty { padding: 8px 18px; margin: 0; }
+.compose-sessions .loading { display: flex; align-items: center; gap: 10px; }
 .compose-sessions > .screen-error { margin-top: -8px; }
 .compose-session {
   display: flex; gap: 12px; align-items: baseline; width: 100%;
