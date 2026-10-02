@@ -60,8 +60,8 @@ const RunPane = lazy(() => import("./run"));
 // widen is the difference between reading a terminal and squinting at one; the
 // steps are Niri's, and they are steps rather than a drag because a column that
 // lands on the same widths every time is a column you stop thinking about.
-const WIDTHS = [0.34, 0.5, 0.67, 1];
-const DEFAULT_WIDTH = 2; // two thirds: wide enough for a page, narrow enough to see the next step
+const WIDTHS = [0.34, 0.5, 0.67, 0.94, 1];
+const DEFAULT_WIDTH = 3; // almost the whole band: a strip of the neighbouring screen stays visible, so the ribbon reads as scrollable
 
 function centerInBand(el: HTMLElement | undefined) {
   const band = el?.closest<HTMLElement>(".band");
