@@ -101,7 +101,8 @@ func main() {
 	// Asked before it is registered: the service refuses to start without an
 	// application bundle, and that refusal would stop everything else — over a
 	// road to an answer that the card and the panel already provide.
-	services := []application.Service{application.NewService(app.NewAPI(core))}
+	popup := &PopupMenu{}
+	services := []application.Service{application.NewService(app.NewAPI(core)), application.NewService(popup)}
 	var notifier *notifications.NotificationService
 	if ok, why := app.NotificationsPossible(); ok {
 		notifier = notifications.New()
@@ -163,6 +164,7 @@ func main() {
 		URL: "/",
 	})
 
+	popup.app, popup.win = wails, win
 	core.SetWindows(&windows{win: win})
 	core.SetNativeWindow(win.NativeWindow)
 

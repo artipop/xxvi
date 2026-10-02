@@ -17,6 +17,7 @@ import Markdown from "./markdown";
 import { entryText, label, propName, questionText, say, t } from "../i18n";
 import { MarkButtons, RemarksForm, sendMark } from "./marks";
 import { Icon } from "../icons";
+import { popup, type PopupItem } from "./popup";
 import type { Msg } from "../../bindings/github.com/artipop/gandvik/internal/msg/models";
 import type { Mark } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
 
@@ -605,29 +606,10 @@ export default function Ribbon(): JSX.Element {
   );
 }
 
-/** Folded is a button that opens a short list under itself, and closes on a
- *  click anywhere else. */
-function Folded(props: { label: JSX.Element; title?: string; class?: string; children: (close: () => void) => JSX.Element }): JSX.Element {
-  const [open, setOpen] = createSignal(false);
-  let box: HTMLDivElement | undefined;
-  onSettled(() => {
-    const away = (e: MouseEvent) => { if (box && !box.contains(e.target as Node)) setOpen(false); };
-    // A click in Ghostty's view never reaches the page as a mousedown; the
-    // view says it was clicked instead.
-    const shut = () => setOpen(false);
-    document.addEventListener("mousedown", away);
-    window.addEventListener("native-terminal-focus", shut);
-    return () => {
-      document.removeEventListener("mousedown", away);
-      window.removeEventListener("native-terminal-focus", shut);
-    };
-  });
+function Folded(props: { label: JSX.Element; title?: string; class?: string; items: () => PopupItem[] }): JSX.Element {
   return (
-    <div class={`card-menu ${props.class ?? ""}`} ref={box}>
-      <button class="btn quiet tiny" onClick={() => setOpen(!open())} title={props.title}>{props.label}</button>
-      <Show when={open()}>
-        <div class="menu">{props.children(() => setOpen(false))}</div>
-      </Show>
+    <div class={`card-menu ${props.class ?? ""}`}>
+      <button class="btn quiet tiny" aria-haspopup="menu" onClick={(e) => popup(e.currentTarget, props.items())} title={props.title}>{props.label}</button>
     </div>
   );
 }
@@ -645,18 +627,11 @@ function Workspaces(): JSX.Element {
   ];
   return (
     <Show when={projects().length > 0}>
-      <Folded class="workspaces" label={<>{name(workspace())}<Icon name="chevron" /></>} title={t("ribbon.workspace")}>
-        {(close) => (
-          <For each={ids()}>
-            {(id) => (
-              <button class={id === workspace() ? "on" : ""} onClick={() => { close(); setWorkspace(id); }}>
-                <span>{name(id)}</span>
-                <Show when={count(id) > 0}><span class="count">{count(id)}</span></Show>
-              </button>
-            )}
-          </For>
-        )}
-      </Folded>
+      <Folded class="workspaces" label={<>{name(workspace())}<Icon name="chevron" /></>} title={t("ribbon.workspace")}
+        items={() => ids().map((id) => ({
+          label: name(id) + (count(id) > 0 ? ` (${count(id)})` : ""),
+          checked: id === workspace(), action: () => setWorkspace(id),
+        }))} />
     </Show>
   );
 }
@@ -667,17 +642,8 @@ function Closed(): JSX.Element {
   const here = () => done().filter((c) => (c.project ?? "") === workspace());
   return (
     <Show when={here().length > 0}>
-      <Folded label={t("ribbon.closedList", { n: here().length })}>
-        {(close) => (
-          <For each={here().slice(0, 30)}>
-            {(card) => (
-              <button onClick={() => { close(); showRibbon(card.id); }}>
-                <span class="menu-title">{card.title}</span>
-              </button>
-            )}
-          </For>
-        )}
-      </Folded>
+      <Folded label={t("ribbon.closedList", { n: here().length })}
+        items={() => here().slice(0, 30).map((card) => ({ label: card.title, action: () => showRibbon(card.id) }))} />
     </Show>
   );
 }
@@ -686,50 +652,20 @@ function Closed(): JSX.Element {
 // and rare, so folded away: the bar is the window's drag handle and the name of
 // the job, not a toolbar.
 function CardMenu(props: { cardId: string; closed: boolean; onJournal: () => void }): JSX.Element {
-  const [open, setOpen] = createSignal(false);
-  // Dropping cannot be taken back from here, so it takes a second press — a
-  // dialog would be a second window for one word.
-  const [sure, setSure] = createSignal(false);
-  let box: HTMLDivElement | undefined;
-
-  onSettled(() => {
-    const away = (e: MouseEvent) => {
-      if (box && !box.contains(e.target as Node)) { setOpen(false); setSure(false); }
-    };
-    const shut = () => { setOpen(false); setSure(false); };
-    document.addEventListener("mousedown", away);
-    window.addEventListener("native-terminal-focus", shut);
-    return () => {
-      document.removeEventListener("mousedown", away);
-      window.removeEventListener("native-terminal-focus", shut);
-    };
-  });
-
-  const run = (fn: () => Promise<unknown>) => {
-    setOpen(false); setSure(false);
-    void guard(fn).then(() => loadRibbons());
-  };
-
+  const run = (fn: () => Promise<unknown>) => { void guard(fn).then(() => loadRibbons()); };
+  const items = (anchor: HTMLElement): PopupItem[] => [
+    { label: t("card.journal"), action: props.onJournal },
+    ...(!props.closed ? [
+      { label: "", separator: true },
+      { label: t("card.removeFromFlow"), action: () => run(() => API.RemoveFromFlow(props.cardId)) },
+      { label: t("common.drop"), action: () => popup(anchor, [
+        { label: t("ribbon.sureDrop"), action: () => run(() => API.DropCard(props.cardId)) },
+      ]) },
+    ] : []),
+  ];
   return (
-    <div class="card-menu" ref={box}>
-      <button class="btn quiet tiny" onClick={() => { setOpen(!open()); setSure(false); }} title={t("attention.card")}>⋯</button>
-      <Show when={open()}>
-        <div class="menu">
-          <button onClick={() => { setOpen(false); props.onJournal(); }}>
-            <span>{t("card.journal")}</span><span class="count">J</span>
-          </button>
-          <Show when={!props.closed}>
-            <hr />
-            <button onClick={() => run(() => API.RemoveFromFlow(props.cardId))}>{t("card.removeFromFlow")}</button>
-            <button
-              class={sure() ? "danger" : ""}
-              onClick={() => (sure() ? run(() => API.DropCard(props.cardId)) : setSure(true))}
-            >
-              {sure() ? t("ribbon.sureDrop") : t("common.drop")}
-            </button>
-          </Show>
-        </div>
-      </Show>
+    <div class="card-menu">
+      <button class="btn quiet tiny" aria-haspopup="menu" onClick={(e) => popup(e.currentTarget, items(e.currentTarget))} title={t("attention.card")}>⋯</button>
     </div>
   );
 }
