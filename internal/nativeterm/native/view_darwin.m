@@ -48,23 +48,6 @@ static BOOL forRibbon(NSEvent *e) {
   return NO;
 }
 
-// A key the menu has a command for.
-static BOOL inMenu(NSMenu *menu, NSEvent *e) {
-  NSEventModifierFlags want = e.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagShift |
-                                                 NSEventModifierFlagOption | NSEventModifierFlagControl);
-  NSString *key = e.charactersIgnoringModifiers.lowercaseString;
-  for (NSMenuItem *item in menu.itemArray) {
-    if (item.hasSubmenu && inMenu(item.submenu, e)) return YES;
-    if (item.keyEquivalent.length == 0) continue;
-    NSEventModifierFlags mods = item.keyEquivalentModifierMask;
-    NSString *k = item.keyEquivalent;
-    // An upper-case equivalent carries its shift in the letter.
-    if (![k isEqualToString:k.lowercaseString]) mods |= NSEventModifierFlagShift;
-    if ([k.lowercaseString isEqualToString:key] && mods == want) return YES;
-  }
-  return NO;
-}
-
 static ghostty_input_mods_e modsOf(NSEventModifierFlags f) {
   int m = 0;
   if (f & NSEventModifierFlagShift) m |= GHOSTTY_MODS_SHIFT;
@@ -468,7 +451,9 @@ static bool ensureApp(void) {
         toPage(e.window);
         return e;
       }
-      if (inMenu(NSApp.mainMenu, e)) return e;
+      // Dispatch before the web view can claim the key equivalent; AppKit
+      // handles the menu's modifiers and keyboard layout itself.
+      if ([NSApp.mainMenu performKeyEquivalent:e]) return nil;
     }
     [v keyDown:e];
     return nil;
