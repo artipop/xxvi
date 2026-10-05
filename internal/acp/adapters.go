@@ -187,7 +187,9 @@ var adapters = map[string]adapter{
 		cliBin: "codex",
 		// Its offer to update itself is a menu drawn over the conversation,
 		// and Enter — the key that sends a message — picks «Update now».
-		cliArgs:       []string{"-c", "check_for_update_on_startup=false"},
+		// Per-step MCP and hook overrides already require embedded mode;
+		// selecting it explicitly avoids the daemon fallback warning.
+		cliArgs:       []string{"--no-daemon", "-c", "check_for_update_on_startup=false"},
 		cliResumeID:   func(id string) []string { return []string{"resume", id} },
 		cliResumeArgs: []string{"resume", "--last"},
 		cliHooks:      codexHooks,
