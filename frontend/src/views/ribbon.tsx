@@ -210,7 +210,7 @@ export default function Ribbon(): JSX.Element {
       if (ids.length === 0) return;
       // A closed card asked for is on its way into the stack, not missing
       // from it: the next read brings it.
-      if (!ids.includes(openRibbon()) && openRibbon() !== closedRibbon() && openRibbon() !== DRAFT) {
+      if (!ids.includes(openRibbon()) && (!closedRibbon() || openRibbon() !== closedRibbon()) && openRibbon() !== DRAFT) {
         setOpenRibbon(ids[0]);
       }
     },

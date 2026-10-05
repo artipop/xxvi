@@ -357,6 +357,7 @@ export async function loadRibbons() {
  *  stack. loadRibbons would do it too, but only on the next backend event, and
  *  with nothing left in work there may be none before they come back. */
 export function leaveRibbons() {
+  setOpenRibbon("");
   if (!closedRibbon()) return;
   setClosedRibbon("");
   void loadRibbons();
