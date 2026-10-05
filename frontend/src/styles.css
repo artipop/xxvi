@@ -582,6 +582,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .ribbon {
   --bar: 44px;      /* what the window reserves for its hidden title bar */
   --band: calc(100dvh - var(--bar));
+  --rail-space: 20px;
   height: 100dvh;
   display: flex; flex-direction: column;
   overflow: hidden;
@@ -635,8 +636,8 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 /* Over the strip rather than beside it: the strip is the whole window, and
    the journal is looked at and put away, not worked next to. */
 .ribbon-journal {
-  position: absolute; top: calc(var(--bar) + 8px); right: 14px; bottom: 14px; z-index: 4;
-  width: min(460px, calc(100% - 28px));
+  position: absolute; top: calc(var(--bar) + 8px); right: var(--rail-space); bottom: 14px; z-index: 4;
+  width: min(460px, calc(100% - var(--rail-space) - 14px));
   display: flex; flex-direction: column;
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-surface);
   box-shadow: 0 10px 30px var(--shadow);
@@ -712,6 +713,9 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
    is the only thing that asks. */
 .stack {
   height: var(--band);
+  /* Native terminals sit above the page, so the rail needs room outside
+     the stack's clipping bounds; a higher z-index cannot keep it visible. */
+  margin-right: var(--rail-space);
   overflow: hidden;
   scroll-behavior: smooth;
   overscroll-behavior: contain;
