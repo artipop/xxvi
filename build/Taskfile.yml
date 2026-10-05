@@ -262,25 +262,27 @@ tasks:
     cmds:
       - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true{{if eq .OBFUSCATED "true"}} -obfuscated{{end}} -ts -i
 
-  generate:icons:
-    summary: Generates Windows `.ico` and Mac `.icns` from an image; on macOS, `-iconcomposerinput appicon.icon -macassetdir darwin` also produces `Assets.car` from a `.icon` file (skipped on other platforms).
+  check:icons:
+    summary: Checks the committed icons used by builds
     run: once
     dir: build
-    sources:
-      - "appicon.png"
-      - "appicon.icon/**/*"
-      - "appicon-dev.png"
-      - "appicon-dev.icon/**/*"
-    generates:
-      - "darwin/icons.icns"
-      - "darwin/dev/icons.icns"
-      - "windows/icon.ico"
+    preconditions:
+      - sh: test -f darwin/icons.icns -a -f darwin/Assets.car -a -f darwin/dev/icons.icns -a -f darwin/dev/Assets.car -a -f windows/icon.ico
+        msg: "Committed icons are missing. Restore them from Git or run common:generate:icons on macOS with Xcode 26+."
+
+  generate:icons:
+    summary: Explicitly updates committed icons after their sources change (Mac assets require macOS and Xcode 26+)
+    run: once
+    dir: build
+    # Builds use committed assets: Wails silently falls back to flat PNG icons
+    # when Icon Composer is unavailable, including in a sandbox. Empty input
+    # makes that failure explicit and preserves the existing Mac assets.
     cmds:
-      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico -iconcomposerinput appicon.icon -macassetdir darwin
-      # The dev icon only ever goes into the macOS dev bundle (darwin:run); the
-      # .ico the command insists on writing has nowhere to go.
-      - cmd: wails3 generate icons -input appicon-dev.png -macfilename darwin/dev/icons.icns -windowsfilename /dev/null -iconcomposerinput appicon-dev.icon -macassetdir darwin/dev
+      - cmd: wails3 generate icons -input '' -iconcomposerinput appicon.icon -macassetdir darwin
         platforms: [darwin]
+      - cmd: wails3 generate icons -input '' -iconcomposerinput appicon-dev.icon -macassetdir darwin/dev
+        platforms: [darwin]
+      - wails3 generate icons -input appicon.png -macfilename '' -windowsfilename windows/icon.ico
 
   dev:frontend:
     summary: Runs the frontend in development mode
