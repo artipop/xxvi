@@ -1,4 +1,5 @@
-import ELK from "elkjs/lib/elk.bundled.js";
+import ELK from "elkjs/lib/elk-api.js";
+import elkWorkerUrl from "elkjs/lib/elk-worker.min.js?url";
 import type { ElkExtendedEdge, ElkNode, ElkPoint } from "elkjs/lib/elk-api";
 
 // Where the boxes stand and how the arrows run between them, worked out by ELK's
@@ -87,7 +88,20 @@ const OPTIONS: Record<string, string> = {
   "elk.separateConnectedComponents": "false",
 };
 
-const elk = new ELK();
+let elk: Promise<InstanceType<typeof ELK>> | undefined;
+
+async function layoutEngine(): Promise<InstanceType<typeof ELK>> {
+  const response = await fetch(elkWorkerUrl);
+  if (!response.ok) throw new Error(`ELK worker: HTTP ${response.status}`);
+  // A blob worker also works in WebViews serving assets through wails://.
+  // Keep ELK's generated engine outside the UI bundle and off the UI thread.
+  const url = URL.createObjectURL(new Blob([await response.text()], { type: "application/javascript" }));
+  try {
+    return new ELK({ algorithms: ["layered"], workerFactory: () => new Worker(url) });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 // How far apart two ports of one kind stand on a side of a box.
 const PORT_STEP = 12;
@@ -194,7 +208,8 @@ export async function layoutFlow(
   edges: LayoutEdge[],
   baseHeight: number,
 ): Promise<Layout> {
-  const laid = await elk.layout(buildGraph(nodes, edges, baseHeight));
+  const engine = await (elk ??= layoutEngine().catch((err) => { elk = undefined; throw err; }));
+  const laid = await engine.layout(buildGraph(nodes, edges, baseHeight));
   const out: Layout = { key, nodes: new Map(), routes: new Map() };
   for (const c of laid.children ?? []) out.nodes.set(c.id, { x: c.x ?? 0, y: c.y ?? 0 });
   for (const e of (laid.edges ?? []) as ElkExtendedEdge[]) {
