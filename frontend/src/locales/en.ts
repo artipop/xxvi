@@ -356,7 +356,7 @@ export const en: Dict = {
   "ribbon.draftKeys": "Enter starts, Shift+Enter is a new line",
   "ribbon.journalKeys": "J or Esc",
   "ribbon.sureDrop": "Really delete?",
-  "ribbon.keysHereTitle": "Keys go here. Click the header to give them back to the ribbon",
+  "ribbon.keysHereTitle": "Keys go to the embedded screen. Click to give them back to the ribbon",
   "ribbon.keysHere": "keys here",
   "ribbon.openOutside": "Open in the browser",
   "ribbon.stageGone": "The stage «{stage}» was removed from the flow. The step stays on the ribbon.",

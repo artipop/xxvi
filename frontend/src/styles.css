@@ -599,7 +599,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   --wails-draggable: drag;
 }
 /* Dragging the window from a button is not what pressing it means. */
-.ribbon-bar button, .ribbon-bar .card-menu { --wails-draggable: no-drag; }
+.ribbon-bar button, .ribbon-bar a, .ribbon-bar .card-menu { --wails-draggable: no-drag; }
 .ribbon-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .menu {
@@ -746,7 +746,6 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 /* A screen holding the keyboard says so, because from inside a preview the
    ribbon cannot hear a key at all. */
 .screen.held { border-color: var(--warn); }
-.screen.held .screen-head { cursor: pointer; }
 
 .screen {
   flex-grow: 0; flex-shrink: 0;
@@ -762,24 +761,10 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .screen.on { border-color: var(--accent); }
 .screen:not(.on) { opacity: .82; }
 
-.screen-head {
-  display: flex; align-items: center; gap: 8px;
-  flex: 0 0 30px;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel-2);
-  font-size: 12px;
-}
-.screen-head .screen-title { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
 .btn.tiny { padding: 1px 7px; font-size: 12px; line-height: 1.4; }
 
 .screen-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .screen-note { padding: 14px; color: var(--faint); }
-.screen-why {
-  color: var(--faint); font-size: 11px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
-}
 
 /* Past problems stay readable but quiet: the step is over. The one on the
    segment the card stands in is the reason it is not moving, and looks it. */

@@ -11,8 +11,8 @@ import { errorText, label, plural, t } from "../i18n";
 //
 // This is the screen a review stage stands on. Deliberately a reader and
 // nothing else: no staging, no comment on a line, no approve button. How a step
-// ended is one field on the card, answered by the two buttons the segment's own
-// header already draws (docs/system.md §12.7), and a second way to say the same
+// ended is one field on the card, answered by the two buttons the ribbon's
+// title bar already draws (docs/system.md §12.7), and a second way to say the same
 // thing would be a second answer to one question.
 //
 // A failure of git is not a failure of the screen: a card whose project is not

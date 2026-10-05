@@ -372,7 +372,7 @@ export const ru: Dict = {
   "ribbon.draftKeys": "Enter — начать, Shift+Enter — новая строка",
   "ribbon.journalKeys": "J или Esc",
   "ribbon.sureDrop": "Точно удалить?",
-  "ribbon.keysHereTitle": "Клавиши уходят сюда. Нажмите на заголовок, чтобы вернуть их ленте",
+  "ribbon.keysHereTitle": "Клавиши уходят во встроенный экран. Нажмите, чтобы вернуть их ленте",
   "ribbon.keysHere": "клавиши здесь",
   "ribbon.openOutside": "Открыть в браузере",
   "ribbon.stageGone": "Стадия «{stage}» убрана из флоу. Шаг остаётся в ленте.",

@@ -6,6 +6,7 @@
 // Ghostty's own macOS host (macos/Sources/Ghostty/Surface View). Every call is
 // made on the main thread: AppKit and Ghostty's surfaces both require it.
 #import <Cocoa/Cocoa.h>
+#import <WebKit/WebKit.h>
 #include "ghostty.h"
 
 static ghostty_app_t app;
@@ -298,6 +299,13 @@ static BOOL isControl(NSString *t) {
 
 - (void)mouseDown:(NSEvent *)e {
   [self.window makeFirstResponder:self];
+  // The native view catches the click before the page can select the pane
+  // whose title and stage actions belong in the application title bar.
+  NSData *data = [NSJSONSerialization dataWithJSONObject:@[self.ident] options:0 error:nil];
+  NSString *ident = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+  NSString *script = [NSString stringWithFormat:
+      @"window.dispatchEvent(new CustomEvent('native-terminal-focus', {detail: %@[0]}))", ident];
+  [(WKWebView *)pageIn(self.window.contentView) evaluateJavaScript:script completionHandler:nil];
   [self button:e state:GHOSTTY_MOUSE_PRESS which:GHOSTTY_MOUSE_LEFT];
 }
 - (void)mouseUp:(NSEvent *)e { [self button:e state:GHOSTTY_MOUSE_RELEASE which:GHOSTTY_MOUSE_LEFT]; }

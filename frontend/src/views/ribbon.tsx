@@ -128,6 +128,20 @@ export default function Ribbon(): JSX.Element {
 
   const focus = () => focusAt()[openRibbon()] ?? current()?.focusId ?? "";
   const setFocus = (id: string) => setFocusAt((f) => ({ ...f, [openRibbon()]: id }));
+  const selected = createMemo(() => {
+    for (const segment of list(current()?.segments)) {
+      const screen = list(segment.screens).find((s) => s.id === focus());
+      if (screen || emptyID(segment) === focus()) return { segment, screen };
+    }
+    return undefined;
+  });
+  const stageName = () => selected()?.segment.stageName ?? current()?.stageName;
+  const paneTitle = () => {
+    const screen = selected()?.screen;
+    return screen ? screenTitle(screen) : "";
+  };
+  const [back, setBack] = createSignal<{ paneId: string; mark: Mark } | null>(null);
+  const backFor = (id: string) => back()?.paneId === id ? back()!.mark : null;
 
   const paneEl = (id: string) =>
     stack?.querySelector<HTMLElement>('[data-pane="' + CSS.escape(id) + '"]') ?? undefined;
@@ -231,17 +245,32 @@ export default function Ribbon(): JSX.Element {
         ? (el.closest("[data-pane]") as HTMLElement | null)?.dataset.pane ?? ""
         : "";
       setCaptured(inside);
+      if (inside && inside !== focus() && current() && paneIDs(current()!).includes(inside)) {
+        setPinned(true);
+        setFocus(inside);
+      }
+    };
+    const nativeFocus = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      const host = Array.from(stack?.querySelectorAll<HTMLElement>(".terminal-host") ?? [])
+        .find((el) => el.dataset.term === id);
+      const pane = host?.closest<HTMLElement>("[data-pane]")?.dataset.pane;
+      if (!pane || !current() || !paneIDs(current()!).includes(pane)) return;
+      setPinned(true);
+      setFocus(pane);
     };
     const later = () => queueMicrotask(note);
     document.addEventListener("focusin", note);
     document.addEventListener("focusout", later);
     window.addEventListener("blur", note);
     window.addEventListener("focus", note);
+    window.addEventListener("native-terminal-focus", nativeFocus);
     return () => {
       document.removeEventListener("focusin", note);
       document.removeEventListener("focusout", later);
       window.removeEventListener("blur", note);
       window.removeEventListener("focus", note);
+      window.removeEventListener("native-terminal-focus", nativeFocus);
     };
   });
 
@@ -334,7 +363,7 @@ export default function Ribbon(): JSX.Element {
   // only form that works from inside a note. From inside a preview nothing
   // works — a cross-origin page keeps every key it is given, and no application
   // outside it can take one back. That is why the pane says when it has the
-  // keyboard: clicking its header hands it back.
+  // keyboard: the button in the application title bar hands it back.
   const onKeyDown = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement | null;
     const typing = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
@@ -411,10 +440,15 @@ export default function Ribbon(): JSX.Element {
       {/* The only chrome: room for the window's own buttons, the name of the
           job in front of you, and the one offer the ribbon ever makes. */}
       <header class="ribbon-bar">
-        <span class="ribbon-where">
-          {current()?.title}
-          <Show when={current()?.stageName}>
-            <span class="ribbon-stage"> · {current()!.stageName}</span>
+        <span class="ribbon-where" title={current()
+          ? (selected()?.segment.detail ? say(selected()!.segment.detail) : undefined)
+          : t("ribbon.draftKeys")}>
+          {current()?.title ?? t("ribbon.newTask")}
+          <Show when={stageName()}>
+            <span class="ribbon-stage"> · {stageName()}</span>
+          </Show>
+          <Show when={paneTitle() && paneTitle() !== stageName()}>
+            <span class="ribbon-stage"> · {paneTitle()}</span>
           </Show>
           {/* A finished job visited for its results: nothing on it moves any
               more, and the bar says so rather than leaving a stage name off. */}
@@ -423,6 +457,23 @@ export default function Ribbon(): JSX.Element {
           </Show>
         </span>
         <div class="spacer" />
+        <Show when={captured()}>
+          <button class="btn quiet tiny warn" title={t("ribbon.keysHereTitle")}
+                  onMouseDown={(e) => e.preventDefault()} onClick={release}>
+            {t("ribbon.keysHere")}
+          </button>
+        </Show>
+        <MarkButtons
+          marks={list(selected()?.segment.marks)}
+          tiny
+          onMark={(mark) => (mark.forward
+            ? void guard(() => sendMark(current()!.cardId, mark))
+            : setBack({ paneId: focus(), mark }))}
+        />
+        <Show when={selected()?.screen?.kind === "browser" && list(selected()?.screen?.waiting).length === 0}>
+          <a class="btn quiet tiny" href={selected()!.screen!.ref}
+             onClick={(e) => openOutside(e, selected()!.screen!.ref)} title={t("ribbon.openOutside")}>↗</a>
+        </Show>
         <Closed />
         <Show when={inWorkspace().length > 0}>
           <button class="btn quiet tiny"
@@ -469,13 +520,13 @@ export default function Ribbon(): JSX.Element {
                             segment={segment}
                             cardId={view.cardId}
                             id={emptyID(segment)}
-                            title={segment.stageName}
                             first
                             width={widthOf(emptyID(segment))}
                             focused={focus() === emptyID(segment)}
                             captured={false}
                             onFocus={() => { setPinned(true); setFocus(emptyID(segment)); }}
-                            onRelease={release}
+                            back={backFor(emptyID(segment))}
+                            onCancelBack={() => setBack(null)}
                           />
                         </Show>
                         <For each={list(segment.screens)}>
@@ -485,13 +536,13 @@ export default function Ribbon(): JSX.Element {
                               screen={screen}
                               cardId={view.cardId}
                               id={screen.id}
-                              title={screenTitle(screen)}
                               first={i() === 0}
                               width={widthOf(screen.id)}
                               focused={focus() === screen.id}
                               captured={captured() === screen.id}
                               onFocus={() => { setPinned(true); setFocus(screen.id); }}
-                              onRelease={release}
+                              back={backFor(screen.id)}
+                              onCancelBack={() => setBack(null)}
                             />
                           )}
                         </For>
@@ -506,10 +557,6 @@ export default function Ribbon(): JSX.Element {
             <section class="workspace" data-ribbon={DRAFT}>
               <div class="band">
                 <section class="screen on draft">
-                  <header class="screen-head">
-                    <span class="tag accent">{t("ribbon.newTask")}</span>
-                    <span class="screen-title">{t("ribbon.draftKeys")}</span>
-                  </header>
                   <div class="screen-body">
                     <Compose
                       onStarted={() => setDrafting(false)}
@@ -689,78 +736,39 @@ function Pane(props: {
   screen?: ScreenView;
   cardId?: string;
   id: string;
-  title: string;
   first: boolean;
   width: number;
   focused: boolean;
   captured: boolean;
   onFocus: () => void;
-  onRelease: () => void;
+  back: Mark | null;
+  onCancelBack: () => void;
 }): JSX.Element {
   const waiting = () => list(props.screen?.waiting);
   // A step that has not started (its stage is full) has no screen, and the
   // strip would show nothing of the task that was just typed.
   const task = () => inWork().find((c) => c.card.id === props.cardId)?.card.body;
-  const [back, setBack] = createSignal<Mark | null>(null);
 
   return (
     <section
       class={`screen ${props.focused ? "on" : ""} ${props.captured ? "held" : ""}`}
       style={{ "flex-basis": `calc(100% * ${WIDTHS[props.width] ?? WIDTHS[DEFAULT_WIDTH]})` }}
       data-pane={props.id}
+      aria-label={props.screen ? screenTitle(props.screen) : props.segment.stageName}
       onMouseDown={props.onFocus}
     >
-      {/* Clicking the header is how the keyboard comes back: a person who
-          clicked into a preview has nowhere else to press, because the page
-          inside it keeps every key. */}
-      <header class="screen-head" onClick={() => props.captured && props.onRelease()}>
-        <Show when={props.first}>
-          <span class={`tag ${props.segment.current ? "accent" : ""}`}>{props.segment.stageName}</span>
-        </Show>
-        <span class="screen-title">{props.title}</span>
-        {/* How the card got here — «came back: failed» reads differently from
-            «taken into work», and it is the one line of the journal that is
-            about the whole segment. */}
-        <Show when={props.first && props.segment.detail}>
-          <span class="screen-why" title={say(props.segment.detail)}>{say(props.segment.detail)}</span>
-        </Show>
-        <Show when={props.captured}>
-          <span class="tag warn" title={t("ribbon.keysHereTitle")}>
-            {t("ribbon.keysHere")}
-          </span>
-        </Show>
-        <div class="spacer" />
-        {/* The two answers a waiting stage is waiting for, on the strip rather
-            than on the card screen: what they are about is open in this very
-            segment, and the ribbon is the whole window (docs/system.md §12.5).
-            Once per segment — they belong to the step, not to the window onto
-            it — and only while the card is standing there. */}
-        <Show when={props.first}>
-          <MarkButtons
-            marks={list(props.segment.marks)}
-            tiny
-            onMark={(mark) => (mark.forward
-              ? void guard(() => sendMark(props.cardId ?? "", mark))
-              : setBack(mark))}
-          />
-        </Show>
-        <Show when={props.screen?.kind === "browser" && waiting().length === 0}>
-          <a class="btn quiet tiny" href={props.screen!.ref} onClick={(e) => openOutside(e, props.screen!.ref)} title={t("ribbon.openOutside")}>↗</a>
-        </Show>
-      </header>
-
       {/* Why the card stands, or why the step broke, on the step itself:
           without it a stopped strip looks exactly like a working one. */}
-      <Show when={props.first && back()}>
+      <Show when={props.back}>
         <div class="screen-remarks">
           <RemarksForm
-            mark={back()!}
+            mark={props.back!}
             onSend={(remarks) => {
-              const mark = back()!;
-              setBack(null);
+              const mark = props.back!;
+              props.onCancelBack();
               void guard(() => sendMark(props.cardId ?? "", mark, remarks));
             }}
-            onCancel={() => setBack(null)}
+            onCancel={props.onCancelBack}
           />
         </div>
       </Show>
