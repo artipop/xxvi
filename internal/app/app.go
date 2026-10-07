@@ -186,7 +186,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	a.Hosting.SetInbox(a.Pipeline, a.Agents, a.notifyHosting, func(event string) { a.Emit(event, map[string]any{}) })
 	a.Engine.SetPublisher(a.Hosting)
 	a.Poller = inbox.NewPoller(st, a.Pipeline, log)
-	catalog := sources.LoadCatalog(filepath.Join(dataDir, sources.ManifestsDir), inbox.PluginDemo, hosting.PluginReview)
+	catalog := sources.LoadCatalog(filepath.Join(dataDir, sources.ManifestsDir), builtinSources()...)
 	for _, problem := range catalog.Problems() {
 		log.Warn("source manifest skipped", "why", problem)
 	}

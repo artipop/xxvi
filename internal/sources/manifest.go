@@ -47,12 +47,23 @@ type Manifest struct {
 	// place for a credential and every server names its own variable; our own
 	// plugins get the token in the handshake and need none of this.
 	TokenEnv string `json:"tokenEnv,omitempty"`
+
+	// Managed marks a source that is not made in the sources form: the review
+	// queue is made by connecting a project's hosting, and the form has nothing
+	// to ask for it. It is in the list all the same, so a source of it is
+	// named and edited like any other.
+	Managed bool `json:"managed,omitempty"`
 }
 
 // Plugin kinds.
 const (
 	KindPlugin = "plugin"
 	KindMCP    = "mcp"
+	// KindBuiltin is read by this application's own code rather than by a
+	// process: the demo file, the review queue. It is given to the catalog
+	// from code and never from a file — a file naming one would take over a
+	// source the application reads itself.
+	KindBuiltin = "builtin"
 )
 
 // SelfCommand is what a manifest writes instead of a path to this application:
@@ -72,6 +83,31 @@ type Field struct {
 	Type    string   `json:"type,omitempty"`
 	Default string   `json:"default,omitempty"`
 	Values  []string `json:"values,omitempty"` // for select
+
+	// Options, when set, are the values to choose from, asked of the service
+	// itself: its boards, its columns. The form offers them in place of a text
+	// box, so a name is picked rather than typed and mistyped.
+	Options *Options `json:"options,omitempty"`
+}
+
+// Options is a question put to an MCP server whose answer is a list of values
+// for one field. It reads like the feed's own mapping, and for the same
+// reason: the rows are JSON with names on them.
+type Options struct {
+	// Tool is called with Arguments, templated over the source as the feed's
+	// are, and At is where the list is in its answer.
+	Tool      string            `json:"tool"`
+	Arguments map[string]string `json:"arguments,omitempty"`
+	At        string            `json:"at,omitempty"`
+
+	// Value is what is stored in the field and Label what the person reads;
+	// both are templates over a row, and the label is the value when empty.
+	Value string `json:"value"`
+	Label string `json:"label,omitempty"`
+
+	// DependsOn names the fields that must be filled before the question can
+	// be asked — columns are those of a board — and that change the answer.
+	DependsOn []string `json:"dependsOn,omitempty"`
 }
 
 // Field types.
@@ -103,6 +139,9 @@ func (p Manifest) NeedsToken() bool {
 // IsMCP reports whether this manifest is an MCP server read through a mapping.
 func (p Manifest) IsMCP() bool { return p.Kind == KindMCP }
 
+// IsBuiltin reports whether the application reads this source itself.
+func (p Manifest) IsBuiltin() bool { return p.Kind == KindBuiltin }
+
 // Validate normalizes a manifest and refuses what cannot be started or shown.
 func (p Manifest) Validate() (Manifest, error) {
 	p.Name = strings.TrimSpace(p.Name)
@@ -110,11 +149,13 @@ func (p Manifest) Validate() (Manifest, error) {
 		return p, msg.Err("plugin.noName")
 	}
 	p.Command = strings.TrimSpace(p.Command)
-	if p.Command == "" {
+	p.Kind = strings.ToLower(strings.TrimSpace(p.Kind))
+	if p.Command == "" && p.Kind != KindBuiltin {
 		return p, msg.Err("plugin.noCommand", "plugin", p.Name)
 	}
-	p.Kind = strings.ToLower(strings.TrimSpace(p.Kind))
 	switch p.Kind {
+	case KindBuiltin:
+		// Nothing to start and nothing to map.
 	case "", KindPlugin:
 		p.Kind = KindPlugin
 		if p.MCP != nil {
@@ -152,9 +193,36 @@ func (p Manifest) Validate() (Manifest, error) {
 			return p, msg.Err("plugin.unknownFieldType", "plugin", p.Name, "field", f.Key,
 				"type", f.Type, "allowed", strings.Join(fieldTypes, ", "))
 		}
+		if f.Options != nil {
+			opts, err := f.Options.validate(p, f)
+			if err != nil {
+				return p, err
+			}
+			f.Options = &opts
+		}
 		p.Fields[i] = f
 	}
 	return p, nil
+}
+
+func (o Options) validate(p Manifest, f Field) (Options, error) {
+	if p.Kind != KindMCP {
+		return o, msg.Err("plugin.optionsNeedMCP", "plugin", p.Name, "field", f.Key)
+	}
+	if f.Type != FieldString {
+		return o, msg.Err("plugin.optionsNeedString", "plugin", p.Name, "field", f.Key)
+	}
+	o.Tool = strings.TrimSpace(o.Tool)
+	o.Value = strings.TrimSpace(o.Value)
+	if o.Tool == "" || o.Value == "" {
+		return o, msg.Err("plugin.optionsIncomplete", "plugin", p.Name, "field", f.Key)
+	}
+	for _, key := range o.DependsOn {
+		if key == f.Key {
+			return o, msg.Err("plugin.optionsDependsOnItself", "plugin", p.Name, "field", f.Key)
+		}
+	}
+	return o, nil
 }
 
 // Argv is the command to start for a source. SelfCommand is resolved here —

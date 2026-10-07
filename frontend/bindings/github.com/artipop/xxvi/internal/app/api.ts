@@ -753,6 +753,15 @@ export function SkipUpdate(): $CancellablePromise<void> {
 }
 
 /**
+ * SourceFieldOptions is the list a field of the form offers to choose from, asked
+ * of the service: its boards, the columns of one. The source is the form as it
+ * stands, and the token is the one typed in it, if any.
+ */
+export function SourceFieldOptions(src: model$0.Source, token: string, field: string): $CancellablePromise<sources$0.Option[] | null> {
+    return $Call.ByID(4272691212, src, token, field);
+}
+
+/**
  * SourceHasToken says whether a token is kept for a source — never the token.
  */
 export function SourceHasToken(name: string): $CancellablePromise<boolean> {
@@ -760,9 +769,8 @@ export function SourceHasToken(name: string): $CancellablePromise<boolean> {
 }
 
 /**
- * SourcePlugins is every manifest there is. The demo file and the review
- * queue are not in it: one is offered by the form itself, the other made by
- * connecting a project's hosting.
+ * SourcePlugins is everything a source can be: the plugins, and the sources
+ * the application reads itself, in one list.
  */
 export function SourcePlugins(): $CancellablePromise<$models.SourcePlugin[] | null> {
     return $Call.ByID(3228240310);

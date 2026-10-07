@@ -95,6 +95,15 @@ type mcpConn struct {
 // get_card, get_columns…" is an answer, and a poll failing every five minutes
 // is not.
 func dialMCP(ctx context.Context, src model.Source, manifest Manifest, cred plugin.Credentials) (conn, error) {
+	client, err := openMCP(ctx, src, manifest, cred, manifest.MCP.Tool)
+	if err != nil {
+		return nil, err
+	}
+	return &mcpConn{client: client, spec: *manifest.MCP, src: src}, nil
+}
+
+// openMCP starts the server and checks that the tool asked for is one it has.
+func openMCP(ctx context.Context, src model.Source, manifest Manifest, cred plugin.Credentials, tool string) (*mcp.Client, error) {
 	env, err := manifest.RenderEnv(src)
 	if err != nil {
 		return nil, err
@@ -120,12 +129,68 @@ func dialMCP(ctx context.Context, src model.Source, manifest Manifest, cred plug
 		client.Close()
 		return nil, err
 	}
-	if !hasTool(tools, manifest.MCP.Tool) {
+	if !hasTool(tools, tool) {
 		client.Close()
-		return nil, msg.Err("mcp.toolMissing", "plugin", manifest.Name, "tool", manifest.MCP.Tool,
+		return nil, msg.Err("mcp.toolMissing", "plugin", manifest.Name, "tool", tool,
 			"have", strings.Join(toolNames(tools), ", "))
 	}
-	return &mcpConn{client: client, spec: *manifest.MCP, src: src}, nil
+	return client, nil
+}
+
+// Option is one value a field can be given, and what to call it.
+type Option struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+// fieldOptions asks the server for the values a field can take. A field whose
+// dependencies are not filled yet has no answer rather than a wrong one: the
+// columns of a board nobody has chosen are not every column there is.
+func fieldOptions(ctx context.Context, src model.Source, manifest Manifest, cred plugin.Credentials, field Field) ([]Option, error) {
+	o := field.Options
+	if o == nil || !manifest.IsMCP() {
+		return nil, msg.Err("source.noOptions", "plugin", manifest.Name, "field", field.Key)
+	}
+	for _, key := range o.DependsOn {
+		if strings.TrimSpace(src.Config[key]) == "" {
+			return nil, nil
+		}
+	}
+	args, err := MCPSpec{Arguments: o.Arguments}.renderArguments(src)
+	if err != nil {
+		return nil, err
+	}
+	client, err := openMCP(ctx, src, manifest, cred, o.Tool)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+	payload, err := client.CallTool(ctx, o.Tool, args)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := rowsAt(payload, o.At)
+	if err != nil {
+		return nil, msg.Wrap(err, "mcp.badAnswer", "tool", o.Tool)
+	}
+	out := make([]Option, 0, len(rows))
+	for _, row := range rows {
+		value, err := renderOver(o.Value, row)
+		if err != nil {
+			continue
+		}
+		if value = strings.TrimSpace(value); value == "" {
+			continue
+		}
+		label := value
+		if o.Label != "" {
+			if text, err := renderOver(o.Label, row); err == nil && strings.TrimSpace(text) != "" {
+				label = strings.TrimSpace(text)
+			}
+		}
+		out = append(out, Option{Value: value, Label: label})
+	}
+	return out, nil
 }
 
 func hasTool(tools []mcp.Tool, name string) bool {

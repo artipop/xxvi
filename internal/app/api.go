@@ -657,18 +657,31 @@ type SourcePlugin struct {
 	Title      string          `json:"title,omitempty"`
 	Fields     []sources.Field `json:"fields,omitempty"`
 	NeedsToken bool            `json:"needsToken"`
+	// Builtin is read by the application itself rather than by a process.
+	// Managed is made elsewhere than the sources form.
+	Builtin bool `json:"builtin,omitempty"`
+	Managed bool `json:"managed,omitempty"`
 }
 
-// SourcePlugins is every manifest there is. The demo file and the review
-// queue are not in it: one is offered by the form itself, the other made by
-// connecting a project's hosting.
+// SourcePlugins is everything a source can be: the plugins, and the sources
+// the application reads itself, in one list.
 func (s *API) SourcePlugins() []SourcePlugin {
 	all := s.app.Sources.Catalog().All()
 	out := make([]SourcePlugin, 0, len(all))
 	for _, m := range all {
-		out = append(out, SourcePlugin{Name: m.Name, Title: m.Title, Fields: m.Fields, NeedsToken: m.NeedsToken()})
+		out = append(out, SourcePlugin{
+			Name: m.Name, Title: m.Title, Fields: m.Fields, NeedsToken: m.NeedsToken(),
+			Builtin: m.IsBuiltin(), Managed: m.Managed,
+		})
 	}
 	return out
+}
+
+// SourceFieldOptions is the list a field of the form offers to choose from, asked
+// of the service: its boards, the columns of one. The source is the form as it
+// stands, and the token is the one typed in it, if any.
+func (s *API) SourceFieldOptions(src model.Source, token, field string) ([]sources.Option, error) {
+	return s.app.Sources.FieldOptions(context.Background(), src, token, field)
 }
 
 // SourceStatuses is what every plugin source is doing now.

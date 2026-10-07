@@ -23,6 +23,49 @@ export interface Field {
      * for select
      */
     "values"?: string[] | null;
+
+    /**
+     * Options, when set, are the values to choose from, asked of the service
+     * itself: its boards, its columns. The form offers them in place of a text
+     * box, so a name is picked rather than typed and mistyped.
+     */
+    "options"?: Options | null;
+}
+
+/**
+ * Option is one value a field can be given, and what to call it.
+ */
+export interface Option {
+    "value": string;
+    "label": string;
+}
+
+/**
+ * Options is a question put to an MCP server whose answer is a list of values
+ * for one field. It reads like the feed's own mapping, and for the same
+ * reason: the rows are JSON with names on them.
+ */
+export interface Options {
+    /**
+     * Tool is called with Arguments, templated over the source as the feed's
+     * are, and At is where the list is in its answer.
+     */
+    "tool": string;
+    "arguments"?: { [_ in string]?: string } | null;
+    "at"?: string;
+
+    /**
+     * Value is what is stored in the field and Label what the person reads;
+     * both are templates over a row, and the label is the value when empty.
+     */
+    "value": string;
+    "label"?: string;
+
+    /**
+     * DependsOn names the fields that must be filled before the question can
+     * be asked — columns are those of a board — and that change the answer.
+     */
+    "dependsOn"?: string[] | null;
 }
 
 /**

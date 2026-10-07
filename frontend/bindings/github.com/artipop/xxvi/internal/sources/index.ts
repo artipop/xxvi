@@ -7,5 +7,7 @@ export {
 
 export type {
     Field,
+    Option,
+    Options,
     Status
 } from "./models.js";

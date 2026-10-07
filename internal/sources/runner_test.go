@@ -65,7 +65,7 @@ func setup(t *testing.T, manifest string) fixture {
 	if err := os.WriteFile(filepath.Join(dir, "fake.json"), []byte(manifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	catalog := LoadCatalog(dir, inbox.PluginDemo)
+	catalog := LoadCatalog(dir, demoManifest)
 	if problems := catalog.Problems(); len(problems) > 0 {
 		t.Fatalf("manifests: %v", problems)
 	}
@@ -259,12 +259,12 @@ func TestTheCatalogPrefersFilesAndKeepsBuiltInNames(t *testing.T) {
 	write("demo.json", `{"name": "demo", "command": "/bin/true"}`)
 	write("broken.json", `{"name": `)
 
-	c := LoadCatalog(dir, inbox.PluginDemo)
+	c := LoadCatalog(dir, demoManifest)
 	if m, ok := c.Get("kaiten"); !ok || m.Title != "Мой Kaiten" {
 		t.Fatalf("kaiten: %+v", m)
 	}
-	if _, ok := c.Get("demo"); ok {
-		t.Fatal("a manifest took over the demo source")
+	if m, ok := c.Get("demo"); !ok || !m.IsBuiltin() {
+		t.Fatalf("a manifest took over the demo source: %+v", m)
 	}
 	if n := len(c.Problems()); n != 2 {
 		t.Fatalf("expected the reserved name and the broken file reported, got %d: %v", n, c.Problems())
@@ -402,3 +402,7 @@ func TestASourceThatDidNotStartIsTriedAgain(t *testing.T) {
 	}
 	eventually(t, "the second start brought the item", func() bool { return len(f.inbox(t)) == 1 })
 }
+
+// demoManifest stands for a source the application reads itself, as the app
+// describes it to the catalog.
+var demoManifest = Manifest{Name: inbox.PluginDemo, Title: "Demo file"}

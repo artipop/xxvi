@@ -10,8 +10,17 @@
   "tokenEnv": "XCIII_FEED_TOKEN",
   "auth": {"type": "token"},
   "fields": [
-    {"key": "board", "title": "Доска"},
-    {"key": "column", "title": "Колонка (пусто — вся доска)"},
+    {
+      "key": "board", "title": "Доска",
+      "options": {"tool": "list_boards", "at": "boards", "value": "{{.title}}"}
+    },
+    {
+      "key": "column", "title": "Колонка (пусто — вся доска)",
+      "options": {
+        "tool": "list_columns", "arguments": {"board": "{{.Config.board}}"},
+        "at": "columns", "value": "{{.name}}", "dependsOn": ["board"]
+      }
+    },
     {"key": "binary", "title": "Где лежит XCIII", "default": "/Applications/XCIII.app/Contents/MacOS/XCIII"},
     {"key": "url", "title": "Адрес сервера XCIII (пусто — приложение на этой машине)"}
   ],

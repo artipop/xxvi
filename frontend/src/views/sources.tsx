@@ -1,10 +1,10 @@
-import { createSignal, createStore, For, Show } from "solid-js";
+import { createEffect, createSignal, createStore, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { SourcePlugin } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
 import type { Rule, Source } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import type { Field } from "../../bindings/github.com/artipop/xxvi/internal/sources/models";
+import type { Field, Option } from "../../bindings/github.com/artipop/xxvi/internal/sources/models";
 import { flows, guard, loadSources, sourcePlugins, sourceStatus, sources, vocabulary } from "../state";
-import { label, plural, say, t, when } from "../i18n";
+import { errorText, has, label, plural, say, t, when } from "../i18n";
 
 // The source registry and its rules. Rules are tried in order and the first
 // match wins, so the order is the whole of what somebody meant — and the
@@ -20,7 +20,7 @@ export default function SourcesView() {
       <div class="row toolbar">
         <div class="spacer" />
         <button class="btn" onClick={() => setEditing({
-          name: "", plugin: sourcePlugins()[0]?.name ?? DEMO, enabled: true, noisy: false, update: "update",
+          name: "", plugin: creatable()[0]?.name ?? "", enabled: true, noisy: false, update: "update",
           intervalSeconds: 0, config: {}, rules: [],
         } as Source)}>{t("sources.new")}</button>
       </div>
@@ -37,7 +37,7 @@ export default function SourcesView() {
               <span class="tag">{pluginTitle(src.plugin ?? "")}</span>
               <span class="tag">{rulesCount(src.rules?.length ?? 0)}</span>
               <div class="spacer" />
-              <Show when={src.enabled && src.plugin !== DEMO}>
+              <Show when={src.enabled}>
                 <button class="btn quiet" onClick={() => guard(() => API.PollSource(src.name))}>{t("sources.pollNow")}</button>
               </Show>
               <button class="btn quiet" onClick={() => setEditing(JSON.parse(JSON.stringify(src)))}>{t("common.edit")}</button>
@@ -45,8 +45,8 @@ export default function SourcesView() {
                 {t("common.delete")}
               </button>
             </div>
-            <Show when={src.plugin === DEMO && src.config?.path}>
-              <div class="meta mono note">{src.config!.path}</div>
+            <Show when={pluginOf(src.plugin)?.builtin && settingsLine(src)}>
+              <div class="meta mono note">{settingsLine(src)}</div>
             </Show>
             <StatusLine name={src.name} />
           </div>
@@ -64,13 +64,25 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
   const [draft, setDraft] = createStore<Source>(props.source);
   const isNew = props.source.name === "";
   const [token, setToken] = createSignal("");
+  // The token as it stood when its box was left, not as it is typed: a list
+  // is asked for with it, and asking at every keystroke would start the
+  // plugin's process that many times.
+  const [askToken, setAskToken] = createSignal("");
   const [hasToken, setHasToken] = createSignal(false);
   if (!isNew) void API.SourceHasToken(props.source.name).then(setHasToken).catch(() => setHasToken(false));
 
   const plugin = () => sourcePlugins().find((p) => p.name === draft.plugin);
   const refused = () => (isNew ? "" : sourceStatus()[props.source.name]?.field ?? "");
   const setConfig = (key: string, value: string) =>
-    setDraft((d) => { d.config = { ...(draft.config ?? {}), [key]: value }; });
+    setDraft((d) => {
+      const config = { ...(draft.config ?? {}), [key]: value };
+      // What was chosen under another choice no longer holds: the columns
+      // are those of the board that was picked.
+      for (const f of list(plugin()?.fields)) {
+        if (list(f.options?.dependsOn).includes(key)) config[f.key] = "";
+      }
+      d.config = config;
+    });
 
   const save = async () => {
     const saved = await guard(() => API.SaveSource(JSON.parse(JSON.stringify(draft)) as Source));
@@ -117,21 +129,15 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
           <span>{t("sources.plugin")}</span>
           <select value={draft.plugin} disabled={!isNew}
                   onChange={(e) => { setDraft((d) => { d.plugin = e.currentTarget.value; d.config = {}; }); }}>
-            <For each={sourcePlugins()}>{(p) => <option value={p.name}>{p.title || p.name}</option>}</For>
-            <option value={DEMO}>{t("sources.demoPlugin")}</option>
-            <Show when={!isNew && draft.plugin !== DEMO && !plugin()}>
+            <For each={creatable().concat(plugin() && plugin()!.managed ? [plugin()!] : [])}>
+              {(p) => <option value={p.name}>{pluginTitle(p.name)}</option>}
+            </For>
+            <Show when={!isNew && !plugin()}>
               <option value={draft.plugin}>{pluginTitle(draft.plugin ?? "")}</option>
             </Show>
           </select>
         </label>
       </div>
-
-      <Show when={draft.plugin === DEMO}>
-        <label class="field">
-          <span>{t("sources.file")}</span>
-          <input type="text" value={draft.config?.path ?? ""} onInput={(e) => setConfig("path", e.currentTarget.value)} />
-        </label>
-      </Show>
 
       <Show when={plugin()}>
         {(p) => (
@@ -139,8 +145,9 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
             <div class="grid2">
               <For each={list(p().fields).filter((f) => f.type !== "bool")}>
                 {(f) => (
-                  <FieldInput field={f} value={draft.config?.[f.key] ?? ""} refused={refused() === f.key}
-                              onChange={(v) => setConfig(f.key, v)} />
+                  <FieldInput plugin={p()} field={f} value={draft.config?.[f.key] ?? ""} refused={refused() === f.key}
+                              source={() => JSON.parse(JSON.stringify(draft)) as Source} token={askToken}
+                              tokenKept={hasToken} onChange={(v) => setConfig(f.key, v)} />
                 )}
               </For>
             </div>
@@ -150,7 +157,8 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
                   <span>{t("sources.token")}</span>
                   <input type="password" autocomplete="off" value={token()}
                          placeholder={hasToken() ? t("sources.tokenKept") : ""}
-                         onInput={(e) => setToken(e.currentTarget.value)} />
+                         onInput={(e) => setToken(e.currentTarget.value)}
+                         onChange={(e) => setAskToken(e.currentTarget.value.trim())} />
                 </label>
               </Show>
               <label class="field">
@@ -172,7 +180,7 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
             <label class="row check">
               <input type="checkbox" checked={(draft.config?.[f.key] || f.default) === "true"}
                      onChange={(e) => setConfig(f.key, e.currentTarget.checked ? "true" : "false")} />
-              <span class={refused() === f.key ? "bad-text" : ""}>{f.title || f.key}</span>
+              <span class={refused() === f.key ? "bad-text" : ""}>{fieldTitle(plugin()!.name, f)}</span>
             </label>
           )}
         </For>
@@ -256,20 +264,41 @@ function rulesCount(n: number): string {
   return plural("sources.ruleCount", n);
 }
 
-// DEMO is the plugin name of the file source, read by the app itself rather
-// than through a manifest (internal/inbox/demo.go).
-const DEMO = "demo";
-const REVIEW = "review";
-
 function list<T>(v: T[] | null | undefined): T[] {
   return v ?? [];
 }
 
+/** creatable is what the form offers to make a source of: everything but what
+ *  is made elsewhere (a project's review queue). */
+function creatable(): SourcePlugin[] {
+  return sourcePlugins().filter((p) => !p.managed);
+}
+
+function pluginOf(name: string | undefined): SourcePlugin | undefined {
+  return sourcePlugins().find((x) => x.name === name);
+}
+
+// A plugin that ships with the app is worded in both languages; one somebody
+// wrote carries its own title, in the language they wrote it in.
 function pluginTitle(name: string): string {
-  if (name === DEMO) return t("sources.demoPlugin");
-  if (name === REVIEW) return t("sources.reviewPlugin");
-  const p: SourcePlugin | undefined = sourcePlugins().find((x) => x.name === name);
+  const key = `plugin.${name}`;
+  if (has(key)) return t(key);
+  const p = pluginOf(name);
   return p ? p.title || p.name : name;
+}
+
+function fieldTitle(plugin: string, f: Field): string {
+  const key = `plugin.${plugin}.${f.key}`;
+  return has(key) ? t(key) : f.title || f.key;
+}
+
+/** settingsLine is what a source the app reads itself was set to, for the card:
+ *  a file it reads has no other face. */
+function settingsLine(src: Source): string {
+  return list(pluginOf(src.plugin)?.fields)
+    .map((f) => src.config?.[f.key])
+    .filter((v) => v)
+    .join(" · ");
 }
 
 function minutes(text: string): number {
@@ -280,19 +309,94 @@ function minutes(text: string): number {
 /** FieldInput is one text, number or select setting a plugin declared. A form
  *  has only strings; the MCP bridge turns what looks like a number back into
  *  one. */
-function FieldInput(props: { field: Field; value: string; refused: boolean; onChange: (v: string) => void }) {
+function FieldInput(props: {
+  plugin: SourcePlugin; field: Field; value: string; refused: boolean;
+  source: () => Source; token: () => string; tokenKept: () => boolean;
+  onChange: (v: string) => void;
+}) {
+  const title = () => fieldTitle(props.plugin.name, props.field);
+  return (
+    <Show when={props.field.options} fallback={
+      <label class={`field ${props.refused ? "refused" : ""}`}>
+        <span>{title()}</span>
+        <Show when={props.field.type === "select"} fallback={
+          <input type="text" inputmode={props.field.type === "number" ? "numeric" : undefined}
+                 value={props.value} placeholder={props.field.default ?? ""}
+                 onInput={(e) => props.onChange(e.currentTarget.value)} />
+        }>
+          <select value={props.value || props.field.default || ""} onChange={(e) => props.onChange(e.currentTarget.value)}>
+            <For each={list(props.field.values)}>{(v) => <option value={v}>{v}</option>}</For>
+          </select>
+        </Show>
+      </label>
+    }>
+      <OptionsInput {...props} title={title()} />
+    </Show>
+  );
+}
+
+/** OptionsInput is a field whose values the service itself knows: its boards,
+ *  its columns. They are asked for when the form opens, and again when what
+ *  they depend on changes. Without an answer — no token yet, the program not
+ *  running — it is a text box with the reason beside it, so a value can still be
+ *  typed. */
+function OptionsInput(props: {
+  plugin: SourcePlugin; field: Field; title: string; value: string; refused: boolean;
+  source: () => Source; token: () => string; tokenKept: () => boolean;
+  onChange: (v: string) => void;
+}) {
+  const [options, setOptions] = createSignal<Option[] | undefined>(undefined);
+  const [failure, setFailure] = createSignal("");
+  const [loading, setLoading] = createSignal(false);
+  const [again, setAgain] = createSignal(0);
+  const needs = () => list(props.field.options?.dependsOn);
+  const waitingFor = () => needs().some((k) => !(props.source().config?.[k] ?? "").trim());
+  const needsToken = () => props.plugin.needsToken && !props.token() && !props.tokenKept();
+
+  // The answer to an older question is dropped: a slow program must not fill
+  // the list for a board that is no longer chosen.
+  let asked = 0;
+  createEffect(
+    () => [props.source().plugin, ...needs().map((k) => props.source().config?.[k] ?? ""), props.token(), again()] as const,
+    () => {
+      const n = ++asked;
+      setOptions(undefined);
+      setFailure("");
+      if (waitingFor() || needsToken()) { setLoading(false); return; }
+      setLoading(true);
+      API.SourceFieldOptions(props.source(), props.token(), props.field.key).then(
+        (got) => { if (n === asked) { setOptions(list(got)); setLoading(false); } },
+        (err) => { if (n === asked) { setFailure(errorText(err)); setLoading(false); } },
+      );
+    },
+  );
+
+  const shown = () => {
+    const got = options() ?? [];
+    // A value stored earlier that the service no longer lists stays visible
+    // rather than being swapped for the first one on the list.
+    return props.value && !got.some((o) => o.value === props.value) ? [{ value: props.value, label: props.value }, ...got] : got;
+  };
+  const hint = () => (needsToken() ? t("sources.optionsNeedToken") : failure());
+
   return (
     <label class={`field ${props.refused ? "refused" : ""}`}>
-      <span>{props.field.title || props.field.key}</span>
-      <Show when={props.field.type === "select"} fallback={
-        <input type="text" inputmode={props.field.type === "number" ? "numeric" : undefined}
-               value={props.value} placeholder={props.field.default ?? ""}
-               onInput={(e) => props.onChange(e.currentTarget.value)} />
-      }>
-        <select value={props.value || props.field.default || ""} onChange={(e) => props.onChange(e.currentTarget.value)}>
-          <For each={list(props.field.values)}>{(v) => <option value={v}>{v}</option>}</For>
-        </select>
-      </Show>
+      <span>{props.title}</span>
+      <div class="row options-row">
+        <Show when={options() !== undefined} fallback={
+          <input type="text" value={props.value} disabled={waitingFor() && !props.value}
+                 placeholder={loading() ? t("sources.optionsLoading") : ""}
+                 onInput={(e) => props.onChange(e.currentTarget.value)} />
+        }>
+          <select value={props.value} onChange={(e) => props.onChange(e.currentTarget.value)}>
+            <option value="">—</option>
+            <For each={shown()}>{(o) => <option value={o.value}>{o.label}</option>}</For>
+          </select>
+        </Show>
+        <button type="button" class="btn quiet" title={t("sources.optionsRefresh")} disabled={loading()}
+                onClick={(e) => { e.preventDefault(); setAgain((n) => n + 1); }}>↻</button>
+      </div>
+      <Show when={hint()}><div class="meta bad-text">{hint()}</div></Show>
     </label>
   );
 }

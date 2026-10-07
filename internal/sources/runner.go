@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -147,9 +148,46 @@ func (r *Runner) Catalog() *Catalog { return r.catalog }
 // Owns reports whether a source is one of the runner's: it names a plugin the
 // catalog has. The demo file and the review queue are read elsewhere.
 func (r *Runner) Owns(src model.Source) bool {
-	_, ok := r.catalog.Get(src.Plugin)
+	m, ok := r.catalog.Get(src.Plugin)
+	ok = ok && !m.IsBuiltin()
 	return src.Plugin != "" && ok
 }
+
+// FieldOptions asks a plugin for the values one field of a source can take. The
+// source is the form as it stands, not a stored one: the list is wanted while
+// the source is being made, with the token typed a moment ago and kept nowhere
+// yet. With no token given, the one kept for the source is used.
+func (r *Runner) FieldOptions(ctx context.Context, src model.Source, token, key string) ([]Option, error) {
+	manifest, ok := r.catalog.Get(src.Plugin)
+	if !ok || manifest.IsBuiltin() {
+		return nil, msg.Err("source.unknownPlugin", "source", src.Name, "plugin", src.Plugin)
+	}
+	var field *Field
+	for i := range manifest.Fields {
+		if manifest.Fields[i].Key == key {
+			field = &manifest.Fields[i]
+		}
+	}
+	if field == nil || field.Options == nil {
+		return nil, msg.Err("source.noOptions", "plugin", manifest.Name, "field", key)
+	}
+	var cred plugin.Credentials
+	if cred.AccessToken = strings.TrimSpace(token); cred.AccessToken == "" && src.Name != "" {
+		if kept, err := r.tokens.Token(TokenKey(src.Name)); err == nil {
+			cred.AccessToken = kept
+		}
+	}
+	if manifest.NeedsToken() && cred.AccessToken == "" {
+		return nil, msg.Err("source.noToken", "source", src.Name)
+	}
+	ctx, cancel := context.WithTimeout(ctx, optionsTimeout)
+	defer cancel()
+	return fieldOptions(ctx, manifest.WithDefaults(src), manifest, cred, *field)
+}
+
+// optionsTimeout is how long a form waits for a list: somebody is looking at
+// it, and a server that has not answered by now will not.
+const optionsTimeout = 20 * time.Second
 
 // Start brings up every enabled source the runner owns.
 func (r *Runner) Start() {

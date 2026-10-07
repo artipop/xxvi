@@ -75,6 +75,10 @@ func serveFakeMCP(mode string) {
 				reply(map[string]any{"tools": []any{map[string]any{"name": "get_card"}}})
 				continue
 			}
+			if mode == "options" {
+				reply(map[string]any{"tools": []any{map[string]any{"name": "list_boards"}, map[string]any{"name": "list_columns"}}})
+				continue
+			}
 			reply(map[string]any{"tools": []any{map[string]any{"name": "list_my_cards"}}})
 		case "tools/call":
 			var params struct {
@@ -83,6 +87,14 @@ func serveFakeMCP(mode string) {
 			}
 			_ = json.Unmarshal(msg.Params, &params)
 			switch mode {
+			case "options":
+				text := `{"boards":[{"id":"b1","title":"Работа"},{"id":"b2","title":"Дом"},{"id":"b3","title":""}]}`
+				if params.Name == "list_columns" {
+					// The board asked for is part of the answer, so a test can
+					// see what the question carried.
+					text = fmt.Sprintf(`{"columns":[{"name":"Входящие (%v)"},{"name":"Готово"}]}`, params.Arguments["board"])
+				}
+				reply(map[string]any{"content": []any{map[string]any{"type": "text", "text": text}}})
 			case "refuses":
 				reply(map[string]any{
 					"content": []any{map[string]any{"type": "text", "text": "Error: API returned HTTP 401"}},

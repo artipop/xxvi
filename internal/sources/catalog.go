@@ -28,7 +28,7 @@ const ManifestsDir = "sources/manifests"
 // ones this app ships. A file wins over a built-in one of the same name — the
 // way to change what a shipped manifest does is to write your own beside it.
 type Catalog struct {
-	reserved []string
+	builtins []Manifest
 
 	mu        sync.RWMutex
 	manifests []Manifest
@@ -40,11 +40,22 @@ type Catalog struct {
 // manifest must not take the other sources down, and the app has to come up to
 // be able to say what was wrong.
 //
-// Reserved are the plugin names read by code rather than by a manifest — the
-// demo file, the review queue. A manifest by one of those names is refused:
+// Builtins are the sources the application reads with its own code — the demo
+// file, the review queue — described the way a manifest describes a plugin, so
+// the list of what a source can be made from is one list and the form has no
+// source it knows by name. A manifest by one of their names is refused:
 // otherwise a file in the data directory would take a built-in source over.
-func LoadCatalog(dir string, reserved ...string) *Catalog {
-	c := &Catalog{reserved: reserved}
+func LoadCatalog(dir string, builtins ...Manifest) *Catalog {
+	c := &Catalog{}
+	for _, m := range builtins {
+		m.Kind = KindBuiltin
+		valid, err := m.Validate()
+		if err != nil {
+			c.builtins = append(c.builtins, m)
+			continue
+		}
+		c.builtins = append(c.builtins, valid)
+	}
 	c.Reload(dir)
 	return c
 }
@@ -61,13 +72,13 @@ func (c *Catalog) Reload(dir string) {
 	}
 	kept := own[:0]
 	for _, m := range own {
-		if containsFold(c.reserved, m.Name) {
+		if _, taken := find(c.builtins, m.Name); taken {
 			problems = append(problems, fmt.Errorf("%q is a built-in source and cannot be a manifest", m.Name))
 			continue
 		}
 		kept = append(kept, m)
 	}
-	own = kept
+	own = append(kept, c.builtins...)
 	sort.Slice(own, func(i, j int) bool { return strings.ToLower(own[i].Name) < strings.ToLower(own[j].Name) })
 
 	c.mu.Lock()
@@ -94,15 +105,6 @@ func (c *Catalog) Problems() []error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return append([]error(nil), c.problems...)
-}
-
-func containsFold(list []string, value string) bool {
-	for _, item := range list {
-		if strings.EqualFold(item, value) {
-			return true
-		}
-	}
-	return false
 }
 
 func find(list []Manifest, name string) (Manifest, bool) {
@@ -187,6 +189,9 @@ func parseManifest(raw []byte) (Manifest, error) {
 	var m Manifest
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return Manifest{}, err
+	}
+	if strings.EqualFold(strings.TrimSpace(m.Kind), KindBuiltin) {
+		return Manifest{}, fmt.Errorf("a file cannot describe a built-in source")
 	}
 	return m.Validate()
 }

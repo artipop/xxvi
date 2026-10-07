@@ -189,6 +189,13 @@ export interface SourcePlugin {
     "title"?: string;
     "fields"?: sources$0.Field[] | null;
     "needsToken": boolean;
+
+    /**
+     * Builtin is read by the application itself rather than by a process.
+     * Managed is made elsewhere than the sources form.
+     */
+    "builtin"?: boolean;
+    "managed"?: boolean;
 }
 
 /**
