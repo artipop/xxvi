@@ -155,6 +155,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	// in the folder an agent worked in: a file of ours inside somebody's
 	// repository is ours to clean up and theirs to find in `git status`.
 	a.Terminals.KeepIn(filepath.Join(dataDir, "terminals"))
+	a.Terminals.HistoryFrom(a.terminalHistory)
 	a.holdTerminals()
 	if err := a.Terminals.Listen(); err != nil {
 		// A terminal that cannot be opened is a screen that says so. Everything

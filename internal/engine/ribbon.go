@@ -234,14 +234,23 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 			if s.Work == model.WorkTerminal {
 				kind = "agentTerminal"
 			}
-			seg.Screens = append(seg.Screens, ScreenView{
+			screen := ScreenView{
 				ID:        screenID(ev.ID, kind, s.ID),
 				Kind:      kind,
 				Agent:     s.AgentName,
 				SessionID: s.ID,
 				Report:    lastReport(journal, s.ID),
 				Paused:    seg.Current && n == len(runs)-1 && s.Status == store.StatusPaused,
-			})
+			}
+			if n > 0 && resumesTerminal(runs[n-1], s) {
+				// A resumed CLI has a new process, but the person is returning to
+				// the same window. Keep its identity, including across repeated pauses.
+				last := len(seg.Screens) - 1
+				screen.ID = seg.Screens[last].ID
+				seg.Screens[last] = screen
+			} else {
+				seg.Screens = append(seg.Screens, screen)
+			}
 		}
 		for n, sc := range stage.Screens {
 			ref, waiting := model.ResolveRef(sc.Ref, card.Props)
@@ -273,6 +282,13 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 		}
 	}
 	return view, nil
+}
+
+func resumesTerminal(previous, next store.Session) bool {
+	return previous.Status == store.StatusPaused &&
+		previous.Work == model.WorkTerminal && next.Work == model.WorkTerminal &&
+		previous.AgentKind == next.AgentKind &&
+		model.Username(previous.AgentName) == model.Username(next.AgentName)
 }
 
 // screenID is «<event>|<what>[|<whose>]». Derived from the journal row rather

@@ -103,7 +103,8 @@ type Manager struct {
 	// whose step ended long ago shows the last thing that stood there rather
 	// than nothing. The pty is gone; the ribbon is a journal, and a journal is
 	// not erased by a process exiting.
-	keep string
+	keep    string
+	history func(sessionID string) []byte
 
 	// holder runs the processes when there is one (Hold): they outlive the
 	// application then. Without it they run here and end with it. connect is
@@ -172,6 +173,22 @@ func (m *Manager) KeepIn(dir string) {
 	m.mu.Lock()
 	m.keep = dir
 	m.mu.Unlock()
+}
+
+func (m *Manager) HistoryFrom(read func(sessionID string) []byte) {
+	m.mu.Lock()
+	m.history = read
+	m.mu.Unlock()
+}
+
+func (m *Manager) savedHistory(id string) []byte {
+	m.mu.Lock()
+	read := m.history
+	m.mu.Unlock()
+	if read == nil {
+		return nil
+	}
+	return read(id)
 }
 
 // Attach starts the terminal of a run: an argv executed directly, in a folder
@@ -512,7 +529,7 @@ func (m *Manager) writeTail(dir, id string, s *Session, final bool) {
 	path := transcriptPath(dir, id)
 	tmp, err := os.CreateTemp(dir, ".tail-*")
 	if err == nil {
-		_, err = tmp.Write(s.History())
+		_, err = tmp.Write(s.transcript())
 		if cerr := tmp.Close(); err == nil {
 			err = cerr
 		}
@@ -768,7 +785,11 @@ func (s *Session) Subscribe() (history []byte, updates <-chan []byte, cancel fun
 	ch := make(chan []byte, 64)
 	s.mu.Lock()
 	history = s.snapshot()
-	s.subs[ch] = struct{}{}
+	if s.Alive() {
+		s.subs[ch] = struct{}{}
+	} else {
+		close(ch)
+	}
 	s.mu.Unlock()
 
 	return history, ch, func() {
@@ -795,6 +816,15 @@ func (s *Session) History() []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.snapshot()
+}
+
+func (s *Session) transcript() []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.screen != nil {
+		return s.screen.ReadOnlyBytes()
+	}
+	return append([]byte(nil), s.final...)
 }
 
 // snapshot is the screen as a new window must be fed it. Called with mu held.
@@ -955,16 +985,15 @@ func (s *Session) Close() {
 // that stopped waiting for either are three events for one fact, and they race.
 func (s *Session) finish() {
 	s.closeOne.Do(func() {
-		close(s.done)
-
 		s.mu.Lock()
+		s.final = s.screen.ReadOnlyBytes()
+		s.screen.Close()
+		s.screen = nil
+		close(s.done)
 		for c := range s.subs {
 			delete(s.subs, c)
 			close(c)
 		}
-		s.final = s.screen.Bytes()
-		s.screen.Close()
-		s.screen = nil
 		s.mu.Unlock()
 		s.eng.Release()
 	})

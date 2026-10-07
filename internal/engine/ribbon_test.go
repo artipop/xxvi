@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -483,5 +484,110 @@ func TestAPausedRunIsMarkedOnItsScreen(t *testing.T) {
 	}
 	if got := pausedScreens(); got != 0 {
 		t.Fatalf("после нового прогона продолжать нечего: %d", got)
+	}
+}
+
+func TestAResumedTerminalKeepsItsWindow(t *testing.T) {
+	for _, action := range []string{"continue", "reopen"} {
+		t.Run(action, func(t *testing.T) {
+			f := setup(t, screenFlow())
+			card := f.card(t, "Задача")
+			if err := f.engine.TakeIntoWork(card.ID, f.flow.ID); err != nil {
+				t.Fatal(err)
+			}
+			f.pause(t, card.ID)
+			before := ribbonOf(t, f, card.ID).Segments[0].Screens
+			windowID, notesID := before[0].ID, before[1].ID
+			for i := 0; i < 3; i++ {
+				var err error
+				if action == "continue" {
+					err = f.engine.Continue(card.ID, "продолжай")
+				} else {
+					err = f.engine.Reopen(card.ID)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.pause(t, card.ID)
+				view := ribbonOf(t, f, card.ID)
+				screens := view.Segments[0].Screens
+				if len(screens) != 2 || screens[0].ID != windowID || screens[1].ID != notesID {
+					t.Fatalf("продолжение должно сохранить прежний терминал и заметки: %+v", screens)
+				}
+				latest := fmt.Sprintf("run-%s-%d", card.ID, f.runner.count())
+				if screens[0].SessionID != latest || !screens[0].Paused || view.FocusID != windowID {
+					t.Fatalf("прежнее окно должно показывать последний запуск и оставаться в фокусе: %+v", view)
+				}
+			}
+			runs, err := f.store.SessionsForCard(card.ID)
+			if err != nil || len(runs) != 4 {
+				t.Fatalf("запуски сохраняются в истории: %+v (%v)", runs, err)
+			}
+		})
+	}
+}
+
+func TestOnlyPausedTerminalsShareAWindow(t *testing.T) {
+	for _, change := range []string{"resume", "finished", "session", "agent", "kind", "visit"} {
+		t.Run(change, func(t *testing.T) {
+			f := setup(t, screenFlow())
+			card := f.card(t, "Задача")
+			if err := f.engine.TakeIntoWork(card.ID, f.flow.ID); err != nil {
+				t.Fatal(err)
+			}
+			previous := store.Session{
+				ID: "before", CardID: card.ID, FlowID: f.flow.ID, StageID: "work",
+				AgentName: "Claude", AgentKind: model.KindClaude, Work: model.WorkTerminal,
+				Status: store.StatusPaused, StartedAt: time.Now(),
+			}
+			if change == "finished" {
+				previous.Status = store.StatusDone
+			}
+			if change == "session" {
+				previous.Work = model.WorkSession
+			}
+			if err := f.store.InsertSession(previous); err != nil {
+				t.Fatal(err)
+			}
+			windowID := ribbonOf(t, f, card.ID).Segments[0].Screens[0].ID
+			time.Sleep(2 * time.Millisecond)
+			if change == "visit" {
+				if err := f.engine.MoveTo(card.ID, "work"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			next := previous
+			next.ID, next.StartedAt, next.Status = "after", time.Now(), store.StatusQueued
+			switch change {
+			case "agent":
+				next.AgentName = "Other"
+			case "kind":
+				next.AgentKind = model.KindCodex
+			}
+			if err := f.store.InsertSession(next); err != nil {
+				t.Fatal(err)
+			}
+			for _, status := range []store.SessionStatus{store.StatusQueued, store.StatusRunning, store.StatusDone} {
+				if err := f.store.UpdateSession(next.ID, store.SessionUpdate{Status: &status}); err != nil {
+					t.Fatal(err)
+				}
+				view := ribbonOf(t, f, card.ID)
+				screens := view.Segments[len(view.Segments)-1].Screens
+				switch change {
+				case "resume":
+					if len(screens) != 2 || screens[0].ID != windowID || screens[0].SessionID != next.ID || screens[0].Paused {
+						t.Fatalf("оживлённый запуск заменяет снимок уже при постановке в очередь: %+v", screens)
+					}
+				case "visit":
+					if len(screens) != 2 || screens[0].ID == windowID {
+						t.Fatalf("у нового визита своё окно: %+v", screens)
+					}
+				default:
+					if len(screens) != 3 || screens[0].ID != windowID || screens[1].SessionID != next.ID {
+						t.Fatalf("отдельные шаги сохраняют отдельные окна: %+v", screens)
+					}
+				}
+			}
+		})
 	}
 }

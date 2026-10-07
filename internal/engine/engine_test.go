@@ -991,11 +991,11 @@ func TestTheRibbonFocusesTheLatestStep(t *testing.T) {
 	f := setup(t, devFlow())
 	card := f.card(t, "Задача")
 	f.engine.TakeIntoWork(card.ID, f.flow.ID)
-	f.pause(t, card.ID)
-	if err := f.engine.Reopen(card.ID); err != nil {
-		t.Fatalf("открыть снова: %v", err)
+	f.pauseWorked(t, card.ID, model.WorkSession)
+	if err := f.engine.Continue(card.ID, ""); err != nil {
+		t.Fatalf("продолжить: %v", err)
 	}
-	f.pause(t, card.ID)
+	f.pauseWorked(t, card.ID, model.WorkSession)
 
 	view := ribbonOf(t, f, card.ID)
 	seg := view.Segments[len(view.Segments)-1]

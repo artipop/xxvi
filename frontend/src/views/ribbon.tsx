@@ -925,10 +925,11 @@ function Body(props: { screen: ScreenView; cardId: string; current: boolean }): 
           the stream it left behind (docs/system.md §12.2). */}
       <Match when={props.screen.kind === "agentTerminal"}>
         <Loading fallback={<div class="screen-note">{t("ribbon.agentTerminalOpening")}</div>}>
-          <TerminalPane
-            open={() => API.AgentTerminal(props.screen.sessionId ?? "")}
-            ended={t("ribbon.stepEnded")}
-          />
+          <For each={[props.screen.sessionId ?? ""]}>
+            {(sessionId) => (
+              <TerminalPane open={() => API.AgentTerminal(sessionId)} ended={t("ribbon.stepEnded")} />
+            )}
+          </For>
         </Loading>
       </Match>
       <Match when={props.screen.kind === "agent"}>

@@ -113,22 +113,90 @@ func (s *Screen) Bytes() []byte {
 	// full-screen program is what the shell shows again when it exits. It is
 	// read from a copy that has left the alternate screen; the terminal itself
 	// is not touched.
-	snapshot, err := s.t.Snapshot()
-	if err != nil {
-		return []byte(format(s.t, true))
-	}
-	dec, err := lg.NewSnapshotDecoderBytes(snapshot)
-	if err != nil {
-		return []byte(format(s.t, true))
-	}
-	defer dec.Close()
-	under, err := dec.Decode()
+	under, err := primaryCopy(s.t)
 	if err != nil {
 		return []byte(format(s.t, true))
 	}
 	defer under.Close()
-	under.VTWrite([]byte("\x1b[?1049l"))
 	return []byte(primary(under) + format(s.t, true))
+}
+
+// ReadOnlyBytes keeps the last full-screen frame in normal scrollback. The
+// alternate screen has no scrollback: its wheel events go to the application,
+// which cannot answer them after it has gone.
+func (s *Screen) ReadOnlyBytes() []byte {
+	screen, err := s.t.ActiveScreen()
+	if err != nil || screen == lg.ScreenPrimary {
+		return s.Bytes()
+	}
+	frame := readOnly(s.t)
+	under, err := primaryCopy(s.t)
+	if err != nil {
+		return []byte(frame)
+	}
+	defer under.Close()
+	if !hasText(under) {
+		return []byte(frame)
+	}
+	return []byte(readOnly(under) + "\r\n" + frame)
+}
+
+// ReadOnlyWithHistory puts saved conversation messages before the last frame.
+// A fullscreen CLI's primary buffer may be entirely empty; padding that buffer
+// would only make the person scroll through blank rows.
+func (s *Screen) ReadOnlyWithHistory(history []byte) []byte {
+	frame := readOnly(s.t)
+	if active, err := s.t.ActiveScreen(); err == nil && active == lg.ScreenAlternate {
+		frame = string(s.ReadOnlyBytes())
+	}
+	return []byte(string(history) + "\r\n────────────────────────────────────────\r\n" + frame)
+}
+
+func hasText(t *lg.Terminal) bool {
+	f, err := lg.NewFormatter(t, lg.WithFormatterFormat(lg.FormatterFormatPlain), lg.WithFormatterTrim(true))
+	if err != nil {
+		return true
+	}
+	defer f.Close()
+	text, err := f.FormatString()
+	return err != nil || strings.TrimSpace(text) != ""
+}
+
+func primaryCopy(t *lg.Terminal) (*lg.Terminal, error) {
+	snapshot, err := t.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	dec, err := lg.NewSnapshotDecoderBytes(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	defer dec.Close()
+	under, err := dec.Decode()
+	if err != nil {
+		return nil, err
+	}
+	under.VTWrite([]byte("\x1b[?1049l"))
+	return under, nil
+}
+
+func readOnly(t *lg.Terminal) string {
+	f, err := lg.NewFormatter(t,
+		lg.WithFormatterFormat(lg.FormatterFormatVT),
+		lg.WithFormatterExtraStyle(true),
+		lg.WithFormatterExtraHyperlink(true),
+	)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	out, _ := f.FormatString()
+	if rows, err := t.TotalRows(); err == nil {
+		if written := strings.Count(out, "\r\n") + 1; written < int(rows) {
+			out += strings.Repeat("\r\n", int(rows)-written)
+		}
+	}
+	return out
 }
 
 // primary is the main screen with its scrollback, padded to the full height:

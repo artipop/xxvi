@@ -481,6 +481,139 @@ func TestHistoryIsTheScreenWithItsModes(t *testing.T) {
 	}
 }
 
+func TestACompletedFullScreenTerminalKeepsScrollableHistory(t *testing.T) {
+	for _, held := range []bool{false, true} {
+		t.Run(fmt.Sprintf("holder=%t", held), func(t *testing.T) {
+			m := unheld(t)
+			if held {
+				holding(t, m, holderSocket(t))
+			}
+			m.KeepIn(t.TempDir())
+			m.HistoryFrom(func(id string) []byte {
+				if id == "fullscreen" {
+					return []byte("сохранённый вопрос\r\nсохранённый ответ\r\n")
+				}
+				return nil
+			})
+			if err := m.Listen(); err != nil {
+				t.Fatal(err)
+			}
+			script := `printf 'история до CLI\r\n'; printf '\033[?1049h\033[?1000h\033[H\033[2Jпоследний кадр\r\n'; read line`
+			s, err := m.Attach("fullscreen", "card", t.TempDir(), []string{"sh", "-c", script}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			conn, _, err := websocket.Dial(ctx, m.Endpoint()+s.ID, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close(websocket.StatusNormalClosure, "")
+			window := ptyhold.NewScreen(80, 24)
+			defer window.Close()
+			for !strings.Contains(window.Text(), "последний кадр") {
+				kind, data, err := conn.Read(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if kind == websocket.MessageBinary {
+					window.Write(data)
+				}
+			}
+			if err := conn.Write(ctx, websocket.MessageBinary, []byte("\n")); err != nil {
+				t.Fatal(err)
+			}
+			readEnd := func(conn *websocket.Conn, window *ptyhold.Screen) {
+				t.Helper()
+				for {
+					kind, data, err := conn.Read(ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if kind == websocket.MessageBinary {
+						window.Write(data)
+					} else if strings.Contains(string(data), "exit") {
+						break
+					}
+				}
+				got := string(window.Bytes())
+				if strings.Contains(got, "\x1b[?1049h") || strings.Contains(got, "\x1b[?1000h") {
+					t.Fatalf("законченный терминал должен разрешать прокрутку и выделение: %q", got)
+				}
+				if !strings.Contains(got, "история до CLI") || !strings.Contains(got, "последний кадр") || !strings.Contains(got, "сохранённый вопрос") || !strings.Contains(got, "сохранённый ответ") {
+					t.Fatalf("история и последний кадр должны сохраниться: %q", got)
+				}
+			}
+			readEnd(conn, window)
+			select {
+			case <-s.forgotten:
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			}
+			again, _, err := websocket.Dial(ctx, m.Endpoint()+s.ID, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer again.Close(websocket.StatusNormalClosure, "")
+			replay := ptyhold.NewScreen(80, 24)
+			defer replay.Close()
+			readEnd(again, replay)
+		})
+	}
+}
+
+func TestAnOlderFullScreenTailCanBeScrolled(t *testing.T) {
+	m := unheld(t)
+	dir := t.TempDir()
+	m.KeepIn(dir)
+	m.HistoryFrom(func(id string) []byte {
+		if id != "old" {
+			t.Errorf("история должна читаться по id шага, получен %q", id)
+			return nil
+		}
+		return []byte("первый вопрос\r\nпервый ответ\r\n")
+	})
+	if err := m.Listen(); err != nil {
+		t.Fatal(err)
+	}
+	screen := ptyhold.NewScreen(120, 5)
+	defer screen.Close()
+	screen.Write([]byte("история до CLI\r\n1\r\n2\r\n3\r\n4\r\n5\r\n"))
+	frame := "последний кадр " + strings.Repeat("я", 90)
+	screen.Write([]byte("\x1b[?1049h\x1b[?1000h\x1b[H\x1b[2J" + frame))
+	if err := os.WriteFile(transcriptPath(dir, "old"), screen.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, m.Endpoint()+"old", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+	if err := conn.Write(ctx, websocket.MessageText, []byte(`{"type":"resize","cols":120,"rows":5}`)); err != nil {
+		t.Fatal(err)
+	}
+	window := ptyhold.NewScreen(120, 5)
+	defer window.Close()
+	for {
+		kind, data, err := conn.Read(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kind == websocket.MessageBinary {
+			window.Write(data)
+		} else if strings.Contains(string(data), "exit") {
+			break
+		}
+	}
+	got := string(window.Bytes())
+	if strings.Contains(got, "\x1b[?1049h") || strings.Contains(got, "\x1b[?1000h") || !strings.Contains(got, "история до CLI") || !strings.Contains(got, frame) || !strings.Contains(got, "первый вопрос") || !strings.Contains(got, "первый ответ") {
+		t.Fatalf("старый снимок должен читаться с историей и последним кадром без переноса строки: %q", got)
+	}
+}
+
 // ---- the holder ----
 
 // The point of the holder: the application closes, the shell of a screen does

@@ -1,6 +1,7 @@
 package term
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/artipop/xxvi/internal/ptyhold"
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
 )
@@ -75,7 +77,7 @@ func (m *Manager) serve(w http.ResponseWriter, r *http.Request) {
 	// it, not an error about a process that was never going to be alive.
 	if session == nil {
 		if tail := m.transcript(rest); tail != nil {
-			m.replay(w, r, tail)
+			m.replay(w, r, rest, tail)
 			return
 		}
 		http.Error(w, "terminal not found", http.StatusNotFound)
@@ -96,7 +98,7 @@ func (m *Manager) serve(w http.ResponseWriter, r *http.Request) {
 
 // replay hands over a finished terminal and closes: there is nothing to type
 // into and nothing more to wait for.
-func (m *Manager) replay(w http.ResponseWriter, r *http.Request, tail []byte) {
+func (m *Manager) replay(w http.ResponseWriter, r *http.Request, id string, tail []byte) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 	if err != nil {
 		return
@@ -105,10 +107,46 @@ func (m *Manager) replay(w http.ResponseWriter, r *http.Request, tail []byte) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
+	tail = scrollableReplay(ctx, conn, tail, m.savedHistory(id))
 	if err := write(ctx, conn, websocket.MessageBinary, append(tail, releaseInput...)); err != nil {
 		return
 	}
 	_ = write(ctx, conn, websocket.MessageText, []byte(`{"type":"exit"}`))
+}
+
+// Older tails kept the alternate screen active. Rebuild those at the size the
+// viewer sends on connection, just as it would have interpreted the snapshot.
+func scrollableReplay(ctx context.Context, conn *websocket.Conn, tail, history []byte) []byte {
+	if len(history) == 0 && !bytes.Contains(tail, []byte("\x1b[?1049h")) &&
+		!bytes.Contains(tail, []byte("\x1b[?1047h")) &&
+		!bytes.Contains(tail, []byte("\x1b[?47h")) {
+		return tail
+	}
+	ready := make(chan control, 1)
+	go func() {
+		kind, data, err := conn.Read(ctx)
+		var size control
+		if err == nil && kind == websocket.MessageText {
+			_ = json.Unmarshal(data, &size)
+		}
+		ready <- size
+	}()
+	cols, rows := 80, 24
+	select {
+	case size := <-ready:
+		if size.Type == "resize" && size.Cols >= 2 && size.Cols <= 1000 && size.Rows >= 2 && size.Rows <= 1000 {
+			cols, rows = size.Cols, size.Rows
+		}
+	case <-time.After(100 * time.Millisecond):
+	case <-ctx.Done():
+	}
+	screen := ptyhold.NewScreen(cols, rows)
+	defer screen.Close()
+	screen.Write(tail)
+	if len(history) > 0 {
+		return screen.ReadOnlyWithHistory(history)
+	}
+	return screen.ReadOnlyBytes()
 }
 
 // releaseInput turns off what makes a finished terminal still act like a live
@@ -195,7 +233,21 @@ func (m *Manager) pipe(conn *websocket.Conn, s *Session) {
 				// The subscription ends with the process. Say so, so the screen
 				// draws it as a shell that finished rather than a connection
 				// that broke.
-				_ = write(ctx, conn, websocket.MessageBinary, []byte(releaseInput))
+				// A fullscreen CLI can end without leaving its alternate screen.
+				// Replace it with the scrollable transcript before releasing input.
+				tail := s.History()
+				if history := m.savedHistory(s.ID); len(history) > 0 {
+					s.mu.Lock()
+					cols, rows := s.cols, s.rows
+					s.mu.Unlock()
+					screen := ptyhold.NewScreen(cols, rows)
+					screen.Write(tail)
+					tail = screen.ReadOnlyWithHistory(history)
+					screen.Close()
+				}
+				final := append([]byte(resetScreen), tail...)
+				final = append(final, releaseInput...)
+				_ = write(ctx, conn, websocket.MessageBinary, final)
 				_ = write(ctx, conn, websocket.MessageText, []byte(`{"type":"exit"}`))
 				return
 			}

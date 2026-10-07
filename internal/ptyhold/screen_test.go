@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	lg "go.mitchellh.com/libghostty"
 )
 
 // replay feeds a screen's bytes to a fresh screen of the same size and reads it
@@ -14,6 +16,101 @@ func replay(t *testing.T, s *Screen, cols, rows int) *Screen {
 	t.Cleanup(fresh.Close)
 	fresh.Write(s.Bytes())
 	return fresh
+}
+
+func TestAReadOnlyFullScreenFrameCanBeScrolled(t *testing.T) {
+	s := NewScreen(40, 5)
+	defer s.Close()
+	s.Write([]byte("давний вывод\r\n1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n"))
+	s.Write([]byte("\x1b[?1049h\x1b[?1000h\x1b[H\x1b[2J\x1b[31mпоследний кадр\x1b[0m\r\nответ агента"))
+
+	window := NewScreen(40, 5)
+	defer window.Close()
+	window.Write(s.ReadOnlyBytes())
+	if active, err := window.t.ActiveScreen(); err != nil || active != lg.ScreenPrimary {
+		t.Fatalf("законченный экран должен иметь обычную прокрутку: %v (%v)", active, err)
+	}
+	if got := plain(window); !strings.Contains(got, "давний вывод") || !strings.Contains(got, "последний кадр") || !strings.Contains(got, "ответ агента") {
+		t.Fatalf("история и последний кадр должны сохраняться: %q", got)
+	}
+	if got := window.Text(); !strings.Contains(got, "последний кадр") {
+		t.Fatalf("последний кадр должен быть видим, а не уйти в прокрутку: %q", got)
+	}
+	if active, _ := s.t.ActiveScreen(); active != lg.ScreenAlternate {
+		t.Fatal("сохранение хвоста не должно менять живой терминал")
+	}
+	if got := string(window.Bytes()); strings.Contains(got, "\x1b[?1000h") || !strings.Contains(got, "\x1b[38;5;1m") {
+		t.Fatalf("снимок сохраняет цвет, но не захватывает мышь: %q", got)
+	}
+}
+
+func TestAFullScreenFrameDoesNotInventEmptyHistory(t *testing.T) {
+	s := NewScreen(40, 5)
+	defer s.Close()
+	s.Write([]byte("\x1b[?1049h\x1b[H\x1b[2Jпоследний кадр"))
+	window := NewScreen(40, 5)
+	defer window.Close()
+	window.Write(s.ReadOnlyBytes())
+	if total, _ := window.t.TotalRows(); total != 5 {
+		t.Fatalf("пустой экран под CLI не должен становиться историей: %d строк вместо 5", total)
+	}
+}
+
+func TestSavedMessagesAreVisibleWhenScrollingAFullScreenFrame(t *testing.T) {
+	s := NewScreen(40, 5)
+	defer s.Close()
+	s.Write([]byte("\x1b[?1049h\x1b[H\x1b[2Jпоследний кадр"))
+	window := NewScreen(40, 5)
+	defer window.Close()
+	window.Write(s.ReadOnlyWithHistory([]byte("первый вопрос\r\nпервый ответ\r\n1\r\n2\r\n3\r\n4\r\n5\r\n")))
+	window.t.ScrollViewportTop()
+	if got := renderedText(t, window); !strings.Contains(got, "первый вопрос") || !strings.Contains(got, "первый ответ") {
+		t.Fatalf("прокрутка вверх должна рисовать сообщения, а не пустые строки: %q", got)
+	}
+	window.t.ScrollViewportBottom()
+	if got := renderedText(t, window); !strings.Contains(got, "последний кадр") {
+		t.Fatalf("внизу должен оставаться последний экран CLI: %q", got)
+	}
+}
+
+func renderedText(t *testing.T, screen *Screen) string {
+	t.Helper()
+	state, err := lg.NewRenderState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer state.Close()
+	if err := state.Update(screen.t); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := lg.NewRenderStateRowIterator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	cells, err := lg.NewRenderStateRowCells()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cells.Close()
+	if err := state.RowIterator(rows); err != nil {
+		t.Fatal(err)
+	}
+	var text []byte
+	for rows.Next() {
+		if err := rows.Cells(cells); err != nil {
+			t.Fatal(err)
+		}
+		for cells.Next() {
+			var err error
+			text, err = cells.AppendGraphemes(text)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		text = append(text, '\n')
+	}
+	return string(text)
 }
 
 // The shell's screen under a full-screen program is what comes back when the
