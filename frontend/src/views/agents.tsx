@@ -2,7 +2,7 @@ import { createSignal, For, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Agent, Proxy } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import type { AgentCheck } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
+import type { AdapterStatus, AgentCheck } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
 import { agents, guard, loadAgents, vocabulary } from "../state";
 import { say, t } from "../i18n";
 
@@ -27,7 +27,7 @@ export default function AgentsView() {
             <div class="row wrap">
               <span class="title">{a.kind}</span>
               <Show when={a.ready} fallback={<span class="tag bad"><span class="dot" />{t("agents.wontStart")}</span>}>
-                <span class="tag ok"><span class="dot" />{a.via ? t("agents.via", { runner: a.via }) : t("work.session")}</span>
+                <span class="tag ok"><span class="dot" />{t("work.session")}</span>
               </Show>
               {/* Two questions with two answers: the vendor's ACP adapter and
                   the vendor's interactive CLI are different programs, and a
@@ -35,10 +35,17 @@ export default function AgentsView() {
               <Show when={a.terminal} fallback={<span class="tag"><span class="dot" />{t("agents.noTerminal")}</span>}>
                 <span class="tag ok"><span class="dot" />{t("work.terminal")}</span>
               </Show>
+              <Show when={a.version}><span class="tag">{a.version}</span></Show>
               <div class="spacer" />
               <Show when={a.path}><span class="meta mono">{a.path}</span></Show>
+              {/* Only our own install is ours to update: one the person put on
+                  the machine themselves is updated the way they installed it. */}
+              <Show when={a.installable && (a.installed || !a.ready)}>
+                <InstallButton adapter={a} />
+              </Show>
             </div>
             <Show when={a.detail}><div class="body">{say(a.detail)}</div></Show>
+            <Show when={installed()[a.kind]}><div class="body">{installed()[a.kind]}</div></Show>
             <Show when={!a.terminal && a.terminalDetail}>
               <div class="body">{say(a.terminalDetail)}</div>
             </Show>
@@ -209,6 +216,32 @@ const forgetCheck = (name: string) => {
   const { [name]: _, ...rest } = checks();
   setChecks(rest);
 };
+
+// What the last install of each kind changed, said under its row until the
+// screen is left.
+const [installed, setInstalled] = createSignal<Record<string, string>>({});
+
+function InstallButton(props: { adapter: AdapterStatus }): JSX.Element {
+  const [busy, setBusy] = createSignal(false);
+  const install = async () => {
+    setBusy(true);
+    const got = await guard(() => API.InstallAdapter(props.adapter.kind));
+    setBusy(false);
+    if (!got) return;
+    const now = got.status.version ?? "";
+    const said = !got.was ? t("agents.installedNow", { version: now })
+      : got.was === now ? t("agents.upToDate", { version: now })
+      : t("agents.updated", { was: got.was, version: now });
+    setInstalled({ ...installed(), [props.adapter.kind]: said });
+    await loadAgents();
+  };
+  return (
+    <button class="btn quiet" disabled={busy()} onClick={() => void install()}
+            title={t("agents.installTitle", { pkg: props.adapter.package ?? "" })}>
+      {busy() ? t("agents.installing") : props.adapter.installed ? t("agents.update") : t("agents.install")}
+    </button>
+  );
+}
 
 function CheckButton(props: { name: string }): JSX.Element {
   const [busy, setBusy] = createSignal(false);

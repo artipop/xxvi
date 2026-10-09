@@ -23,10 +23,9 @@ import (
 type adapter struct {
 	// bin is the executable, looked up on PATH and in the usual install spots.
 	bin string
-	// pkg provides bin when it is not installed, published in from. It
-	// doubles as the install instruction shown to a person and the argument
-	// to the registry's runner, so a machine with that runner needs no
-	// install step at all.
+	// pkg provides bin, published in from. We install it into a folder of
+	// our own on a person's word (Install); the same name goes into the
+	// command shown to somebody who would rather install it themselves.
 	pkg  string
 	from registry
 	// acpArgs put the CLI into ACP-over-stdio mode. Empty when it has no other
@@ -97,32 +96,48 @@ type adapter struct {
 	cliPromptArgs func(prompt string) []string
 }
 
-// registry is where an adapter package is published: how to run it without
-// installing it, and how a person installs it.
+// registry is where an adapter package is published: how we install it into a
+// folder of our own, and how a person installs it themselves.
 type registry struct {
-	// runner fetches and runs a package in one go.
-	runner string
-	// runArgs follow runner, naming the package and, when it provides more
-	// than one program, which of them.
-	runArgs func(pkg, bin string) []string
+	// tool is the program that installs from the registry.
+	tool string
+	// installArgs install the latest pkg into dir, or move it there when an
+	// older one is in place. env goes on top of ours.
+	installArgs func(pkg, dir string) (args, env []string)
+	// binIn is where bin lands once installed into dir.
+	binIn func(dir, bin string) string
+	// versionIn reads the installed version of pkg from dir, empty when it
+	// cannot tell.
+	versionIn func(dir, pkg string) string
 	// install is the command a person runs to install it for good.
 	install func(pkg string) string
-	// needs is what provides runner, for a machine that has neither.
+	// needs is what provides tool, for a machine that has neither.
 	needs string
 }
 
 var (
 	npm = registry{
-		runner:  "npx",
-		runArgs: func(pkg, _ string) []string { return []string{"--yes", pkg} },
-		install: func(pkg string) string { return "npm install -g " + pkg },
-		needs:   "Node.js",
+		tool: "npm",
+		installArgs: func(pkg, dir string) ([]string, []string) {
+			return []string{"install", "--prefix", dir, "--no-audit", "--no-fund", pkg + "@latest"}, nil
+		},
+		binIn:     func(dir, bin string) string { return filepath.Join(dir, "node_modules", ".bin", bin) },
+		versionIn: npmVersion,
+		install:   func(pkg string) string { return "npm install -g " + pkg },
+		needs:     "Node.js",
 	}
 	pypi = registry{
-		runner:  "uvx",
-		runArgs: func(pkg, bin string) []string { return []string{"--from", pkg, bin} },
-		install: func(pkg string) string { return "uv tool install " + pkg },
-		needs:   "uv",
+		tool: "uv",
+		// The tool's environment and its entry point are both kept in dir, so
+		// the person's own `uv tool list` neither shows ours nor loses theirs.
+		installArgs: func(pkg, dir string) ([]string, []string) {
+			return []string{"tool", "install", "--upgrade", pkg},
+				[]string{"UV_TOOL_DIR=" + filepath.Join(dir, "tools"), "UV_TOOL_BIN_DIR=" + filepath.Join(dir, "bin")}
+		},
+		binIn:     func(dir, bin string) string { return filepath.Join(dir, "bin", bin) },
+		versionIn: pypiVersion,
+		install:   func(pkg string) string { return "uv tool install " + pkg },
+		needs:     "uv",
 	}
 )
 
@@ -258,10 +273,14 @@ type AdapterStatus struct {
 	Path string `json:"path,omitempty"`
 	// Ready reports that a session of this kind can start right now.
 	Ready bool `json:"ready"`
-	// Via names the runner — npx, uvx — of a kind that is not installed but
-	// will be run through it: it works, only the first run pays for the
-	// download.
-	Via string `json:"via,omitempty"`
+	// Installed reports that Path is our own install, which Install updates.
+	// One the person installed themselves is theirs to update.
+	Installed bool `json:"installed,omitempty"`
+	// Version is that install's version, when it can be read.
+	Version string `json:"version,omitempty"`
+	// Installable reports that Install can put the adapter in place here:
+	// the package is published and the tool that installs it is on hand.
+	Installable bool `json:"installable,omitempty"`
 	// Detail says what is missing, with what a person needs to act on.
 	Detail *msg.Msg `json:"detail,omitempty"`
 
@@ -292,23 +311,30 @@ func adapterStatus(kind string) AdapterStatus {
 	def := adapters[kind]
 	st := AdapterStatus{Kind: kind, Package: def.pkg}
 	st.Terminal, st.TerminalDetail = terminalStatus(kind)
+	if def.pkg != "" {
+		_, err := lookupBin(def.from.tool)
+		st.Installable = err == nil
+	}
+	if bin, ok := installedBin(kind); ok {
+		st.Path, st.Ready, st.Installed = bin, true, true
+		st.Version = def.from.versionIn(installDir(kind), def.pkg)
+		return st
+	}
 	if bin, err := lookupBin(def.bin); err == nil {
 		st.Path, st.Ready = bin, true
 		return st
 	}
-	if def.pkg == "" {
+	switch {
+	case def.pkg == "":
 		st.Detail = detail("adapter.missing", "bin", def.bin)
-		return st
+	case st.Installable:
+		st.Detail = detail("adapter.notInstalled", "bin", def.bin)
+	default:
+		// Nothing to offer: installing Node.js or uv is not something to do
+		// behind a person's back.
+		st.Detail = detail("adapter.noTool", "bin", def.bin, "tool", def.from.tool,
+			"needs", def.from.needs, "install", def.from.install(def.pkg))
 	}
-	if _, err := lookupBin(def.from.runner); err == nil {
-		st.Ready, st.Via = true, def.from.runner
-		st.Detail = detail("adapter.viaRunner", "bin", def.bin, "runner", def.from.runner)
-		return st
-	}
-	// Nothing to offer: installing Node.js or uv is not something to do behind
-	// a person's back.
-	st.Detail = detail("adapter.noRunner", "bin", def.bin, "runner", def.from.runner,
-		"needs", def.from.needs, "install", def.from.install(def.pkg))
 	return st
 }
 
@@ -379,15 +405,17 @@ func launchFor(a model.Agent) (launch, error) {
 	return l, nil
 }
 
-// adapterArgv resolves the adapter binary for a kind. An installed binary wins;
-// failing that, the package is run through its registry's runner, so a machine
-// with Node.js or uv needs no install step at all. Nothing else is guessed:
-// an agent that cannot be started says so here rather than at its first turn.
+// adapterArgv resolves the adapter binary for a kind. A path the person gave
+// wins, then our own install, then one found on the machine. Nothing is fetched
+// here: a package runner would ask the registry on every start and download
+// whatever is newest, inside a timeout meant for the agent's answer.
 func adapterArgv(kind, override string) ([]string, error) {
 	def := adapters[kind]
 	name := def.bin
 	if override != "" {
 		name = override
+	} else if bin, ok := installedBin(kind); ok {
+		return []string{bin}, nil
 	}
 	if bin, err := lookupBin(name); err == nil {
 		return []string{bin}, nil
@@ -399,11 +427,7 @@ func adapterArgv(kind, override string) ([]string, error) {
 	if def.pkg == "" {
 		return nil, msg.Err("adapter.missing", "bin", def.bin)
 	}
-	if runner, err := lookupBin(def.from.runner); err == nil {
-		return append([]string{runner}, def.from.runArgs(def.pkg, def.bin)...), nil
-	}
-	return nil, msg.Err("adapter.install", "bin", def.bin, "runner", def.from.runner,
-		"needs", def.from.needs, "install", def.from.install(def.pkg))
+	return nil, msg.Err("adapter.install", "bin", def.bin, "install", def.from.install(def.pkg))
 }
 
 // lookupBin finds an executable. PATH first, then the usual install locations,

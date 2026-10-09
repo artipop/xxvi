@@ -33,11 +33,21 @@ export interface AdapterStatus {
     "ready": boolean;
 
     /**
-     * Via names the runner — npx, uvx — of a kind that is not installed but
-     * will be run through it: it works, only the first run pays for the
-     * download.
+     * Installed reports that Path is our own install, which Install updates.
+     * One the person installed themselves is theirs to update.
      */
-    "via"?: string;
+    "installed"?: boolean;
+
+    /**
+     * Version is that install's version, when it can be read.
+     */
+    "version"?: string;
+
+    /**
+     * Installable reports that Install can put the adapter in place here:
+     * the package is published and the tool that installs it is on hand.
+     */
+    "installable"?: boolean;
 
     /**
      * Detail says what is missing, with what a person needs to act on.
@@ -176,6 +186,18 @@ export interface Attention {
     "standing"?: string;
     "stage"?: string;
     "problem"?: msg$0.Msg | null;
+}
+
+/**
+ * InstallResult is what an install changed.
+ */
+export interface InstallResult {
+    "status": AdapterStatus;
+
+    /**
+     * Was is the version before, empty on a first install.
+     */
+    "was"?: string;
 }
 
 /**

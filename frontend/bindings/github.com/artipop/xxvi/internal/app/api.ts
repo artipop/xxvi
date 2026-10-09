@@ -117,9 +117,7 @@ export function Card(cardID: string): $CancellablePromise<$models.CardView> {
 }
 
 /**
- * CheckAgent asks a registered agent what it is and what it can do. The
- * timeout is the listing's: an adapter run through npx or uvx for the first
- * time downloads itself before it answers.
+ * CheckAgent asks a registered agent what it is and what it can do.
  */
 export function CheckAgent(name: string): $CancellablePromise<acp$0.AgentCheck> {
     return $Call.ByID(971528406, name);
@@ -321,6 +319,14 @@ export function InWork(): $CancellablePromise<$models.CardSummary[] | null> {
  */
 export function Inbox(): $CancellablePromise<model$0.InboxGroup[] | null> {
     return $Call.ByID(64525769);
+}
+
+/**
+ * InstallAdapter installs a kind's adapter, or updates our install of it to
+ * the latest release.
+ */
+export function InstallAdapter(kind: string): $CancellablePromise<acp$0.InstallResult> {
+    return $Call.ByID(2112661601, kind);
 }
 
 /**

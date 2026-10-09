@@ -10,6 +10,7 @@ export type {
     AgentCheck,
     Answer,
     Attention,
+    InstallResult,
     PastSession,
     Question,
     QuestionOption

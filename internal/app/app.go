@@ -139,6 +139,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 		log.Info("sessions of the previous run marked cancelled", "count", n)
 	}
 
+	acp.KeepAdaptersIn(filepath.Join(dataDir, "adapters"))
 	a.Engine = engine.New(st, nil, a, log)
 	a.Agents = acp.New(st, a.Engine, a, acp.Options{
 		WorkDir: filepath.Join(dataDir, "work"),

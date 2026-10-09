@@ -1,7 +1,10 @@
 package acp
 
 import (
+	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -311,5 +314,48 @@ func TestClippedHidesTheProxyPassword(t *testing.T) {
 	got := clipped(a, errors.New("connect to "+addr+" refused")).Error()
 	if strings.Contains(got, "s3cr") || strings.Contains(got, "et%2F") {
 		t.Fatalf("пароль остался в тексте ошибки: %q", got)
+	}
+}
+
+// An adapter installed by us is what starts, and its version is read back, so
+// «Update» can say what it changed.
+func TestInstalledAdapterIsTheOneStarted(t *testing.T) {
+	tools := t.TempDir()
+	fake := `#!/bin/sh
+# npm install --prefix <dir> ... <pkg>@latest
+dir="$3"; pkg="${6%@latest}"
+mkdir -p "$dir/node_modules/.bin" "$dir/node_modules/$pkg"
+printf '{"version":"%s"}' "${FAKE_VERSION}" > "$dir/node_modules/$pkg/package.json"
+printf '#!/bin/sh\n' > "$dir/node_modules/.bin/claude-agent-acp"
+chmod +x "$dir/node_modules/.bin/claude-agent-acp"
+`
+	if err := os.WriteFile(filepath.Join(tools, "npm"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tools+":/usr/bin:/bin")
+	KeepAdaptersIn(t.TempDir())
+	t.Cleanup(func() { KeepAdaptersIn("") })
+
+	if st := adapterStatus(model.KindClaude); st.Ready || !st.Installable {
+		t.Fatalf("до установки адаптер не готов, но ставится: %+v", st)
+	}
+	t.Setenv("FAKE_VERSION", "0.85.0")
+	got, err := Install(context.Background(), model.KindClaude)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Was != "" || !got.Status.Installed || got.Status.Version != "0.85.0" {
+		t.Fatalf("первая установка: %+v", got)
+	}
+	t.Setenv("FAKE_VERSION", "0.88.0")
+	if got, err = Install(context.Background(), model.KindClaude); err != nil {
+		t.Fatal(err)
+	}
+	if got.Was != "0.85.0" || got.Status.Version != "0.88.0" {
+		t.Fatalf("обновление: %+v", got)
+	}
+	argv, err := adapterArgv(model.KindClaude, "")
+	if err != nil || argv[0] != got.Status.Path {
+		t.Fatalf("запускается не наша установка: %v %v", argv, err)
 	}
 }

@@ -1019,8 +1019,7 @@ func (s *API) checkWorkMode(projectID, folderID, mode string) error {
 
 // ---- agents ----
 
-// pastSessionsTimeout bounds asking an agent for its conversations: an adapter
-// run through npx for the first time downloads itself before it answers.
+// pastSessionsTimeout bounds asking an agent for its conversations.
 const pastSessionsTimeout = 90 * time.Second
 
 // PastSessions lists the conversations an agent already had in a project's
@@ -1047,9 +1046,7 @@ func (s *API) PastSessions(agentName, projectID, folderID string) ([]acp.PastSes
 	return acp.PastSessions(ctx, agent, project.Path)
 }
 
-// CheckAgent asks a registered agent what it is and what it can do. The
-// timeout is the listing's: an adapter run through npx or uvx for the first
-// time downloads itself before it answers.
+// CheckAgent asks a registered agent what it is and what it can do.
 func (s *API) CheckAgent(name string) (acp.AgentCheck, error) {
 	agent, err := s.app.Store.Agent(name)
 	if err != nil {
@@ -1058,6 +1055,18 @@ func (s *API) CheckAgent(name string) (acp.AgentCheck, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), pastSessionsTimeout)
 	defer cancel()
 	return acp.CheckAgent(ctx, agent)
+}
+
+// installTimeout bounds installing an adapter. Claude's carries a build of the
+// CLI and is hundreds of megabytes; on a slow line that is minutes.
+const installTimeout = 15 * time.Minute
+
+// InstallAdapter installs a kind's adapter, or updates our install of it to
+// the latest release.
+func (s *API) InstallAdapter(kind string) (acp.InstallResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), installTimeout)
+	defer cancel()
+	return acp.Install(ctx, kind)
 }
 
 // AgentsView is the registry and what this machine can actually run.
