@@ -1082,6 +1082,41 @@ func (s *API) PastSessions(agentName, projectID, folderID string) ([]acp.PastSes
 	return acp.PastSessions(ctx, agent, project.Path)
 }
 
+func (s *API) PastSessionPreview(agentName, sessionID string) (string, error) {
+	agent, err := s.app.Store.Agent(agentName)
+	if err != nil {
+		return "", err
+	}
+	// A preview belongs to no card or run: reading the vendor's file must not
+	// import a conversation into our database or reopen it in the CLI.
+	history := acp.TerminalHistory(agent, sessionID, time.Time{})
+	if len(history) == 0 {
+		return "", msg.Err("sessions.previewUnavailable", "id", sessionID)
+	}
+	return strings.ReplaceAll(string(history), "\r\n", "\n"), nil
+}
+
+func (s *API) DeletePastSession(agentName, projectID, folderID, sessionID string) error {
+	agent, err := s.app.Store.Agent(agentName)
+	if err != nil {
+		return err
+	}
+	if projectID == "" {
+		return msg.Err("sessions.needProject")
+	}
+	whole, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return err
+	}
+	project, err := whole.In(folderID)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), pastSessionsTimeout)
+	defer cancel()
+	return acp.DeletePastSession(ctx, agent, project.Path, sessionID)
+}
+
 // CheckAgent asks a registered agent what it is and what it can do.
 func (s *API) CheckAgent(name string) (acp.AgentCheck, error) {
 	agent, err := s.app.Store.Agent(name)

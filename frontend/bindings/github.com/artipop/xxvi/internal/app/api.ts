@@ -184,6 +184,10 @@ export function DeleteFlow(flowID: string): $CancellablePromise<void> {
     return $Call.ByID(2555422584, flowID);
 }
 
+export function DeletePastSession(agentName: string, projectID: string, folderID: string, sessionID: string): $CancellablePromise<void> {
+    return $Call.ByID(536171800, agentName, projectID, folderID, sessionID);
+}
+
 /**
  * DeleteProject removes one, refusing while a card still names it.
  */
@@ -429,6 +433,10 @@ export function OpenClient(name: string): $CancellablePromise<void> {
  */
 export function OpenTerminal(cardID: string, screenID: string, command: string): $CancellablePromise<$models.TerminalHandle> {
     return $Call.ByID(3998944851, cardID, screenID, command);
+}
+
+export function PastSessionPreview(agentName: string, sessionID: string): $CancellablePromise<string> {
+    return $Call.ByID(1951607699, agentName, sessionID);
 }
 
 /**

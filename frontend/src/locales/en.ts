@@ -337,6 +337,10 @@ export const en: Dict = {
   "compose.sessionsNeedProject": "Choose a project: sessions are looked up in its folder.",
   "compose.sessionsLoading": "Asking the agent…",
   "compose.sessionsNone": "This agent has no sessions in the project folder.",
+  "compose.confirmDeleteSession": "Permanently delete this conversation?",
+  "compose.previewSession": "Preview",
+  "compose.previewLoading": "Reading the saved conversation…",
+  "compose.previewHint": "Saved history: up to 5000 recent lines",
 
   // ---- terminal ----
   "terminal.shellEnded": "the shell has ended",

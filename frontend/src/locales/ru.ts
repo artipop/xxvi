@@ -349,6 +349,10 @@ export const ru: Dict = {
   "compose.sessionsNeedProject": "Выберите проект: сессии ищутся в его папке.",
   "compose.sessionsLoading": "Спрашиваю агента…",
   "compose.sessionsNone": "В папке проекта у этого агента сессий нет.",
+  "compose.confirmDeleteSession": "Удалить разговор навсегда?",
+  "compose.previewSession": "Предпросмотр",
+  "compose.previewLoading": "Читаю сохранённый разговор…",
+  "compose.previewHint": "Сохранённая история: до 5000 последних строк",
 
   // ---- terminal ----
   "terminal.shellEnded": "шелл завершился",

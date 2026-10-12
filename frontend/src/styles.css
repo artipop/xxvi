@@ -694,14 +694,31 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .compose-sessions > .screen-error { margin-top: -8px; }
 .compose-session {
   display: flex; gap: 12px; align-items: baseline; width: 100%;
-  padding: 5px 18px 5px 16px; text-align: left;
-  background: none; border: 0; border-left: 2px solid transparent; border-radius: 0;
+  padding-right: 18px;
+  border-left: 2px solid transparent;
+}
+.compose-session-pick {
+  display: flex; gap: 12px; align-items: baseline; flex: 1; min-width: 0;
+  padding: 5px 0 5px 16px; text-align: left;
+  background: none; border: 0; border-radius: 0;
   cursor: pointer;
 }
 .compose-session:hover { background: var(--panel); }
 .compose-session.on { background: var(--panel-2); border-left-color: var(--accent); }
 .compose-session .meta { flex: none; font-variant-numeric: tabular-nums; }
+.compose-session > .btn { flex: none; }
 .compose-session-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compose-sessions:has(.session-preview) { display: flex; overflow: hidden; padding: 0; }
+.session-preview { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.session-preview > header { padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.session-preview-heading { flex: 1; min-width: 0; }
+.session-preview-heading h3 { margin: 0 0 4px; overflow-wrap: anywhere; }
+.session-preview-heading .meta { overflow-wrap: anywhere; }
+.session-preview-history {
+  flex: 1; min-height: 0; margin: 0; padding: 16px 18px; overflow: auto;
+  font-family: var(--mono); font-size: 12px; line-height: 1.6;
+  white-space: pre-wrap; overflow-wrap: anywhere; overscroll-behavior: contain;
+}
 /* Two ways to begin, one of which is always chosen. */
 .compose-mode { display: flex; border: 1px solid var(--line); border-radius: var(--radius-control); overflow: hidden; }
 .compose-mode button {

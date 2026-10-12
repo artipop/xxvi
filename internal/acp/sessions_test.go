@@ -18,6 +18,10 @@ import (
 const fakeListerEnv = "XXVI_FAKE_SESSION_LISTER"
 
 func TestMain(m *testing.M) {
+	if os.Getenv(fakeDeleteEnv) == "1" {
+		fakeDelete()
+		os.Exit(0)
+	}
 	if os.Getenv(fakeListerEnv) == "1" {
 		fakeLister()
 		os.Exit(0)
