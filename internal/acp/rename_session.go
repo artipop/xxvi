@@ -14,7 +14,7 @@ import (
 )
 
 func RenamePastSession(ctx context.Context, a model.Agent, cwd, id, title string) (string, error) {
-	if a.Kind != model.KindCodex {
+	if a.Kind != model.KindCodex && a.Kind != model.KindClaude {
 		return "", msg.Err("sessions.notRenamable", "agent", a.Name)
 	}
 	conversation, err := uuid.Parse(id)
@@ -24,6 +24,12 @@ func RenamePastSession(ctx context.Context, a model.Agent, cwd, id, title string
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return "", msg.Err("sessions.emptyTitle")
+	}
+	if a.Kind == model.KindClaude {
+		if err := renameClaudeSession(a, conversation.String(), title); err != nil {
+			return "", err
+		}
+		return title, nil
 	}
 	cli, _ := cliFor(a.Kind)
 	bin, err := terminalBin(cli)

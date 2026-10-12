@@ -15,11 +15,15 @@ import (
 )
 
 func DeletePastSession(ctx context.Context, a model.Agent, cwd, id string) error {
-	if a.Kind != model.KindCodex {
+	if a.Kind != model.KindCodex && a.Kind != model.KindClaude {
 		return msg.Err("sessions.notDeletable", "agent", a.Name)
 	}
-	if err := uuid.Validate(id); err != nil {
+	conversation, err := uuid.Parse(id)
+	if err != nil {
 		return msg.Err("sessions.invalidID", "id", id)
+	}
+	if a.Kind == model.KindClaude {
+		return deleteClaudeSession(a, conversation.String())
 	}
 	cli, _ := cliFor(a.Kind)
 	bin, err := terminalBin(cli)

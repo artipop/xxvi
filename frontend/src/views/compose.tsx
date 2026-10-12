@@ -62,8 +62,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     !fromSession() && isRepo() && workModes().some((m) => m.value === workMode()) ? workMode() : "";
   const agentName = () =>
     list(agents().agents).find((a) => a.name === agent())?.name ?? list(agents().agents)[0]?.name ?? "";
-  const canDelete = () => list(agents().agents).find((a) => a.name === agentName())?.kind === "codex";
-  const canPreview = () => ["claude", "codex"].includes(list(agents().agents).find((a) => a.name === agentName())?.kind ?? "");
+  const canManage = () => ["claude", "codex"].includes(list(agents().agents).find((a) => a.name === agentName())?.kind ?? "");
   const flowID = () => flows().find((f) => f.id === flow())?.id ?? flows()[0]?.id ?? "";
 
   // Asked of the agent itself, whenever whose conversations or where changes.
@@ -224,21 +223,21 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
                   }>
                     <button class="compose-session-pick" title={s.cwd} disabled={sessionBusy()}
                       onClick={() => { setSession(s); setConfirming(""); }}
-                      onDblClick={() => { if (canPreview()) setPreview(s); }}>
+                      onDblClick={() => { if (canManage()) setPreview(s); }}>
                       <span class="meta">{when(s.updatedAt, false)}</span>
                       <span class="compose-session-title">{s.title || s.id}</span>
                     </button>
-                    <Show when={canPreview() && confirming() !== s.id}>
+                    <Show when={canManage() && confirming() !== s.id}>
                       <button class="btn quiet" disabled={sessionBusy()}
                         onClick={() => { setConfirming(""); setPreview(s); }}>{t("compose.previewSession")}</button>
                     </Show>
-                    <Show when={canDelete() && confirming() !== s.id}>
+                    <Show when={canManage() && confirming() !== s.id}>
                       <button class="btn quiet" disabled={sessionBusy()}
                         onClick={() => { setConfirming(""); setSessionTitle(s.title ?? ""); setEditing(s.id); }}>
                         {t("compose.renameSession")}
                       </button>
                     </Show>
-                    <Show when={canDelete()}>
+                    <Show when={canManage()}>
                       <Show when={confirming() === s.id} fallback={
                         <button class="btn quiet" disabled={sessionBusy()}
                           onClick={() => setConfirming(s.id)}>{t("common.delete")}</button>

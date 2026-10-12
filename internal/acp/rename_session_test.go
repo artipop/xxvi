@@ -83,7 +83,7 @@ func TestRenamePastSession(t *testing.T) {
 		{"timeout", model.KindCodex, deleteSessionID, title, "wait", "sessions.renameFailed"},
 		{"empty name", model.KindCodex, deleteSessionID, " \t\n ", "", "sessions.emptyTitle"},
 		{"invalid ID", model.KindCodex, "../conversation", title, "", "sessions.invalidID"},
-		{"other agent", model.KindClaude, deleteSessionID, title, "", "sessions.notRenamable"},
+		{"other agent", model.KindVibe, deleteSessionID, title, "", "sessions.notRenamable"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			record := filepath.Join(t.TempDir(), "invocation.json")

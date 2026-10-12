@@ -81,7 +81,7 @@ func TestDeletePastSession(t *testing.T) {
 		{"session name", model.KindCodex, "a conversation", "", "sessions.invalidID"},
 		{"flag", model.KindCodex, "--last", "", "sessions.invalidID"},
 		{"empty ID", model.KindCodex, "", "", "sessions.invalidID"},
-		{"other agent", model.KindClaude, deleteSessionID, "", "sessions.notDeletable"},
+		{"other agent", model.KindVibe, deleteSessionID, "", "sessions.notDeletable"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			record := filepath.Join(t.TempDir(), "invocation.json")
