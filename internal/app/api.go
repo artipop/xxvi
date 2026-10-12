@@ -1096,6 +1096,27 @@ func (s *API) PastSessionPreview(agentName, sessionID string) (string, error) {
 	return strings.ReplaceAll(string(history), "\r\n", "\n"), nil
 }
 
+func (s *API) RenamePastSession(agentName, projectID, folderID, sessionID, title string) (string, error) {
+	agent, err := s.app.Store.Agent(agentName)
+	if err != nil {
+		return "", err
+	}
+	if projectID == "" {
+		return "", msg.Err("sessions.needProject")
+	}
+	whole, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return "", err
+	}
+	project, err := whole.In(folderID)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), pastSessionsTimeout)
+	defer cancel()
+	return acp.RenamePastSession(ctx, agent, project.Path, sessionID, title)
+}
+
 func (s *API) DeletePastSession(agentName, projectID, folderID, sessionID string) error {
 	agent, err := s.app.Store.Agent(agentName)
 	if err != nil {

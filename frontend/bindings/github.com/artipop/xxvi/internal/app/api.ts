@@ -507,6 +507,10 @@ export function RemoveFromFlow(cardID: string): $CancellablePromise<$models.Card
     return $Call.ByID(361858351, cardID);
 }
 
+export function RenamePastSession(agentName: string, projectID: string, folderID: string, sessionID: string, title: string): $CancellablePromise<string> {
+    return $Call.ByID(337737323, agentName, projectID, folderID, sessionID, title);
+}
+
 /**
  * ReopenStage brings a paused stage's CLI back in the conversation it stopped
  * in, telling the agent nothing: the person looks, then decides.

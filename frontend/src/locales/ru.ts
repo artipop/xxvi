@@ -353,6 +353,8 @@ export const ru: Dict = {
   "compose.previewSession": "Предпросмотр",
   "compose.previewLoading": "Читаю сохранённый разговор…",
   "compose.previewHint": "Сохранённая история: до 5000 последних строк",
+  "compose.renameSession": "Переименовать",
+  "compose.sessionName": "Название разговора",
 
   // ---- terminal ----
   "terminal.shellEnded": "шелл завершился",

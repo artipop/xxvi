@@ -42,6 +42,9 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   const [confirming, setConfirming] = createSignal("");
   const [deleting, setDeleting] = createSignal("");
   const [preview, setPreview] = createSignal<PastSession | undefined>();
+  const [editing, setEditing] = createSignal("");
+  const [sessionTitle, setSessionTitle] = createSignal("");
+  const [savingTitle, setSavingTitle] = createSignal("");
   let box: HTMLTextAreaElement | undefined;
 
   // The project is where the task is typed, not a question: the workspace
@@ -75,6 +78,9 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     setConfirming("");
     setDeleting("");
     setPreview(undefined);
+    setEditing("");
+    setSessionTitle("");
+    setSavingTitle("");
     if (!on || !who || !where) return;
     API.PastSessions(who, where, dir).then(
       (got) => { if (n === asked) setSessions(got ?? []); },
@@ -82,10 +88,29 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     );
   });
 
-  const ready = () => !busy() && !deleting() && !preview() && !!flowID() && (!fromSession() || !!session());
+  const sessionBusy = () => busy() || !!deleting() || !!savingTitle();
+  const ready = () => !sessionBusy() && !editing() && !preview() && !!flowID() && (!fromSession() || !!session());
+
+  const renameSession = async (s: PastSession) => {
+    if (sessionBusy() || editing() !== s.id || !sessionTitle().trim()) return;
+    const n = asked;
+    setSavingTitle(s.id);
+    setSessionsError("");
+    try {
+      const title = await API.RenamePastSession(agentName(), projectID(), folderID(), s.id, sessionTitle());
+      if (n !== asked) return;
+      setSessions((got) => got?.map((past) => past.id === s.id ? { ...past, title } : past));
+      if (session()?.id === s.id) setSession({ ...s, title });
+      setEditing("");
+    } catch (err) {
+      if (n === asked) setSessionsError(errorText(err));
+    } finally {
+      if (n === asked) setSavingTitle("");
+    }
+  };
 
   const removeSession = async (s: PastSession) => {
-    if (busy() || deleting() || confirming() !== s.id) return;
+    if (sessionBusy() || confirming() !== s.id) return;
     const n = asked;
     setDeleting(s.id);
     setSessionsError("");
@@ -178,29 +203,55 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
                 <div
                   class={`compose-session ${session()?.id === s.id ? "on" : ""}`}
                 >
-                  <button class="compose-session-pick" title={s.cwd} disabled={busy() || !!deleting()}
-                    onClick={() => { setSession(s); setConfirming(""); }}
-                    onDblClick={() => { if (canPreview()) setPreview(s); }}>
-                    <span class="meta">{when(s.updatedAt, false)}</span>
-                    <span class="compose-session-title">{s.title || s.id}</span>
-                  </button>
-                  <Show when={canPreview() && confirming() !== s.id}>
-                    <button class="btn quiet" disabled={busy() || !!deleting()}
-                      onClick={() => { setConfirming(""); setPreview(s); }}>{t("compose.previewSession")}</button>
-                  </Show>
-                  <Show when={canDelete()}>
-                    <Show when={confirming() === s.id} fallback={
-                      <button class="btn quiet" disabled={busy() || !!deleting()}
-                        onClick={() => setConfirming(s.id)}>{t("common.delete")}</button>
-                    }>
-                      <span class="meta">{t("compose.confirmDeleteSession")}</span>
-                      <button class="btn quiet" disabled={!!deleting()}
-                        onClick={() => setConfirming("")}>{t("common.cancel")}</button>
-                      <button class="btn danger" disabled={busy() || !!deleting()}
-                        onClick={() => void removeSession(s)}>
-                        <Show when={deleting() === s.id}><span class="spinner" /></Show>
-                        {t("common.delete")}
+                  <Show when={editing() !== s.id} fallback={
+                    <form class="compose-session-rename" onSubmit={(e) => { e.preventDefault(); void renameSession(s); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          e.preventDefault(); e.stopPropagation();
+                          if (!savingTitle()) setEditing("");
+                        }
+                      }}>
+                      <input value={sessionTitle()} aria-label={t("compose.sessionName")} disabled={sessionBusy()}
+                        ref={(el) => { queueMicrotask(() => { el.focus({ preventScroll: true }); el.select(); }); }}
+                        onInput={(e) => setSessionTitle(e.currentTarget.value)} />
+                      <button class="btn primary" type="submit" disabled={sessionBusy() || !sessionTitle().trim()}>
+                        <Show when={savingTitle() === s.id}><span class="spinner" /></Show>
+                        {t("common.save")}
                       </button>
+                      <button class="btn quiet" type="button" disabled={!!savingTitle()}
+                        onClick={() => setEditing("")}>{t("common.cancel")}</button>
+                    </form>
+                  }>
+                    <button class="compose-session-pick" title={s.cwd} disabled={sessionBusy()}
+                      onClick={() => { setSession(s); setConfirming(""); }}
+                      onDblClick={() => { if (canPreview()) setPreview(s); }}>
+                      <span class="meta">{when(s.updatedAt, false)}</span>
+                      <span class="compose-session-title">{s.title || s.id}</span>
+                    </button>
+                    <Show when={canPreview() && confirming() !== s.id}>
+                      <button class="btn quiet" disabled={sessionBusy()}
+                        onClick={() => { setConfirming(""); setPreview(s); }}>{t("compose.previewSession")}</button>
+                    </Show>
+                    <Show when={canDelete() && confirming() !== s.id}>
+                      <button class="btn quiet" disabled={sessionBusy()}
+                        onClick={() => { setConfirming(""); setSessionTitle(s.title ?? ""); setEditing(s.id); }}>
+                        {t("compose.renameSession")}
+                      </button>
+                    </Show>
+                    <Show when={canDelete()}>
+                      <Show when={confirming() === s.id} fallback={
+                        <button class="btn quiet" disabled={sessionBusy()}
+                          onClick={() => setConfirming(s.id)}>{t("common.delete")}</button>
+                      }>
+                        <span class="meta">{t("compose.confirmDeleteSession")}</span>
+                        <button class="btn quiet" disabled={!!deleting()}
+                          onClick={() => setConfirming("")}>{t("common.cancel")}</button>
+                        <button class="btn danger" disabled={sessionBusy()}
+                          onClick={() => void removeSession(s)}>
+                          <Show when={deleting() === s.id}><span class="spinner" /></Show>
+                          {t("common.delete")}
+                        </button>
+                      </Show>
                     </Show>
                   </Show>
                 </div>

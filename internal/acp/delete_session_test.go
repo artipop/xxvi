@@ -42,7 +42,8 @@ func fakeDelete() {
 	}
 }
 
-func TestDeletePastSession(t *testing.T) {
+func fakeCodexBin(t *testing.T) {
+	t.Helper()
 	binDir := t.TempDir()
 	name := "codex"
 	if runtime.GOOS == "windows" {
@@ -63,6 +64,10 @@ func TestDeletePastSession(t *testing.T) {
 		t.Fatalf("копия тестового CLI: %v, %v", err, closeErr)
 	}
 	t.Setenv("PATH", binDir)
+}
+
+func TestDeletePastSession(t *testing.T) {
+	fakeCodexBin(t)
 	t.Setenv("CODEX_HOME", t.TempDir())
 	cwd := t.TempDir()
 	home := t.TempDir()

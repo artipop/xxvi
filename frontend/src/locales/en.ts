@@ -341,6 +341,8 @@ export const en: Dict = {
   "compose.previewSession": "Preview",
   "compose.previewLoading": "Reading the saved conversation…",
   "compose.previewHint": "Saved history: up to 5000 recent lines",
+  "compose.renameSession": "Rename",
+  "compose.sessionName": "Conversation name",
 
   // ---- terminal ----
   "terminal.shellEnded": "the shell has ended",
