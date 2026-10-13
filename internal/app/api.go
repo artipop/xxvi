@@ -657,6 +657,8 @@ type SourcePlugin struct {
 	Title      string          `json:"title,omitempty"`
 	Fields     []sources.Field `json:"fields,omitempty"`
 	NeedsToken bool            `json:"needsToken"`
+	// TakesToken is a token that may be given; NeedsToken, one that must be.
+	TakesToken bool `json:"takesToken"`
 	// Builtin is read by the application itself rather than by a process.
 	// Managed is made elsewhere than the sources form.
 	Builtin bool `json:"builtin,omitempty"`
@@ -670,7 +672,7 @@ func (s *API) SourcePlugins() []SourcePlugin {
 	out := make([]SourcePlugin, 0, len(all))
 	for _, m := range all {
 		out = append(out, SourcePlugin{
-			Name: m.Name, Title: m.Title, Fields: m.Fields, NeedsToken: m.NeedsToken(),
+			Name: m.Name, Title: m.Title, Fields: m.Fields, NeedsToken: m.NeedsToken(), TakesToken: m.TakesToken(),
 			Builtin: m.IsBuiltin(), Managed: m.Managed,
 		})
 	}

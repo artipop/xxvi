@@ -296,6 +296,7 @@ export const ru: Dict = {
   "plugin.demo.path": "Файл с элементами",
   "plugin.review": "MR на ревью",
   "sources.token": "Токен",
+  "sources.tokenOptional": "не нужен для приложения на этом компьютере",
   "sources.tokenKept": "сохранён — новый заменит его",
   "sources.interval": "Опрашивать раз в, мин",
   "sources.intervalDefault": "5",

@@ -152,11 +152,11 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
               </For>
             </div>
             <div class="grid2">
-              <Show when={p().needsToken}>
+              <Show when={p().takesToken}>
                 <label class="field">
                   <span>{t("sources.token")}</span>
                   <input type="password" autocomplete="off" value={token()}
-                         placeholder={hasToken() ? t("sources.tokenKept") : ""}
+                         placeholder={hasToken() ? t("sources.tokenKept") : p().needsToken ? "" : t("sources.tokenOptional")}
                          onInput={(e) => setToken(e.currentTarget.value)}
                          onChange={(e) => setAskToken(e.currentTarget.value.trim())} />
                 </label>

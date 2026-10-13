@@ -8,7 +8,7 @@
     "XCIII_URL": "{{.Config.url}}"
   },
   "tokenEnv": "XCIII_FEED_TOKEN",
-  "auth": {"type": "token"},
+  "auth": {"type": "token", "optional": true},
   "fields": [
     {
       "key": "board", "title": "Доска",

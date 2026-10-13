@@ -284,6 +284,7 @@ export const en: Dict = {
   "plugin.demo.path": "Items file",
   "plugin.review": "MRs to review",
   "sources.token": "Token",
+  "sources.tokenOptional": "not needed for the app on this computer",
   "sources.tokenKept": "kept — a new one replaces it",
   "sources.interval": "Poll every, min",
   "sources.intervalDefault": "5",

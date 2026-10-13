@@ -159,3 +159,22 @@ func TestAListThatCannotBeAskedForIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// A token a plugin may take and does not need is not waited for: the XCIII
+// bridge on this machine finds its own secret, and a server is given one.
+func TestAnOptionalTokenIsNotWaitedFor(t *testing.T) {
+	m := optionsManifest()
+	m.Auth = &AuthSpec{Type: AuthToken, Optional: true}
+	if m.NeedsToken() || !m.TakesToken() {
+		t.Fatalf("needs %v, takes %v", m.NeedsToken(), m.TakesToken())
+	}
+	raw, _ := json.Marshal(m)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "boards.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := NewRunner(nil, LoadCatalog(dir), inbox.NewPipeline(nil, nil, nil), &secrets.Memory{}, nil, nil)
+	if got, err := r.FieldOptions(context.Background(), model.Source{Plugin: "boards"}, "", "board"); err != nil || len(got) != 2 {
+		t.Fatalf("without a token: %+v, %v", got, err)
+	}
+}

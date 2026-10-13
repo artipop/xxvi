@@ -191,6 +191,11 @@ export interface SourcePlugin {
     "needsToken": boolean;
 
     /**
+     * TakesToken is a token that may be given; NeedsToken, one that must be.
+     */
+    "takesToken": boolean;
+
+    /**
      * Builtin is read by the application itself rather than by a process.
      * Managed is made elsewhere than the sources form.
      */

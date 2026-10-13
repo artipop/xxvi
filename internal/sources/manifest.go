@@ -126,6 +126,11 @@ var fieldTypes = []string{FieldString, FieldNumber, FieldBool, FieldSelect}
 // a browser round trip this application does not do yet.
 type AuthSpec struct {
 	Type string `json:"type"` // token
+
+	// Optional says the plugin runs without one and takes it when given: the
+	// XCIII bridge on the same machine finds its own secret, and only a
+	// server needs a token a person issued.
+	Optional bool `json:"optional,omitempty"`
 }
 
 // AuthToken is the one auth type there is.
@@ -133,6 +138,11 @@ const AuthToken = "token"
 
 // NeedsToken reports whether a source of this plugin is useless without a token.
 func (p Manifest) NeedsToken() bool {
+	return p.TakesToken() && !p.Auth.Optional
+}
+
+// TakesToken reports whether the form asks for a token at all.
+func (p Manifest) TakesToken() bool {
 	return p.Auth != nil && p.Auth.Type == AuthToken
 }
 
