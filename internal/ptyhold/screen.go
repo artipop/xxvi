@@ -71,31 +71,36 @@ func (s *Screen) Answer(reply func([]byte)) {
 // none of the scrollback. What a person reading it would take it to say — a
 // question on screen is one whether or not any hook said so.
 func (s *Screen) Text() string {
-	f, err := lg.NewFormatter(s.t, lg.WithFormatterFormat(lg.FormatterFormatPlain), lg.WithFormatterTrim(true))
+	state, err := lg.NewRenderState()
 	if err != nil {
 		return ""
 	}
-	defer f.Close()
-	all, err := f.FormatString()
+	defer state.Close()
+	if err := state.Update(s.t); err != nil {
+		return ""
+	}
+	rows, err := lg.NewRenderStateRowIterator()
 	if err != nil {
 		return ""
 	}
-	total, err1 := s.t.TotalRows()
-	rows, err2 := s.t.Rows()
-	if err1 != nil || err2 != nil {
-		return all
-	}
-	// One line per physical row, the blank ones at the bottom left out: the
-	// visible rows are the last rows of total, whichever of them were written.
-	lines := strings.Split(all, "\n")
-	first := int(total) - int(rows)
-	if first < 0 {
-		first = 0
-	}
-	if first >= len(lines) {
+	defer rows.Close()
+	cells, err := lg.NewRenderStateRowCells()
+	if err != nil {
 		return ""
 	}
-	return strings.Join(lines[first:], "\n")
+	defer cells.Close()
+	if err := state.RowIterator(rows); err != nil {
+		return ""
+	}
+	var lines []string
+	for rows.Next() {
+		line, err := rows.AppendText(nil, cells)
+		if err != nil {
+			return ""
+		}
+		lines = append(lines, strings.TrimRight(string(line), " \t"))
+	}
+	return strings.TrimRight(strings.Join(lines, "\n"), "\n")
 }
 
 // Close frees the emulator.

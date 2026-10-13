@@ -11,7 +11,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/wailsapp/wails/v3 v3.0.0-beta.27
 	github.com/zalando/go-keyring v0.2.8
-	go.mitchellh.com/libghostty v0.0.0-20260920220152-31b65cdc24cf
+	go.mitchellh.com/libghostty v0.0.0-20261007030428-8812ad0e0f79
 	golang.org/x/sys v0.46.0
 	modernc.org/sqlite v1.44.3
 )

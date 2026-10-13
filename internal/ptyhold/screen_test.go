@@ -216,3 +216,16 @@ func TestTextIsTheVisibleScreenOnly(t *testing.T) {
 		t.Fatalf("строка над пустыми внизу на экране: %q", got)
 	}
 }
+
+func TestTextFollowsTheVisibleViewport(t *testing.T) {
+	s := NewScreen(20, 3)
+	defer s.Close()
+	s.Write([]byte("первая\r\nвторая\r\nтретья\r\nчетвёртая\r\nпятая"))
+	if got := s.Text(); strings.Contains(got, "первая") || !strings.Contains(got, "пятая") {
+		t.Fatalf("внизу экрана должны быть последние строки: %q", got)
+	}
+	s.t.ScrollViewportTop()
+	if got := s.Text(); !strings.Contains(got, "первая") || strings.Contains(got, "пятая") {
+		t.Fatalf("после прокрутки должны быть видны ранние строки: %q", got)
+	}
+}
