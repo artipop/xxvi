@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // The ribbon is the card's journal of transitions made visible (docs/system.md

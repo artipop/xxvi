@@ -3,7 +3,7 @@ package model
 import (
 	"strings"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // Who picks a card up on a stage. This is a pure decision — given the

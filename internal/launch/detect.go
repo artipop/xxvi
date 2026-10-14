@@ -17,7 +17,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 // Profile is one way to start a project.
@@ -400,7 +400,7 @@ func (f folder) backend(pkg pkgJSON) []Profile {
 		}
 	}
 	if len(out) == 0 && f.has("Dockerfile") {
-		image := "xxvi-run-" + strings.ToLower(notName.ReplaceAllString(filepath.Base(f.dir), "-"))
+		image := "gandvik-run-" + strings.ToLower(notName.ReplaceAllString(filepath.Base(f.dir), "-"))
 		ports, url := "", ""
 		for _, m := range exposed.FindAllStringSubmatch(f.read("Dockerfile"), -1) {
 			ports += " -p " + m[1] + ":" + m[1]

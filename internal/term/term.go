@@ -27,8 +27,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/ptyhold"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/ptyhold"
 	"github.com/google/uuid"
 )
 

@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 func setup(t *testing.T, src model.Source) (*store.Store, *Pipeline) {

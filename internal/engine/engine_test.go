@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // fakeRunner stands in for the ACP side. It records what it was asked to run

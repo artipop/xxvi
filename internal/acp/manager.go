@@ -23,12 +23,12 @@ import (
 	acpsdk "github.com/coder/acp-go-sdk"
 	"github.com/google/uuid"
 
-	"github.com/artipop/xxvi/internal/engine"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/stagemcp"
-	"github.com/artipop/xxvi/internal/store"
-	"github.com/artipop/xxvi/internal/term"
+	"github.com/artipop/gandvik/internal/engine"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/stagemcp"
+	"github.com/artipop/gandvik/internal/store"
+	"github.com/artipop/gandvik/internal/term"
 )
 
 // Outcomes a session reports back to the engine.
@@ -757,7 +757,7 @@ func (m *Manager) workDir(cardID string) (string, error) {
 
 	base := m.opts.WorkDir
 	if base == "" {
-		base = filepath.Join(os.TempDir(), "xxvi-work")
+		base = filepath.Join(os.TempDir(), "gandvik-work")
 	}
 	dir := filepath.Join(base, cardID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

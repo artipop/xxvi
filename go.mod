@@ -1,4 +1,4 @@
-module github.com/artipop/xxvi
+module github.com/artipop/gandvik
 
 go 1.26.0
 

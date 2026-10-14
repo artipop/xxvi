@@ -1,9 +1,9 @@
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { Events } from "@wailsio/runtime";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { LaunchPlan, LaunchRun } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
-import type { Profile, Response } from "../../bindings/github.com/artipop/xxvi/internal/launch/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { LaunchPlan, LaunchRun } from "../../bindings/github.com/artipop/gandvik/internal/app/models";
+import type { Profile, Response } from "../../bindings/github.com/artipop/gandvik/internal/launch/models";
 import { guard, list, openOutside } from "../state";
 import { label, t } from "../i18n";
 import TerminalPane from "./terminal";

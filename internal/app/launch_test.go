@@ -3,8 +3,8 @@ package app
 import (
 	"testing"
 
-	"github.com/artipop/xxvi/internal/launch"
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/launch"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 func tryStage(t *testing.T, a *App) (model.Flow, model.Stage) {

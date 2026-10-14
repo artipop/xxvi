@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // The project registry: where work happens. Rows like any other, in the same

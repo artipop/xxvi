@@ -21,7 +21,7 @@ import {
   useViewport,
 } from "@dschz/solid-flow";
 
-import type { Edge, Flow, Stage, StageTemplate, Trigger } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { Edge, Flow, Stage, StageTemplate, Trigger } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
 
 import "@dschz/solid-flow/dist/style.css";
 import { label, propName, propValue, t } from "../i18n";
@@ -369,7 +369,7 @@ const GRAB = 20;
 
 // DRAG_KIND is the type a palette card puts on the drag, so the canvas takes a
 // node kind and nothing else a person drags over it.
-export const DRAG_KIND = "application/x-xxvi-stage-kind";
+export const DRAG_KIND = "application/x-gandvik-stage-kind";
 const MARK = 9;
 
 // How thick the mark's own ring is drawn, in screen pixels — divided like the

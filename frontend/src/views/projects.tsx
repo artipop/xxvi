@@ -1,7 +1,7 @@
 import { createEffect, createSignal, createStore, onSettled, For, Show } from "solid-js";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { Project } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import type { RemoteOption } from "../../bindings/github.com/artipop/xxvi/internal/hosting/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { Project } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
+import type { RemoteOption } from "../../bindings/github.com/artipop/gandvik/internal/hosting/models";
 import { folderName, guard, list, loadProjects, projects, vocabulary, openOutside } from "../state";
 import { errorText, label, t } from "../i18n";
 

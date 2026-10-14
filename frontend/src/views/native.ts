@@ -1,9 +1,9 @@
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
 
 /** TERMINAL_ENGINE is where the choice between Ghostty and xterm.js is kept:
  *  «web» for xterm.js, anything else for Ghostty where it is available. The
  *  choice is there to try on a Mac what Windows and Linux get. */
-export const TERMINAL_ENGINE = "xxvi.terminalEngine";
+export const TERMINAL_ENGINE = "gandvik.terminalEngine";
 
 let answer: Promise<boolean> | undefined;
 

@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // A stage template is a kind of node the flow editor offers: «AI in the

@@ -147,7 +147,7 @@ jobs:
       # dist/update is what the updater installs; dist/install is what a person
       # downloads the first time. The manifest is generated over the first
       # directory alone — an installer swapped in as if it were the application
-      # would replace XXVI with a copy of its own installer.
+      # would replace Gandvík with a copy of its own installer.
       - name: Make the output directories
         shell: bash
         run: mkdir -p dist/update dist/install
@@ -160,10 +160,10 @@ jobs:
         if: matrix.target.platform == 'darwin'
         run: |
           wails3 task darwin:package:dmg
-          ditto -c -k --keepParent "bin/xxvi.app" \
-            "dist/update/xxvi-${{ steps.version.outputs.version }}-darwin-${{ matrix.target.arch }}.zip"
-          mv "bin/xxvi.dmg" \
-            "dist/install/xxvi-${{ steps.version.outputs.version }}-darwin-${{ matrix.target.arch }}.dmg"
+          ditto -c -k --keepParent "bin/gandvik.app" \
+            "dist/update/gandvik-${{ steps.version.outputs.version }}-darwin-${{ matrix.target.arch }}.zip"
+          mv "bin/gandvik.dmg" \
+            "dist/install/gandvik-${{ steps.version.outputs.version }}-darwin-${{ matrix.target.arch }}.dmg"
 
       # ── Windows ──────────────────────────────────────────────────────────
       # INSTALL_SCOPE=user rather than the Taskfile's default of machine: an
@@ -175,10 +175,10 @@ jobs:
         shell: bash
         run: |
           wails3 task windows:package INSTALL_SCOPE=user
-          cp "bin/xxvi.exe" \
-            "dist/update/xxvi-${{ steps.version.outputs.version }}-windows-${{ matrix.target.arch }}.exe"
-          mv "bin/xxvi-${{ matrix.target.arch }}-installer.exe" \
-            "dist/install/xxvi-${{ steps.version.outputs.version }}-windows-${{ matrix.target.arch }}-installer.exe"
+          cp "bin/gandvik.exe" \
+            "dist/update/gandvik-${{ steps.version.outputs.version }}-windows-${{ matrix.target.arch }}.exe"
+          mv "bin/gandvik-${{ matrix.target.arch }}-installer.exe" \
+            "dist/install/gandvik-${{ steps.version.outputs.version }}-windows-${{ matrix.target.arch }}-installer.exe"
 
       # ── Linux ────────────────────────────────────────────────────────────
       # The tar.gz is the updatable form: unpacked into a directory the user
@@ -192,8 +192,8 @@ jobs:
         if: matrix.target.platform == 'linux'
         run: |
           wails3 task linux:build
-          tar -czf "dist/update/xxvi-${{ steps.version.outputs.version }}-linux-${{ matrix.target.arch }}.tar.gz" \
-            -C bin xxvi
+          tar -czf "dist/update/gandvik-${{ steps.version.outputs.version }}-linux-${{ matrix.target.arch }}.tar.gz" \
+            -C bin gandvik
           wails3 task linux:create:appimage
           wails3 task linux:create:deb
           find bin -maxdepth 1 \( -name '*.AppImage' -o -name '*.deb' \) -exec mv {} dist/install/ \;
@@ -260,7 +260,7 @@ jobs:
             git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" > notes.md
           fi
           if [ ! -s notes.md ]; then
-            printf 'XXVI %s\n' "${{ steps.version.outputs.version }}" > notes.md
+            printf 'Gandvík %s\n' "${{ steps.version.outputs.version }}" > notes.md
           fi
           cat notes.md
 

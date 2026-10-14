@@ -13,8 +13,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // Manifest describes a plugin: how to start it, what it needs and what to ask

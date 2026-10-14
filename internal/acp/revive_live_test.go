@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/engine"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/engine"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // Junie is left out: it can open a conversation again, but its stream then

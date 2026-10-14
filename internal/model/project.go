@@ -4,7 +4,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // A project is where the work happens: the card says what, the flow says how it

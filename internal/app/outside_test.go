@@ -14,8 +14,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/artipop/xxvi/internal/appmcp"
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/appmcp"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 // The application worked from outside: a whole card, from the inbox to closed,
@@ -364,7 +364,7 @@ func waitFor(t *testing.T, cond func() bool) bool {
 
 func quiet() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
-// `xxvi mcp` — the line somebody writes once in an agent's configuration — run
+// `gandvik mcp` — the line somebody writes once in an agent's configuration — run
 // for real: the built executable, the handoff file a running application left
 // beside its database, and a tool call that comes back with this application's
 // own answer. The parts underneath are tested in internal/appmcp; what this
@@ -373,7 +373,7 @@ func TestCommandLineBridgeReachesTheRunningApplication(t *testing.T) {
 	if testing.Short() {
 		t.Skip("нужна сборка исполняемого файла")
 	}
-	bin := filepath.Join(t.TempDir(), "xxvi")
+	bin := filepath.Join(t.TempDir(), "gandvik")
 	build := exec.Command("go", "build", "-o", bin, ".")
 	build.Dir = filepath.Join("..", "..")
 	if out, err := build.CombinedOutput(); err != nil {
@@ -401,7 +401,7 @@ func TestCommandLineBridgeReachesTheRunningApplication(t *testing.T) {
 	sess, err := mcp.NewClient(&mcp.Implementation{Name: "тест", Version: "1"}, nil).
 		Connect(ctx, &mcp.CommandTransport{Command: exec.Command(bin, "mcp")}, nil)
 	if err != nil {
-		t.Fatalf("запустить `xxvi mcp`: %v", err)
+		t.Fatalf("запустить `gandvik mcp`: %v", err)
 	}
 	defer sess.Close()
 

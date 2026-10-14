@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/artipop/xxvi/internal/acp"
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/acp"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 func (a *App) terminalHistory(id string) []byte {

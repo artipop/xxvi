@@ -3,9 +3,9 @@ import {
 } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { Events } from "@wailsio/runtime";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/xxvi/internal/engine/models";
-import type { SessionEvent } from "../../bindings/github.com/artipop/xxvi/internal/store/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/gandvik/internal/engine/models";
+import type { SessionEvent } from "../../bindings/github.com/artipop/gandvik/internal/store/models";
 import {
   attention, closedRibbon, done, guard, inWork, inWorkspace, leaveRibbons, list, loadAttention, loadRibbons, openRibbon, projects, report,
   ribbons, setOpenRibbon, setTab, setWorkspace, showRibbon, workRibbons, workspace, openOutside,
@@ -17,8 +17,8 @@ import Markdown from "./markdown";
 import { entryText, label, propName, questionText, say, t } from "../i18n";
 import { MarkButtons, RemarksForm, sendMark } from "./marks";
 import { Icon } from "../icons";
-import type { Msg } from "../../bindings/github.com/artipop/xxvi/internal/msg/models";
-import type { Mark } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { Msg } from "../../bindings/github.com/artipop/gandvik/internal/msg/models";
+import type { Mark } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
 
 // The emulator is a large chunk and most screens are not terminals, so it
 // arrives only when one is opened.

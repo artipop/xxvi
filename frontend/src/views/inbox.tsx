@@ -1,6 +1,6 @@
 import { createSignal, For, Show } from "solid-js";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { Card, InboxGroup } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { Card, InboxGroup } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
 import { applyCard, flows, folderName, guard, inbox, workspace, list, loadInbox, openCardByID, projectFolders, projects, setInbox, showRibbon, openOutside } from "../state";
 import { propName, propValue, t } from "../i18n";
 import Markdown from "./markdown";

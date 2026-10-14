@@ -1,7 +1,7 @@
 /* The application is a desk: dense, quiet, and nothing moves that was not
    asked to. */
 
-/* The palette below is the dark half of the XXVI theme, and it is only the
+/* The palette below is the dark half of the Gandvík theme, and it is only the
    first paint: theme/index.ts writes the same names onto the document element
    for whichever theme is chosen, and theme/themes.test.ts holds this block to
    the config it was taken from. Every colour a rule paints with is one of

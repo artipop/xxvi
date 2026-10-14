@@ -183,9 +183,9 @@ tasks:
     internal: true
     cmds:
       - |
-        if [ -f build/nativeterm/libxxvinative.dylib ]; then
+        if [ -f build/nativeterm/libgandviknative.dylib ]; then
           mkdir -p "{{.APP}}/Contents/Frameworks"
-          cp build/nativeterm/libxxvinative.dylib "{{.APP}}/Contents/Frameworks/"
+          cp build/nativeterm/libgandviknative.dylib "{{.APP}}/Contents/Frameworks/"
         fi
 
   codesign:adhoc:

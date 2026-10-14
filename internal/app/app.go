@@ -15,17 +15,17 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/artipop/xxvi/internal/acp"
-	"github.com/artipop/xxvi/internal/appmcp"
-	"github.com/artipop/xxvi/internal/engine"
-	"github.com/artipop/xxvi/internal/hosting"
-	"github.com/artipop/xxvi/internal/inbox"
-	"github.com/artipop/xxvi/internal/ptyhold"
-	"github.com/artipop/xxvi/internal/secrets"
-	"github.com/artipop/xxvi/internal/sources"
-	"github.com/artipop/xxvi/internal/stagemcp"
-	"github.com/artipop/xxvi/internal/store"
-	"github.com/artipop/xxvi/internal/term"
+	"github.com/artipop/gandvik/internal/acp"
+	"github.com/artipop/gandvik/internal/appmcp"
+	"github.com/artipop/gandvik/internal/engine"
+	"github.com/artipop/gandvik/internal/hosting"
+	"github.com/artipop/gandvik/internal/inbox"
+	"github.com/artipop/gandvik/internal/ptyhold"
+	"github.com/artipop/gandvik/internal/secrets"
+	"github.com/artipop/gandvik/internal/sources"
+	"github.com/artipop/gandvik/internal/stagemcp"
+	"github.com/artipop/gandvik/internal/store"
+	"github.com/artipop/gandvik/internal/term"
 )
 
 // App is everything the application is made of.
@@ -129,7 +129,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("create the data folder: %w", err)
 	}
 
-	st, err := store.Open(filepath.Join(dataDir, "xxvi.db"))
+	st, err := store.Open(filepath.Join(dataDir, "gandvik.db"))
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	} else {
 		// The port is open and the tools work; what failed is the note saying
 		// where they are. Said out loud, because the symptom without it is
-		// `xxvi mcp` insisting the application is not running.
+		// `gandvik mcp` insisting the application is not running.
 		log.Warn("could not write the application tools address", "err", err)
 	}
 

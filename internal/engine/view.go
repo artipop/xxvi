@@ -3,7 +3,7 @@ package engine
 import (
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 // What a card can say about itself: which flow it is on, where along it it

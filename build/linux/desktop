@@ -1,14 +1,14 @@
 [Desktop Entry]
 Version=1.0
-Name=XXVI
+Name=Gandvík
 Comment=Inbox and flows with agents
 Comment[ru]=Входящие и флоу с агентами
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/xxvi %u
+Exec=/usr/local/bin/gandvik %u
 Terminal=false
 Type=Application
-Icon=xxvi
+Icon=gandvik
 Categories=Utility;
-StartupWMClass=xxvi
+StartupWMClass=gandvik
 
  

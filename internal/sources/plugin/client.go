@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/procgroup"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/procgroup"
 )
 
 // Spec is everything needed to start one plugin: the command, where it runs and

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 func write(t *testing.T, dir string, files map[string]string) {

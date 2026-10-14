@@ -6,8 +6,8 @@ import (
 
 	acpsdk "github.com/coder/acp-go-sdk"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // AgentCheck is what an agent says about itself when asked over ACP. It is the
@@ -41,7 +41,7 @@ type AgentCheck struct {
 func CheckAgent(ctx context.Context, a model.Agent) (AgentCheck, error) {
 	// An empty folder of its own: an agent keeps what it opens, and a check
 	// must not leave a conversation behind in somebody's project.
-	dir, err := os.MkdirTemp("", "xxvi-check-")
+	dir, err := os.MkdirTemp("", "gandvik-check-")
 	if err != nil {
 		return AgentCheck{}, err
 	}

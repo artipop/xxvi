@@ -13,11 +13,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/stagemcp"
-	"github.com/artipop/xxvi/internal/store"
-	"github.com/artipop/xxvi/internal/term"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/stagemcp"
+	"github.com/artipop/gandvik/internal/store"
+	"github.com/artipop/gandvik/internal/term"
 )
 
 // A stage worked in a terminal: the agent's own CLI in a pty of the card, with
@@ -565,10 +565,10 @@ func claudeTools(url, token string) (toolsHandoff, error) {
 
 // codexStepServer is not stagemcp.ServerName on purpose. codex merges `-c`
 // into ~/.codex/config.toml key by key, even when the whole table is given,
-// and the agents screen suggests registering this app there as «xxvi» with a
+// and the agents screen suggests registering this app there as «gandvik» with a
 // command. Our url on top of that entry is a server that is both stdio and
 // http, and codex refuses to start at all.
-const codexStepServer = "xxvi_step"
+const codexStepServer = "gandvik_step"
 
 // codexTokenEnv carries the grant. codex reads a bearer token from a variable
 // it is told the name of, which keeps the grant out of the argv that ps shows
@@ -601,7 +601,7 @@ func writeMCPConfig(url, token string) (string, error) {
 	if url == "" || token == "" {
 		return "", msg.Err("terminal.noTools")
 	}
-	f, err := os.CreateTemp("", "xxvi-mcp-*.json")
+	f, err := os.CreateTemp("", "gandvik-mcp-*.json")
 	if err != nil {
 		return "", fmt.Errorf("write the tools configuration: %w", err)
 	}

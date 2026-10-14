@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // newRepo is a repository with one commit on main.

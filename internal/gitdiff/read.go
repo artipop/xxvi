@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // Limits. A diff nobody can scroll to the end of is not more useful than one

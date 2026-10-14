@@ -1,4 +1,4 @@
-// XXVI: inbox → flow. Tasks arrive from sources, a person takes one into work,
+// Gandvík: inbox → flow. Tasks arrive from sources, a person takes one into work,
 // and it travels a flow whose stages are worked by ACP agents.
 //
 // This file is the desktop shell and nothing else: it opens the application
@@ -26,15 +26,15 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 
-	"github.com/artipop/xxvi/internal/app"
-	"github.com/artipop/xxvi/internal/appmcp"
-	"github.com/artipop/xxvi/internal/launch"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/nativeterm"
-	"github.com/artipop/xxvi/internal/ptyhold"
-	"github.com/artipop/xxvi/internal/sources/kaiten"
-	"github.com/artipop/xxvi/internal/stagemcp"
-	"github.com/artipop/xxvi/internal/userpath"
+	"github.com/artipop/gandvik/internal/app"
+	"github.com/artipop/gandvik/internal/appmcp"
+	"github.com/artipop/gandvik/internal/launch"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/nativeterm"
+	"github.com/artipop/gandvik/internal/ptyhold"
+	"github.com/artipop/gandvik/internal/sources/kaiten"
+	"github.com/artipop/gandvik/internal/stagemcp"
+	"github.com/artipop/gandvik/internal/userpath"
 )
 
 //go:embed all:frontend/dist
@@ -56,7 +56,7 @@ func main() {
 	updater.HandleHelperMode()
 
 	// Second line, and before anything is opened: this executable is also the
-	// MCP server an outside agent spawns (`xxvi mcp`), and in that mode stdout
+	// MCP server an outside agent spawns (`gandvik mcp`), and in that mode stdout
 	// belongs to the JSON-RPC stream. It never returns — a window, a database
 	// and a terminal socket are exactly what must not happen here.
 	maybeRunMCP(os.Args[1:])
@@ -111,7 +111,7 @@ func main() {
 	}
 
 	wails := application.New(application.Options{
-		Name:        "XXVI",
+		Name:        "Gandvík",
 		Description: "Inbox and flows with agents",
 		Services:    services,
 		// What a refusal sends the window is its message — a code and its
@@ -149,7 +149,7 @@ func main() {
 	core.Start()
 
 	win := wails.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "XXVI",
+		Title:            "Gandvík",
 		Width:            1280,
 		Height:           820,
 		MinWidth:         minWidth,
@@ -204,17 +204,17 @@ func main() {
 	}
 }
 
-// maybeRunMCP handles `xxvi mcp`: the same executable doubles as the MCP server
+// maybeRunMCP handles `gandvik mcp`: the same executable doubles as the MCP server
 // an agent's session spawns, which keeps this a single application with nothing
 // extra to install.
 //
 // It bridges to the application that is already running rather than opening one
 // of its own: the cards it moves are the cards on the screen, and a second copy
-// of XXVI over the same database would be a second application disagreeing with
+// of Gandvík over the same database would be a second application disagreeing with
 // the first (internal/appmcp).
 //
-// `xxvi mcp kaiten` is the other server this binary carries: the feed a Kaiten
-// source reads (internal/sources/manifests/kaiten.json). The bare `xxvi mcp`
+// `gandvik mcp kaiten` is the other server this binary carries: the feed a Kaiten
+// source reads (internal/sources/manifests/kaiten.json). The bare `gandvik mcp`
 // stays the application's, because that is the line people have already
 // written into their agents' configuration.
 func maybeRunMCP(args []string) {
@@ -242,7 +242,7 @@ func maybeRunMCP(args []string) {
 	}
 }
 
-// maybeRunHook handles `xxvi hook`: the command a stage's CLI runs at the turns
+// maybeRunHook handles `gandvik hook`: the command a stage's CLI runs at the turns
 // of its conversation, which hands each one to the step it belongs to
 // (internal/stagemcp). It exits 0 whatever happened and prints nothing: the CLI
 // waits on it, some events feed stdout back to the model, and a card's mark
@@ -252,12 +252,12 @@ func maybeRunHook(args []string) {
 		return
 	}
 	if err := stagemcp.ForwardHook(context.Background(), os.Stdin, os.Getenv); err != nil {
-		fmt.Fprintf(os.Stderr, "xxvi hook: %v\n", err)
+		fmt.Fprintf(os.Stderr, "gandvik hook: %v\n", err)
 	}
 	os.Exit(0)
 }
 
-// maybeHoldTerminals handles `xxvi pty-hold <socket>`: the holder the
+// maybeHoldTerminals handles `gandvik pty-hold <socket>`: the holder the
 // application starts for its terminals, and which outlives it.
 func maybeHoldTerminals(args []string) {
 	if len(args) != 2 || args[0] != "pty-hold" {
@@ -269,7 +269,7 @@ func maybeHoldTerminals(args []string) {
 	os.Exit(0)
 }
 
-// maybeAttachTerminal handles `xxvi term-attach <url>`: what a native terminal
+// maybeAttachTerminal handles `gandvik term-attach <url>`: what a native terminal
 // view runs in its pty — a bridge to the terminal's socket.
 func maybeAttachTerminal(args []string) {
 	if len(args) != 2 || args[0] != "term-attach" {

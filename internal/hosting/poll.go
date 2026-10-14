@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // The hosting is asked, not listened to: a webhook needs an address the

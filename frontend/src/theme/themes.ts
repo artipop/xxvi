@@ -2,7 +2,7 @@
 // pair — one design, light and dark — and the polarity is a second setting,
 // so picking a design never means giving up following the system.
 //
-// The halves after XXVI's own are xciii's, which ported them from Mattermost's
+// The halves after Gandvík's own are xciii's, which ported them from Mattermost's
 // community list and wrote the missing half of each from the theme's real
 // counterpart (../xciii/docs/themes.md says which half came from where). Only
 // xciii's label tints were dropped: there are no labels here.
@@ -23,16 +23,16 @@ import solarizedDark from "./themes/solarized-dark.json";
 import solarizedLight from "./themes/solarized-light.json";
 import windowsDark from "./themes/windows-dark.json";
 import windowsLight from "./themes/windows-light.json";
-import xxviDark from "./themes/xxvi-dark.json";
-import xxviLight from "./themes/xxvi-light.json";
+import gandvikDark from "./themes/gandvik-dark.json";
+import gandvikLight from "./themes/gandvik-light.json";
 import type { ThemeConfig } from "./config";
 
 export type ThemeFamily = { id: string; name: string; light: ThemeConfig; dark: ThemeConfig };
 
-export const DEFAULT_FAMILY = "xxvi";
+export const DEFAULT_FAMILY = "gandvik";
 
 export const THEME_FAMILIES: ThemeFamily[] = [
-  { id: "xxvi", name: "XXVI", light: xxviLight, dark: xxviDark },
+  { id: "gandvik", name: "Gandvík", light: gandvikLight, dark: gandvikDark },
   { id: "windows", name: "Windows", light: windowsLight, dark: windowsDark },
   { id: "one", name: "One", light: oneLight, dark: oneDark },
   { id: "gruvbox", name: "Gruvbox", light: gruvboxLight, dark: gruvboxDark },

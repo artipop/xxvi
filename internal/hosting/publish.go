@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/engine"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/engine"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // Reporter is the engine, as the hosting side talks to it: a hosting stage

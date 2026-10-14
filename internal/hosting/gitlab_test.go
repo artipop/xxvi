@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/artipop/xxvi/internal/hosting/gitlabtest"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/hosting/gitlabtest"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 func TestGitLabWalksAnMR(t *testing.T) {

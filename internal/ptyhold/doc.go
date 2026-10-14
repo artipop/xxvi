@@ -1,5 +1,5 @@
 // Package ptyhold keeps terminals alive while the application is not: a small
-// process of its own — the application's executable started as `xxvi
+// process of its own — the application's executable started as `gandvik
 // pty-hold` — owns every pty, and the application talks to it over a unix
 // socket. Closing the application lets go of the socket, not of the shells,
 // and the next start finds them where they were, with what they printed

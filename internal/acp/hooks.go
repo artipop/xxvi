@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/stagemcp"
+	"github.com/artipop/gandvik/internal/stagemcp"
 )
 
 // What a stage's CLI says about itself, through its own hooks (stagemcp's
@@ -119,7 +119,7 @@ func claudeHooks() (toolsHandoff, error) {
 		}
 		hooks[e.event] = []any{group}
 	}
-	f, err := os.CreateTemp("", "xxvi-hooks-*.json")
+	f, err := os.CreateTemp("", "gandvik-hooks-*.json")
 	if err != nil {
 		return toolsHandoff{}, fmt.Errorf("write the hooks: %w", err)
 	}

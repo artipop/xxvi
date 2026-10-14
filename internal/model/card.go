@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // CardState is where a card is in its life. Exactly four, and a card in state

@@ -18,7 +18,7 @@ type Store interface {
 }
 
 // keyringService is the name the system keychain shows the entries under.
-const keyringService = "XXVI"
+const keyringService = "Gandvík"
 
 // Keyring is the system's own: Keychain on macOS, the Credential Manager on
 // Windows, the Secret Service on Linux.

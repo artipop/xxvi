@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // The running half: agent sessions and their stream, the queue of cards waiting

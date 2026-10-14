@@ -19,7 +19,7 @@ export type ThemeMode = "light" | "dark" | "system";
 export const THEME_MODES: ThemeMode[] = ["system", "light", "dark"];
 export { THEME_FAMILIES, type ThemeFamily };
 
-const STORAGE_KEY = "xxvi.theme";
+const STORAGE_KEY = "gandvik.theme";
 
 type Kept = { family: string; mode: ThemeMode };
 

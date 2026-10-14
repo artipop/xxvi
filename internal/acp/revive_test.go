@@ -13,19 +13,19 @@ import (
 
 	acpsdk "github.com/coder/acp-go-sdk"
 
-	"github.com/artipop/xxvi/internal/engine"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/engine"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // The test binary doubles as an agent that can open a past conversation, so
 // reviving a paused session run is tested over a real pipe.
 const (
-	fakeReviverEnv = "XXVI_FAKE_REVIVER" // resume, load, or none
-	fakeReviverLog = "XXVI_FAKE_REVIVER_LOG"
+	fakeReviverEnv = "GANDVIK_FAKE_REVIVER" // resume, load, or none
+	fakeReviverLog = "GANDVIK_FAKE_REVIVER_LOG"
 	// fakeReviverHang makes a turn last until it is cancelled.
-	fakeReviverHang = "XXVI_FAKE_REVIVER_HANG"
+	fakeReviverHang = "GANDVIK_FAKE_REVIVER_HANG"
 )
 
 func init() {

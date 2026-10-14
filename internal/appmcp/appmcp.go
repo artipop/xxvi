@@ -32,15 +32,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/artipop/xxvi/internal/engine"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/engine"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // ServerName is how a CLI is told to call these tools. The same short name
 // stagemcp uses: a session sees one of the two and never both.
-const ServerName = "xxvi"
+const ServerName = "gandvik"
 
 // tokenSetting is where the install's token lives. In the database rather than
 // in a file, because it is as long-lived as the cards are and everything else
@@ -189,7 +189,7 @@ func (s *Server) handler() http.Handler {
 // instructions is what a session reads before it calls anything: the shape of
 // the application in the smallest number of sentences that still makes the
 // tools predictable.
-const instructions = `This is XXVI — an inbox and flows. A task sits in the inbox,
+const instructions = `This is Gandvík — an inbox and flows. A task sits in the inbox,
 a person or you put it on a flow (take_into_work), and from there it travels through stages.
 
 A stage is the only place a task stands. A step on it ends with a report
@@ -204,7 +204,7 @@ A stage where nothing runs waits for an answer: there finish_step sets
 // stateless, and a tool set holding nothing per-call costs nothing to build.
 func (s *Server) mcp() *mcp.Server {
 	srv := mcp.NewServer(
-		&mcp.Implementation{Name: ServerName, Title: "XXVI", Version: "1"},
+		&mcp.Implementation{Name: ServerName, Title: "Gandvík", Version: "1"},
 		&mcp.ServerOptions{Instructions: instructions},
 	)
 	mcp.AddTool(srv, &mcp.Tool{

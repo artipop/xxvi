@@ -15,7 +15,7 @@ import (
 // The folder is the user's alone, because whoever can connect to the holder
 // can run anything as this user.
 func socketDir() (string, error) {
-	dir := filepath.Join("/tmp", fmt.Sprintf("xxvi-%d", os.Getuid()))
+	dir := filepath.Join("/tmp", fmt.Sprintf("gandvik-%d", os.Getuid()))
 	if err := os.Mkdir(dir, 0o700); err != nil && !os.IsExist(err) {
 		return "", err
 	}

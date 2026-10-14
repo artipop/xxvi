@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/secrets"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/secrets"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // Service is the hosting side of the application: which server a project is

@@ -9,7 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 // call opens an MCP client on the running server with one grant and calls the

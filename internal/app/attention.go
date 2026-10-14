@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artipop/xxvi/internal/acp"
+	"github.com/artipop/gandvik/internal/acp"
 )
 
 // Attention is everything waiting for a person, oldest first. The agents know

@@ -14,7 +14,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 // Remote is a project's origin, taken apart: which server, and which
@@ -113,7 +113,7 @@ func TokenURL(provider, server string) string {
 		if server == "" {
 			return ""
 		}
-		return server + "/-/user_settings/personal_access_tokens?name=XXVI&scopes=api"
+		return server + "/-/user_settings/personal_access_tokens?name=Gandv%C3%ADk&scopes=api"
 	}
 	return ""
 }

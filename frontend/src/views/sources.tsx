@@ -1,8 +1,8 @@
 import { createEffect, createSignal, createStore, For, Show } from "solid-js";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { SourcePlugin } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
-import type { Rule, Source } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import type { Field, Option } from "../../bindings/github.com/artipop/xxvi/internal/sources/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { SourcePlugin } from "../../bindings/github.com/artipop/gandvik/internal/app/models";
+import type { Rule, Source } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
+import type { Field, Option } from "../../bindings/github.com/artipop/gandvik/internal/sources/models";
 import { flows, guard, loadSources, sourcePlugins, sourceStatus, sources, vocabulary } from "../state";
 import { errorText, has, label, plural, say, t, when } from "../i18n";
 

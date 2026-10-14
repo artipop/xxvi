@@ -1,4 +1,4 @@
-// The native half of internal/nativeterm, built into libxxvinative.dylib with
+// The native half of internal/nativeterm, built into libgandviknative.dylib with
 // Ghostty's full library: Ghostty surfaces in clipping subviews of the window's
 // content view, laid over the page where the page draws a terminal's pane.
 //
@@ -453,13 +453,13 @@ static void onMain(dispatch_block_t b) {
 
 static bool ensureApp(void) {
   if (app) return true;
-  static char *argv[] = {"xxvi", NULL};
+  static char *argv[] = {"gandvik", NULL};
   if (ghostty_init(1, argv) != 0) return false;
   ghostty_config_t cfg = ghostty_config_new();
   // The application's colours first, so a terminal without settings of its own
   // looks like part of the window (styles.css --bg, --text) rather than a grey
   // patch in it; then the person's own Ghostty settings, which win.
-  NSString *base = [NSTemporaryDirectory() stringByAppendingPathComponent:@"xxvi-ghostty.conf"];
+  NSString *base = [NSTemporaryDirectory() stringByAppendingPathComponent:@"gandvik-ghostty.conf"];
   [@"background = #111216\nforeground = #e6e8ee\nwindow-padding-x = 6\nwindow-padding-y = 4\n"
       writeToFile:base atomically:YES encoding:NSUTF8StringEncoding error:nil];
   ghostty_config_load_file(cfg, base.fileSystemRepresentation);

@@ -424,7 +424,7 @@ func (s *Server) all() []*session {
 	return out
 }
 
-// Serve is the whole of `xxvi pty-hold`: a holder on socket, until it is done.
+// Serve is the whole of `gandvik pty-hold`: a holder on socket, until it is done.
 func Serve(socket string) error {
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	log.Info("holder started", "socket", socket, "pid", os.Getpid())

@@ -15,8 +15,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/updater"
 	"github.com/wailsapp/wails/v3/pkg/updater/providers/endpoint"
 
-	"github.com/artipop/xxvi/internal/app"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/app"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // How this application replaces itself.
@@ -53,7 +53,7 @@ var updaterPublicKey []byte
 // One const per line, no block: the release workflow reads these with sed, so
 // the address a release is published under and the address an installed copy
 // asks cannot drift apart.
-const updateManifestURL = "https://updates.deffun.org/xxvi.json"
+const updateManifestURL = "https://updates.deffun.org/gandvik.json"
 
 // updateChannel is the manifest field the provider filters on, and the value
 // the release workflow signs a manifest with. A manifest that ended up at this

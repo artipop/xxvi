@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { Attention } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
-import type { CardView } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { Attention } from "../../bindings/github.com/artipop/gandvik/internal/acp/models";
+import type { CardView } from "../../bindings/github.com/artipop/gandvik/internal/app/models";
 import { attention, guard, loadAttention, openCardByID, showRibbon } from "../state";
 import { questionText, say, t } from "../i18n";
 

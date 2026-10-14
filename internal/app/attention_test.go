@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/acp"
+	"github.com/artipop/gandvik/internal/acp"
 )
 
 func TestRemindersThinOutTheLongerATaskWaits(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // The migration writes the builtin templates as SQL and the model states them

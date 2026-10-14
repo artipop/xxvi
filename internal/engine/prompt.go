@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // What an agent is told, composed in one place so the runner has nothing to

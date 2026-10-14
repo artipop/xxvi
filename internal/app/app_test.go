@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/artipop/xxvi/internal/gitdiff"
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/gitdiff"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 func open(t *testing.T) *App {

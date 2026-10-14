@@ -1,5 +1,5 @@
 import { createSignal, flush } from "solid-js";
-import type { Msg } from "../bindings/github.com/artipop/xxvi/internal/msg/models";
+import type { Msg } from "../bindings/github.com/artipop/gandvik/internal/msg/models";
 import { en } from "./locales/en";
 import { ru } from "./locales/ru";
 
@@ -34,7 +34,7 @@ export const LANG_NAMES: Record<Lang, string> = { en: "English", ru: "Русск
 // bundle is localized into, not the ones the person reads. Until the backend
 // has answered, the last answer is remembered here so the first frame is
 // already in the right language.
-const STORAGE_KEY = "xxvi.lang";
+const STORAGE_KEY = "gandvik.lang";
 
 type Known = { chosen: Choice; system: string[] };
 

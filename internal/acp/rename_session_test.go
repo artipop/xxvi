@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
-const fakeRenameEnv = "XXVI_FAKE_SESSION_RENAME"
+const fakeRenameEnv = "GANDVIK_FAKE_SESSION_RENAME"
 
 type renameInvocation struct {
 	Args     []string
@@ -30,7 +30,7 @@ func fakeRename() {
 	invocation := renameInvocation{Args: os.Args[1:], Cwd: cwd, Home: os.Getenv("CODEX_HOME")}
 	writeRecord := func() {
 		b, _ := json.Marshal(invocation)
-		if err := os.WriteFile(os.Getenv("XXVI_RENAME_RECORD"), b, 0o600); err != nil {
+		if err := os.WriteFile(os.Getenv("GANDVIK_RENAME_RECORD"), b, 0o600); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -54,7 +54,7 @@ func fakeRename() {
 			fmt.Printf(`{"id":%d,"result":{"userAgent":"fake"}}`+"\n", req.ID)
 		case "initialized":
 		case "thread/name/set":
-			switch os.Getenv("XXVI_RENAME_RESULT") {
+			switch os.Getenv("GANDVIK_RENAME_RESULT") {
 			case "error":
 				fmt.Printf(`{"id":%d,"error":{"code":-32000,"message":"thread not found"}}`+"\n", req.ID)
 			case "exit":
@@ -89,7 +89,7 @@ func TestRenamePastSession(t *testing.T) {
 			record := filepath.Join(t.TempDir(), "invocation.json")
 			a := model.Agent{Name: "Codex account", Kind: tc.kind,
 				BinPath: "/not-the-vendor-cli", Command: []string{"not-the-vendor-cli"}, Args: []string{"--acp-only"},
-				Env: map[string]string{fakeRenameEnv: "1", "CODEX_HOME": home, "XXVI_RENAME_RECORD": record, "XXVI_RENAME_RESULT": tc.result},
+				Env: map[string]string{fakeRenameEnv: "1", "CODEX_HOME": home, "GANDVIK_RENAME_RECORD": record, "GANDVIK_RENAME_RESULT": tc.result},
 			}
 			duration := 10 * time.Second
 			if tc.result == "wait" {

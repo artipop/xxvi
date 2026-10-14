@@ -6,8 +6,8 @@ version: '3'
 # This information is used to generate the build assets.
 info:
   companyName: "artipop"
-  productName: "XXVI"
-  productIdentifier: "io.deffun.xxvi"
+  productName: "Gandvík"
+  productIdentifier: "io.deffun.gandvik"
   description: "Inbox and flows with agents"
   copyright: "Copyright (c) 2026 Artem"
   comments: "Inbox and flows with agents"

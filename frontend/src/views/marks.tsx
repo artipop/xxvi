@@ -1,7 +1,7 @@
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { Mark } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { Mark } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
 import { markTitle, t } from "../i18n";
 
 // A waiting stage's two answers. Forward goes at once; back first asks what is

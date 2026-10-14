@@ -1,7 +1,7 @@
 import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { PastSession } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { PastSession } from "../../bindings/github.com/artipop/gandvik/internal/acp/models";
 import { agents, applyCard, flows, folderName, guard, list, projectFolders, projects, showRibbon, taskFolder, workModes, workspace } from "../state";
 import { errorText, t, when } from "../i18n";
 import { SessionPreview } from "./session-preview";
@@ -19,7 +19,7 @@ import { SessionPreview } from "./session-preview";
 // same place and for the same agent, and asking again every time is asking a
 // question with a known answer.
 
-const KEY = "xxvi.compose";
+const KEY = "gandvik.compose";
 
 function remembered(): { workMode?: string; agent?: string; flow?: string; folders?: Record<string, string> } {
   try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; }

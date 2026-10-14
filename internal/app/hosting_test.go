@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/hosting/gitlabtest"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/secrets"
+	"github.com/artipop/gandvik/internal/hosting/gitlabtest"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/secrets"
 )
 
 // hosted is a project whose origin is a bare repository on disk — what git

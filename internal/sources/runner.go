@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artipop/xxvi/internal/inbox"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/secrets"
-	"github.com/artipop/xxvi/internal/sources/plugin"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/inbox"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/secrets"
+	"github.com/artipop/gandvik/internal/sources/plugin"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // Running a plugin: one goroutine per source, started with the app and stopped
@@ -100,7 +100,7 @@ func dialPlugin(ctx context.Context, src model.Source, manifest Manifest, cred p
 		Env:         envList(env),
 		Source:      plugin.SourceInfo{Name: src.Name, Config: src.Config},
 		Credentials: cred,
-		Host:        plugin.HostInfo{Name: "XXVI"},
+		Host:        plugin.HostInfo{Name: "Gandvík"},
 	}, handler)
 }
 

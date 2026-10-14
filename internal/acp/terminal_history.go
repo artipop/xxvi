@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 	"github.com/google/uuid"
 )
 

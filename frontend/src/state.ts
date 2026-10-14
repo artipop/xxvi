@@ -1,12 +1,12 @@
 import { createSignal, createStore, reconcile } from "solid-js";
 import { Browser, Events } from "@wailsio/runtime";
-import * as API from "../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { AgentsView, CardView, UpdateState, Vocabulary } from "../bindings/github.com/artipop/xxvi/internal/app/models";
-import type { Attention } from "../bindings/github.com/artipop/xxvi/internal/acp/models";
-import type { Card, Flow, Folder, InboxGroup, Project, Source, StageTemplate } from "../bindings/github.com/artipop/xxvi/internal/model/models";
-import type { CardSummary, SourcePlugin } from "../bindings/github.com/artipop/xxvi/internal/app/models";
-import type { Status as SourceStatus } from "../bindings/github.com/artipop/xxvi/internal/sources/models";
-import type { RibbonView } from "../bindings/github.com/artipop/xxvi/internal/engine/models";
+import * as API from "../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { AgentsView, CardView, UpdateState, Vocabulary } from "../bindings/github.com/artipop/gandvik/internal/app/models";
+import type { Attention } from "../bindings/github.com/artipop/gandvik/internal/acp/models";
+import type { Card, Flow, Folder, InboxGroup, Project, Source, StageTemplate } from "../bindings/github.com/artipop/gandvik/internal/model/models";
+import type { CardSummary, SourcePlugin } from "../bindings/github.com/artipop/gandvik/internal/app/models";
+import type { Status as SourceStatus } from "../bindings/github.com/artipop/gandvik/internal/sources/models";
+import type { RibbonView } from "../bindings/github.com/artipop/gandvik/internal/engine/models";
 import { applyLanguage, choose, type Choice, errorText, label, lang, langInEnglish, t } from "./i18n";
 
 // Everything the screens read, in one place. The backend is the only copy of
@@ -101,7 +101,7 @@ const MENU_KEYS = [
  *  them. */
 export function syncNotificationWords() {
   const menu: Record<string, string> = {};
-  for (const k of MENU_KEYS) menu[`menu.${k}`] = t(`menu.${k}`, { app: "XXVI" });
+  for (const k of MENU_KEYS) menu[`menu.${k}`] = t(`menu.${k}`, { app: "Gandvík" });
   void API.SetMenuWords(menu).catch((e) => console.error(e));
   void API.SetNotificationWords({
     asks: t("notify.asks"),
@@ -312,11 +312,11 @@ export const [closedRibbon, setClosedRibbon] = createSignal<string>("");
 // rather than again on every task. Remembered so the next start opens where
 // the last one left off; the first time, it is the project the last task was
 // typed for.
-const WORKSPACE_KEY = "xxvi.workspace";
+const WORKSPACE_KEY = "gandvik.workspace";
 
 function rememberedWorkspace(): string {
   try {
-    return localStorage.getItem(WORKSPACE_KEY) ?? JSON.parse(localStorage.getItem("xxvi.compose") ?? "{}").project ?? "";
+    return localStorage.getItem(WORKSPACE_KEY) ?? JSON.parse(localStorage.getItem("gandvik.compose") ?? "{}").project ?? "";
   } catch {
     return "";
   }

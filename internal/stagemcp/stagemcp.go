@@ -26,12 +26,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 // ServerName is how the agent's CLI is told to call these tools. Short, because
 // vendors prefix every tool name with it.
-const ServerName = "xxvi"
+const ServerName = "gandvik"
 
 // Report is what an agent hands back when its step ends: whether the work is
 // done, what it did, and the values the stage declared it would leave on the
@@ -219,7 +219,7 @@ type finishInput struct {
 // newServer exposes one step's report as a tool.
 func newServer(step Step) *mcp.Server {
 	srv := mcp.NewServer(
-		&mcp.Implementation{Name: ServerName, Title: "XXVI", Version: "1"},
+		&mcp.Implementation{Name: ServerName, Title: "Gandvík", Version: "1"},
 		&mcp.ServerOptions{Instructions: instructions(step)},
 	)
 	mcp.AddTool(srv, &mcp.Tool{
@@ -308,7 +308,7 @@ const lastCall = "Make it your last call, on its own: not alongside other tool c
 
 func instructions(step Step) string {
 	var b strings.Builder
-	b.WriteString("This is a step of an XXVI flow")
+	b.WriteString("This is a step of a Gandvík flow")
 	if step.StageName != "" {
 		fmt.Fprintf(&b, " — the stage «%s»", step.StageName)
 	}

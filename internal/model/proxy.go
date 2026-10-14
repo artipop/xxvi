@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // Proxy is one named network path: where an agent's traffic goes and the trust

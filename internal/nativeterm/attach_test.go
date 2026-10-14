@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/ptyhold"
-	"github.com/artipop/xxvi/internal/term"
+	"github.com/artipop/gandvik/internal/ptyhold"
+	"github.com/artipop/gandvik/internal/term"
 )
 
-// attachEnv makes this test binary the bridge, the way `xxvi term-attach`
+// attachEnv makes this test binary the bridge, the way `gandvik term-attach`
 // makes the application one.
-const attachEnv = "XXVI_TEST_ATTACH_URL"
+const attachEnv = "GANDVIK_TEST_ATTACH_URL"
 
 func TestMain(m *testing.M) {
 	if url := os.Getenv(attachEnv); url != "" {

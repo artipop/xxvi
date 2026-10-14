@@ -15,5 +15,5 @@ func SocketPath(dataDir string) (string, error) {
 		return "", err
 	}
 	sum := sha256.Sum256([]byte(dataDir))
-	return filepath.Join(dir, "xxvi-"+hex.EncodeToString(sum[:4])+".sock"), nil
+	return filepath.Join(dir, "gandvik-"+hex.EncodeToString(sum[:4])+".sock"), nil
 }

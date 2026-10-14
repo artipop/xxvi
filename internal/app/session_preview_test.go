@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 type previewEvents struct{ emitted int }
@@ -22,7 +22,7 @@ func TestPastSessionPreviewDoesNotImportOrResumeConversation(t *testing.T) {
 	api := NewAPI(a)
 	events := &previewEvents{}
 	a.SetUI(events)
-	observer, err := sql.Open("sqlite", "file:"+filepath.ToSlash(filepath.Join(a.DataDir, "xxvi.db"))+"?mode=ro")
+	observer, err := sql.Open("sqlite", "file:"+filepath.ToSlash(filepath.Join(a.DataDir, "gandvik.db"))+"?mode=ro")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 // Rect is an area of the desktop in logical points, from the top-left corner

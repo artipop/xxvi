@@ -1,6 +1,6 @@
 import { createSignal, Show } from "solid-js";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { UpdateState } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { UpdateState } from "../../bindings/github.com/artipop/gandvik/internal/app/models";
 import { loadUpdateState, updateState } from "../state";
 import { errorText, t, when } from "../i18n";
 

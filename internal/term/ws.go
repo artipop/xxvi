@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artipop/xxvi/internal/ptyhold"
+	"github.com/artipop/gandvik/internal/ptyhold"
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
 )

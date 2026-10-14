@@ -12,7 +12,7 @@ import (
 )
 
 // Manifests this application ships: a service it carries its own server for
-// (`xxvi mcp kaiten`), or one whose server another application of ours
+// (`gandvik mcp kaiten`), or one whose server another application of ours
 // carries. They are in the dialog from the first run with nothing to install.
 //
 //go:embed manifests/*.json

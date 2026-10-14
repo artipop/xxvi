@@ -19,7 +19,7 @@ import (
 //
 // The address changes on every launch — a loopback port is asked for, not
 // chosen — while the line in somebody's agent configuration does not. So the
-// running application leaves its address beside the database, and `xxvi mcp`
+// running application leaves its address beside the database, and `gandvik mcp`
 // reads it there and pipes one stdio session through to it. The bridge carries
 // no tool schemas of its own: it asks the server what it has and forwards the
 // calls, so there is one place the tools are described and it is the one that
@@ -38,7 +38,7 @@ type Handoff struct {
 	PID int `json:"pid"`
 }
 
-// WriteHandoff leaves the address for `xxvi mcp` to find. Written 0600: it
+// WriteHandoff leaves the address for `gandvik mcp` to find. Written 0600: it
 // carries the token.
 func WriteHandoff(dataDir, url, token string) error {
 	if url == "" || token == "" {
@@ -63,7 +63,7 @@ func ReadHandoff(dataDir string) (Handoff, error) {
 	body, err := os.ReadFile(filepath.Join(dataDir, HandoffFile))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Handoff{}, errors.New("XXVI is not running: the application tools live inside it, open the application")
+			return Handoff{}, errors.New("Gandvík is not running: the application tools live inside it, open the application")
 		}
 		return Handoff{}, err
 	}
@@ -77,7 +77,7 @@ func ReadHandoff(dataDir string) (Handoff, error) {
 	return h, nil
 }
 
-// ServeStdio is `xxvi mcp`: one stdio session bridged to the running
+// ServeStdio is `gandvik mcp`: one stdio session bridged to the running
 // application. It returns when the caller closes stdio, which is how an agent
 // ends a session.
 func ServeStdio(ctx context.Context, dataDir string, in *os.File, out *os.File) error {
@@ -118,16 +118,16 @@ func Bridge(ctx context.Context, h Handoff, transport mcp.Transport) error {
 		HTTPClient: &http.Client{Transport: bearer{token: h.Token}},
 	}, nil)
 	if err != nil {
-		return fmt.Errorf("could not connect to XXVI: %w", err)
+		return fmt.Errorf("could not connect to Gandvík: %w", err)
 	}
 	defer upstream.Close()
 
 	tools, err := upstream.ListTools(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("could not read the XXVI tools: %w", err)
+		return fmt.Errorf("could not read the Gandvík tools: %w", err)
 	}
 	srv := mcp.NewServer(
-		&mcp.Implementation{Name: ServerName, Title: "XXVI", Version: "1"},
+		&mcp.Implementation{Name: ServerName, Title: "Gandvík", Version: "1"},
 		&mcp.ServerOptions{Instructions: instructions},
 	)
 	for _, tool := range tools.Tools {

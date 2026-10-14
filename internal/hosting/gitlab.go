@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // GitLab is the REST API v4, on gitlab.com or on a company's own server —

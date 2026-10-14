@@ -2,7 +2,7 @@ import { createSignal, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { report } from "../state";
 import { errorText, t } from "../i18n";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
 import { nativeWanted } from "./native";
 import { drawInPage } from "./xterm";
 

@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artipop/xxvi/internal/acp"
-	"github.com/artipop/xxvi/internal/engine"
-	"github.com/artipop/xxvi/internal/gitdiff"
-	"github.com/artipop/xxvi/internal/hosting"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/nativeterm"
-	"github.com/artipop/xxvi/internal/sources"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/acp"
+	"github.com/artipop/gandvik/internal/engine"
+	"github.com/artipop/gandvik/internal/gitdiff"
+	"github.com/artipop/gandvik/internal/hosting"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/nativeterm"
+	"github.com/artipop/gandvik/internal/sources"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // API is what the UI calls. One service rather than several: the screens do not

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // A route that loops: the check sends the card back to the agent. Every question

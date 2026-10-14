@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 // What a first run finds: an agent and three flows worth reading as examples.

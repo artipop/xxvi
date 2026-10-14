@@ -50,7 +50,7 @@ func TestRepoPathUnderASubpath(t *testing.T) {
 
 func TestTokenPageIsTheServersOwn(t *testing.T) {
 	got := TokenURL("gitlab", "https://gitlab.company.ru/")
-	if got != "https://gitlab.company.ru/-/user_settings/personal_access_tokens?name=XXVI&scopes=api" {
+	if got != "https://gitlab.company.ru/-/user_settings/personal_access_tokens?name=Gandv%C3%ADk&scopes=api" {
 		t.Fatalf("страница токена: %s", got)
 	}
 	if _, ok := ServerURL("gitlab.company.ru"); ok {

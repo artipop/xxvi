@@ -14,18 +14,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/inbox"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/secrets"
-	"github.com/artipop/xxvi/internal/sources/plugin"
-	"github.com/artipop/xxvi/internal/store"
-	"github.com/artipop/xxvi/sources/protocol"
-	"github.com/artipop/xxvi/sources/sdk"
+	"github.com/artipop/gandvik/internal/inbox"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/secrets"
+	"github.com/artipop/gandvik/internal/sources/plugin"
+	"github.com/artipop/gandvik/internal/store"
+	"github.com/artipop/gandvik/sources/protocol"
+	"github.com/artipop/gandvik/sources/sdk"
 )
 
 // The plugin these tests run is this test binary again, serving the SDK: a
 // real process on real stdio, the way a plugin somebody wrote would run.
-const pluginModeEnv = "XXVI_TEST_SOURCE_PLUGIN"
+const pluginModeEnv = "GANDVIK_TEST_SOURCE_PLUGIN"
 
 func servePlugin(mode string) {
 	if mode == "dies" {
@@ -275,7 +275,7 @@ func TestTheCatalogPrefersFilesAndKeepsBuiltInNames(t *testing.T) {
 }
 
 // The shipped Kaiten manifest end to end: the site typed into the form and the
-// token in the keychain reach `xxvi mcp kaiten`, and its answer lands in the
+// token in the keychain reach `gandvik mcp kaiten`, and its answer lands in the
 // inbox as cards that link back to Kaiten.
 func TestTheShippedKaitenSourceFillsTheInbox(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -344,7 +344,7 @@ func TestTheShippedXCIIIManifestMapsTheFeed(t *testing.T) {
 	}
 
 	row := map[string]any{"id": "c1", "title": "Починить логин", "updated": "1700", "column": "Сегодня",
-		"url": "https://board.example/team/0/b1/0/c1", "properties": map[string]any{"Проект": "xxvi"}}
+		"url": "https://board.example/team/0/b1/0/c1", "properties": map[string]any{"Проект": "gandvik"}}
 	raw, err := m.MCP.Item.render(row)
 	if err != nil {
 		t.Fatal(err)
@@ -353,7 +353,7 @@ func TestTheShippedXCIIIManifestMapsTheFeed(t *testing.T) {
 	if err := json.Unmarshal(raw, &item); err != nil {
 		t.Fatal(err)
 	}
-	if item.ExternalID != "c1" || item.Version != "1700" || item.Body != "Проект: xxvi" ||
+	if item.ExternalID != "c1" || item.Version != "1700" || item.Body != "Проект: gandvik" ||
 		item.URL != "https://board.example/team/0/b1/0/c1" || len(item.Labels) != 1 || item.Labels[0] != "Сегодня" {
 		t.Fatalf("item: %+v", item)
 	}

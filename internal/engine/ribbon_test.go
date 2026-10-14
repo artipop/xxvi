@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // screenFlow is dataFlow with screens on it: the agent stage keeps a plan, the

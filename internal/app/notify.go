@@ -9,9 +9,9 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 
-	"github.com/artipop/xxvi/internal/acp"
-	"github.com/artipop/xxvi/internal/engine"
-	"github.com/artipop/xxvi/internal/hosting"
+	"github.com/artipop/gandvik/internal/acp"
+	"github.com/artipop/gandvik/internal/engine"
+	"github.com/artipop/gandvik/internal/hosting"
 )
 
 // A question an agent asked reaches a person who is not looking at the

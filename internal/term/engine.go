@@ -1,6 +1,6 @@
 package term
 
-import "github.com/artipop/xxvi/internal/ptyhold"
+import "github.com/artipop/gandvik/internal/ptyhold"
 
 // engine is what a Session drives its process through. Output and the end come
 // back the other way: into publish and finish.

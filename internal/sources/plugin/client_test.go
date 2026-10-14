@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/sources/protocol"
-	"github.com/artipop/xxvi/sources/sdk"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/sources/protocol"
+	"github.com/artipop/gandvik/sources/sdk"
 )
 
 // The plugin these tests talk to is this test binary, re-invoked. That is the
@@ -21,7 +21,7 @@ import (
 // stdio, real line framing — without depending on a toolchain being installed
 // to build a second program.
 
-const pluginModeEnv = "XXVI_TEST_PLUGIN"
+const pluginModeEnv = "GANDVIK_TEST_PLUGIN"
 
 func TestMain(m *testing.M) {
 	if mode := os.Getenv(pluginModeEnv); mode != "" {
@@ -166,7 +166,7 @@ func dialTestPlugin(t *testing.T, mode string, handler Handler) (*Client, error)
 		Command: []string{os.Args[0]},
 		Env:     []string{pluginModeEnv + "=" + mode},
 		Source:  SourceInfo{Name: "телефон", Config: map[string]string{"label": "INBOX"}},
-		Host:    HostInfo{Name: "XXVI"},
+		Host:    HostInfo{Name: "Gandvík"},
 	}, handler)
 }
 

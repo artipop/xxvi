@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artipop/xxvi/internal/hosting"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/hosting"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // A card's workspace in a repository: what its work mode (model/workmode.go)
@@ -145,7 +145,7 @@ func fetchMR(card model.Card, project model.Project) (string, error) {
 		return "", msg.Err("hosting.notConnected", "project", project.Name)
 	}
 	name := hosting.RemoteName(project)
-	local := fmt.Sprintf("refs/xxvi/mr/%d", iid)
+	local := fmt.Sprintf("refs/gandvik/mr/%d", iid)
 	args := []string{"fetch", "-q", name, "+" + remote + ":" + local}
 	if target := strings.TrimPrefix(card.Base, name+"/"); target != "" && target != card.Base {
 		args = append(args, "+refs/heads/"+target+":refs/remotes/"+name+"/"+target)
@@ -252,7 +252,7 @@ func (m *Manager) claimBranch(card model.Card, project model.Project) (string, e
 func (m *Manager) worktreeRoot() string {
 	base := m.opts.WorkDir
 	if base == "" {
-		base = filepath.Join(os.TempDir(), "xxvi-work")
+		base = filepath.Join(os.TempDir(), "gandvik-work")
 	}
 	return filepath.Join(base, "trees")
 }

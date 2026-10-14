@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/artipop/xxvi/internal/launch"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/term"
+	"github.com/artipop/gandvik/internal/launch"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/term"
 )
 
 // The run screen (model.ScreenRun): the card's working copy started the way

@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 func RenamePastSession(ctx context.Context, a model.Agent, cwd, id, title string) (string, error) {
@@ -89,7 +89,7 @@ func RenamePastSession(ctx context.Context, a model.Agent, cwd, id, title string
 		}
 		return "", msg.Err("sessions.renameFailed", "id", id, "output", tail(err.Error(), 1500))
 	}
-	if err := request("initialize", map[string]any{"clientInfo": map[string]string{"name": "xxvi", "version": "1"}}); err != nil {
+	if err := request("initialize", map[string]any{"clientInfo": map[string]string{"name": "gandvik", "version": "1"}}); err != nil {
 		return failed(err)
 	}
 	if err := encoder.Encode(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {

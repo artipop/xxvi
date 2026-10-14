@@ -2,4 +2,4 @@
 
 package app
 
-const dataDirName = "XXVI"
+const dataDirName = "Gandvík"

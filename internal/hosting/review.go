@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/inbox"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/inbox"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // The first real source (docs/system.md §8): the MRs of a project that wait on

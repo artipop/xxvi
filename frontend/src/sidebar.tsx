@@ -9,7 +9,7 @@ import { setTab, tab } from "./state";
 // section never takes a menu to be opened first. Names come as pills over the
 // work on hover, and a click on the top button spreads the sidebar out when
 // the icons are not enough.
-const KEY = "xxvi.sidebar.wide";
+const KEY = "gandvik.sidebar.wide";
 
 function rememberedWide(): boolean {
   try { return localStorage.getItem(KEY) === "1"; } catch { return false; }
@@ -27,7 +27,7 @@ export default function Sidebar(): JSX.Element {
   return (
     <aside class={`sidebar ${wide() ? "wide" : ""}`}>
       <div class="sidebar-head">
-        <Show when={wide()}><span class="brand">XXVI</span></Show>
+        <Show when={wide()}><span class="brand">Gandvík</span></Show>
         <button class="nav toggle" onClick={toggle} aria-label={wide() ? t("nav.collapse") : t("nav.expand")}>
           <Icon name={wide() ? "collapse" : "expand"} />
           <span class="tip">{t("nav.expand")}</span>

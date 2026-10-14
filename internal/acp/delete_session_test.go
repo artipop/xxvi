@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
-const fakeDeleteEnv = "XXVI_FAKE_SESSION_DELETE"
+const fakeDeleteEnv = "GANDVIK_FAKE_SESSION_DELETE"
 const deleteSessionID = "019a1de0-8765-4321-abcd-0123456789ab"
 
 type deleteInvocation struct {
@@ -29,11 +29,11 @@ type deleteInvocation struct {
 func fakeDelete() {
 	cwd, _ := os.Getwd()
 	b, _ := json.Marshal(deleteInvocation{os.Args[1:], cwd, os.Getenv("CODEX_HOME")})
-	if err := os.WriteFile(os.Getenv("XXVI_DELETE_RECORD"), b, 0o600); err != nil {
+	if err := os.WriteFile(os.Getenv("GANDVIK_DELETE_RECORD"), b, 0o600); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	switch os.Getenv("XXVI_DELETE_RESULT") {
+	switch os.Getenv("GANDVIK_DELETE_RESULT") {
 	case "error":
 		fmt.Fprintln(os.Stderr, "session is still running")
 		os.Exit(1)
@@ -88,7 +88,7 @@ func TestDeletePastSession(t *testing.T) {
 			a := model.Agent{
 				Name: "Codex account", Kind: tc.kind,
 				BinPath: "/not-the-vendor-cli", Command: []string{"not-the-vendor-cli"}, Args: []string{"--acp-only"},
-				Env: map[string]string{fakeDeleteEnv: "1", "CODEX_HOME": home, "XXVI_DELETE_RECORD": record, "XXVI_DELETE_RESULT": tc.result},
+				Env: map[string]string{fakeDeleteEnv: "1", "CODEX_HOME": home, "GANDVIK_DELETE_RECORD": record, "GANDVIK_DELETE_RESULT": tc.result},
 			}
 			duration := 10 * time.Second
 			if tc.result == "wait" {

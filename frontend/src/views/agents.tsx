@@ -1,8 +1,8 @@
 import { createSignal, For, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { Agent, Proxy } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import type { AdapterStatus, AgentCheck } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { Agent, Proxy } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
+import type { AdapterStatus, AgentCheck } from "../../bindings/github.com/artipop/gandvik/internal/acp/models";
 import { agents, guard, loadAgents, vocabulary } from "../state";
 import { say, t } from "../i18n";
 

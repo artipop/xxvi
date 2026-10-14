@@ -1,8 +1,8 @@
 import { createEffect, createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { Events } from "@wailsio/runtime";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { Diff, File } from "../../bindings/github.com/artipop/xxvi/internal/gitdiff/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { Diff, File } from "../../bindings/github.com/artipop/gandvik/internal/gitdiff/models";
 import { list } from "../state";
 import { errorText, label, plural, t } from "../i18n";
 

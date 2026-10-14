@@ -17,7 +17,7 @@ import (
 // claude and codex both run a command of their own choosing at the points of a
 // conversation — it starts, a turn begins, a permission is asked for, a turn
 // ends — and hand it that moment as JSON on stdin. The command is this same
-// executable (`xxvi hook`), which forwards the moment here, to the step it
+// executable (`gandvik hook`), which forwards the moment here, to the step it
 // belongs to. It is what replaces guessing from a silent terminal: silence is
 // forty-five seconds late and cannot tell a question from a model thinking,
 // while a hook is the CLI saying so the moment it happens.
@@ -27,14 +27,14 @@ import (
 // hook without ever being on a command line: argv is what ps shows every user
 // of the machine, and TokenEnv is the grant.
 const (
-	TokenEnv   = "XXVI_STEP_TOKEN"
-	HookURLEnv = "XXVI_HOOK_URL"
+	TokenEnv   = "GANDVIK_STEP_TOKEN"
+	HookURLEnv = "GANDVIK_HOOK_URL"
 	// HookExeEnv names this executable. The hook's command refers to it by
 	// variable rather than spelling the path, so a path with a space or a
 	// quote in it needs no escaping in two vendors' configuration languages —
 	// and codex's trust in the command, which is a hash of its text, does not
 	// change when the application moves.
-	HookExeEnv = "XXVI_HOOK_EXE"
+	HookExeEnv = "GANDVIK_HOOK_EXE"
 )
 
 // HookCommand is the command both CLIs are told to run, through a POSIX shell.
@@ -64,7 +64,7 @@ type HookEvent struct {
 // memory.
 const maxHookInput = 4 << 20
 
-// ForwardHook is `xxvi hook`: it reads one hook payload and hands it to the
+// ForwardHook is `gandvik hook`: it reads one hook payload and hands it to the
 // step named by the environment. It never fails the CLI — every error is the
 // caller's to swallow — and writes nothing to stdout, which some events feed
 // back to the model as context.
@@ -109,7 +109,7 @@ func ForwardHook(ctx context.Context, in io.Reader, getenv func(string) string) 
 	return nil
 }
 
-// HookURL is where `xxvi hook` delivers. Empty until the port is open.
+// HookURL is where `gandvik hook` delivers. Empty until the port is open.
 func (s *Server) HookURL() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

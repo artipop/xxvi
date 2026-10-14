@@ -11,19 +11,19 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/artipop/xxvi/internal/engine"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/engine"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/store"
 )
 
-// The bridge is what makes `xxvi mcp` a line somebody can write once: the port
+// The bridge is what makes `gandvik mcp` a line somebody can write once: the port
 // is new on every launch, the command is not. What it must not be is a second
 // place the tools are described — so what it forwards is whatever the running
 // application says it has.
 
 func serve(t *testing.T) *Server {
 	t.Helper()
-	st, err := store.Open(filepath.Join(t.TempDir(), "xxvi.db"))
+	st, err := store.Open(filepath.Join(t.TempDir(), "gandvik.db"))
 	if err != nil {
 		t.Fatalf("открыть базу: %v", err)
 	}

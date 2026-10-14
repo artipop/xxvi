@@ -1,6 +1,6 @@
 package model
 
-import "github.com/artipop/xxvi/internal/msg"
+import "github.com/artipop/gandvik/internal/msg"
 
 // How a card works in its project when the project is a git repository. Asked
 // of the card, not of the project: the same repository takes a quick fix in

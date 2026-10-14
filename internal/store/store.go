@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 	"github.com/jmoiron/sqlx"
 	_ "modernc.org/sqlite" // pure-Go driver: no cgo, so the build cross-compiles
 )

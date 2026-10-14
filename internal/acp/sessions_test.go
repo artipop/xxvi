@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/stagemcp"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/stagemcp"
 )
 
 // The test binary doubles as an agent that lists sessions, so the listing is
 // tested over a real pipe without a vendor adapter installed.
-const fakeListerEnv = "XXVI_FAKE_SESSION_LISTER"
+const fakeListerEnv = "GANDVIK_FAKE_SESSION_LISTER"
 
 func TestMain(m *testing.M) {
 	if os.Getenv(fakeRenameEnv) == "1" {
@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 		fakeLister()
 		os.Exit(0)
 	}
-	// And as `xxvi hook`: a stage's hooks run os.Executable, which here is
+	// And as `gandvik hook`: a stage's hooks run os.Executable, which here is
 	// this binary (terminal_live_test.go).
 	if len(os.Args) > 1 && os.Args[1] == "hook" {
 		_ = stagemcp.ForwardHook(context.Background(), os.Stdin, os.Getenv)

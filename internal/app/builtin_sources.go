@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/artipop/xxvi/internal/hosting"
-	"github.com/artipop/xxvi/internal/sources"
+	"github.com/artipop/gandvik/internal/hosting"
+	"github.com/artipop/gandvik/internal/sources"
 )
 
 // builtinSources are the sources this application reads with its own code, as

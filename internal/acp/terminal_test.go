@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/stagemcp"
-	"github.com/artipop/xxvi/internal/store"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/stagemcp"
+	"github.com/artipop/gandvik/internal/store"
 )
 
 // ---- the command line a stage's CLI is started with ----
@@ -82,12 +82,12 @@ func TestCodexGetsTheToolsWithoutShowingTheGrant(t *testing.T) {
 	if strings.Contains(line, "секрет") {
 		t.Fatalf("грант не должен попадать в argv: %v", handoff.args)
 	}
-	if !strings.Contains(line, `mcp_servers.xxvi_step.url="http://127.0.0.1:1/mcp"`) {
+	if !strings.Contains(line, `mcp_servers.gandvik_step.url="http://127.0.0.1:1/mcp"`) {
 		t.Fatalf("адрес сервера — переопределение конфигурации: %v", handoff.args)
 	}
-	// «xxvi» may already be the person's own entry with a command in it, and an
+	// «gandvik» may already be the person's own entry with a command in it, and an
 	// url merged into that is a config codex refuses to load.
-	if strings.Contains(line, "mcp_servers.xxvi.") {
+	if strings.Contains(line, "mcp_servers.gandvik.") {
 		t.Fatalf("имя сервера шага не должно совпадать с постоянным: %v", handoff.args)
 	}
 	if !slices.Contains(handoff.env, codexTokenEnv+"=секрет") {
@@ -225,7 +225,7 @@ func TestTerminalArgvResumesAConversationByID(t *testing.T) {
 func TestCodexFlagsGoBeforeResume(t *testing.T) {
 	cli, _ := cliFor(model.KindCodex)
 	argv, _ := terminalArgv(cli, "codex", opening{args: cli.cliResumeID("abc-123"), id: "abc-123"},
-		[]string{"-c", "mcp_servers.xxvi_step.url=\"x\""}, "дальше")
+		[]string{"-c", "mcp_servers.gandvik_step.url=\"x\""}, "дальше")
 	resume := slices.Index(argv, "resume")
 	for i, arg := range argv {
 		if arg == "-c" && i > resume {
@@ -334,14 +334,14 @@ func TestConversationFollowsTheCLI(t *testing.T) {
 }
 
 // codex runs a hook only when its trust hash matches, and skips it silently
-// otherwise, so the value is pinned: this is the hash codex 0.157–0.158
-// computed for this handler.
+// otherwise, so the value is pinned: the hash this handler gets from the
+// algorithm checked against codex 0.157–0.158.
 func TestCodexHooksCarryTheirTrust(t *testing.T) {
-	hash, err := codexTrustHash("session_start", `"$XXVI_HOOK_EXE" hook`, 10)
+	hash, err := codexTrustHash("session_start", `"$GANDVIK_HOOK_EXE" hook`, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hash != "sha256:b5b5a2233273a62a5b029f0b95db4fee650e9f1444dbbe18721d76d0046488e6" {
+	if hash != "sha256:77e6285559ff4abb5f8a6307722805d8cea4f9a83a4ab5d5725d6450e74f08e5" {
 		t.Fatalf("хеш доверия разошёлся с тем, что проверено на живом codex: %s", hash)
 	}
 	handoff, err := codexHooks()
@@ -375,7 +375,7 @@ func TestClaudeHooksAreAFileOfTheirOwn(t *testing.T) {
 			t.Fatalf("нет хука %s: %s", e.event, body)
 		}
 	}
-	if !strings.Contains(string(body), `\"$XXVI_HOOK_EXE\" hook`) {
+	if !strings.Contains(string(body), `\"$GANDVIK_HOOK_EXE\" hook`) {
 		t.Fatalf("команда хука — этот же исполняемый файл: %s", body)
 	}
 }

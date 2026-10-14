@@ -10,7 +10,7 @@ import (
 
 	acpsdk "github.com/coder/acp-go-sdk"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 // ---- what an agent may do without asking ----

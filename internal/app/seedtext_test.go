@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 func flowByEntry(t *testing.T, a *App, entry string) model.Flow {

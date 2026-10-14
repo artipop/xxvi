@@ -14,13 +14,13 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/artipop/xxvi/internal/ptyhold"
+	"github.com/artipop/gandvik/internal/ptyhold"
 	"github.com/coder/websocket"
 )
 
-// holderEnv makes this test binary a holder, the way `xxvi pty-hold` makes the
+// holderEnv makes this test binary a holder, the way `gandvik pty-hold` makes the
 // application one.
-const holderEnv = "XXVI_TEST_PTYHOLD"
+const holderEnv = "GANDVIK_TEST_PTYHOLD"
 
 func TestMain(m *testing.M) {
 	if socket := os.Getenv(holderEnv); socket != "" {

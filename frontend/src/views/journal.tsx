@@ -1,8 +1,8 @@
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { Events } from "@wailsio/runtime";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { JournalEntry } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { JournalEntry } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
 import { guard, list } from "../state";
 import { entryText, has, t, when } from "../i18n";
 

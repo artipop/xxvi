@@ -1,6 +1,6 @@
 package app
 
-import "github.com/artipop/xxvi/internal/msg"
+import "github.com/artipop/gandvik/internal/msg"
 
 // How this application learns of a newer version of itself.
 //

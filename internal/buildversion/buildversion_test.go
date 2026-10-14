@@ -17,7 +17,7 @@ func TestSetChangesTheNumberAndNothingElse(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "build", "darwin"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	before := "<key>CFBundleVersion</key>\n\t<string>0.1.0</string>\n<key>CFBundleShortVersionString</key>\n\t<string>0.1.0</string>\n<key>CFBundleName</key>\n\t<string>XXVI</string>\n"
+	before := "<key>CFBundleVersion</key>\n\t<string>0.1.0</string>\n<key>CFBundleShortVersionString</key>\n\t<string>0.1.0</string>\n<key>CFBundleName</key>\n\t<string>Gandvík</string>\n"
 	write(t, root, "version.go", `const appVersion = "0.1.0"`+"\n")
 	write(t, root, plist, before)
 
@@ -37,7 +37,7 @@ func TestSetChangesTheNumberAndNothingElse(t *testing.T) {
 		t.Fatalf("изменено %v, ждали оба файла", changed)
 	}
 	// Both numbers in the same file, and the name between them untouched.
-	want := "<key>CFBundleVersion</key>\n\t<string>0.2.0</string>\n<key>CFBundleShortVersionString</key>\n\t<string>0.2.0</string>\n<key>CFBundleName</key>\n\t<string>XXVI</string>\n"
+	want := "<key>CFBundleVersion</key>\n\t<string>0.2.0</string>\n<key>CFBundleShortVersionString</key>\n\t<string>0.2.0</string>\n<key>CFBundleName</key>\n\t<string>Gandvík</string>\n"
 	if got := read(t, root, plist); got != want {
 		t.Errorf("Info.plist после Set:\n%q\nждали:\n%q", got, want)
 	}

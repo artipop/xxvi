@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 func TestLivePastSessions(t *testing.T) {

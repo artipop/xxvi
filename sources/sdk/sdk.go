@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/artipop/xxvi/sources/protocol"
+	"github.com/artipop/gandvik/sources/protocol"
 )
 
 // Item is one thing a plugin found. The fields that matter are the first two:

@@ -9,8 +9,8 @@ import (
 
 	acpsdk "github.com/coder/acp-go-sdk"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // Conversations an agent already had, asked of the agent itself over ACP.

@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, createStore, For, Show, type StoreSetter } from "solid-js";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { Edge, Flow, PropertyWrite, Screen, Stage, StageTemplate } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { Edge, Flow, PropertyWrite, Screen, Stage, StageTemplate } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
 import { flows, guard, list, loadFlows, loadTemplates, templates, vocabulary } from "../state";
 import FlowCanvas, { type CanvasApi, DRAG_KIND, type Selection, type StageWrite, condLabel, edgeIndexOf } from "./flowCanvas";
 import {
@@ -322,7 +322,7 @@ function Editor(props: {
   );
 }
 
-const PALETTE_KEY = "xxvi.flows.palette";
+const PALETTE_KEY = "gandvik.flows.palette";
 
 // How much of the canvas the open palette covers: its width in styles.css and
 // the gap it floats at.

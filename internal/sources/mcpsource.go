@@ -11,10 +11,10 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/sources/mcp"
-	"github.com/artipop/xxvi/internal/sources/plugin"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/sources/mcp"
+	"github.com/artipop/gandvik/internal/sources/plugin"
 )
 
 // An MCP server as a source. What MCP lacks for this is one word: which tool is
@@ -119,7 +119,7 @@ func openMCP(ctx context.Context, src model.Source, manifest Manifest, cred plug
 		Command:    argv,
 		Dir:        manifest.Dir,
 		Env:        envList(env),
-		ClientName: "XXVI",
+		ClientName: "Gandvík",
 	})
 	if err != nil {
 		return nil, err

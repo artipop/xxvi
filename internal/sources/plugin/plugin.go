@@ -8,7 +8,7 @@
 // each message.
 package plugin
 
-import "github.com/artipop/xxvi/sources/protocol"
+import "github.com/artipop/gandvik/sources/protocol"
 
 // The wire types, under the names this side of the app uses them by.
 type (

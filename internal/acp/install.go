@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // Adapters installed by the application into a folder of its own.

@@ -1,7 +1,7 @@
 import { createEffect, createSignal, onCleanup, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { PastSession } from "../../bindings/github.com/artipop/xxvi/internal/acp/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { PastSession } from "../../bindings/github.com/artipop/gandvik/internal/acp/models";
 import { errorText, t, when } from "../i18n";
 
 export function SessionPreview(props: { agentName: string; session: PastSession; onClose: () => void }): JSX.Element {

@@ -1,7 +1,7 @@
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
-import type { BackgroundTerminal } from "../../bindings/github.com/artipop/xxvi/internal/app/models";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import type { BackgroundTerminal } from "../../bindings/github.com/artipop/gandvik/internal/app/models";
 import { guard, list } from "../state";
 import { plural, t } from "../i18n";
 

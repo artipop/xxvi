@@ -61,7 +61,7 @@ var Sites = []Site{{
 	Why:     "what the NSIS installer calls the product",
 }, {
 	Path:    "build/windows/wails.exe.manifest",
-	Pattern: regexp.MustCompile(`name="io\.deffun\.xxvi" version="([^"]*)"`),
+	Pattern: regexp.MustCompile(`name="io\.deffun\.gandvik" version="([^"]*)"`),
 	Why:     "the assembly version inside the .exe's side-by-side manifest",
 }, {
 	Path:    "build/linux/nfpm/nfpm.yaml",

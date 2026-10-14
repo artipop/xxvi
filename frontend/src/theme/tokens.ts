@@ -6,7 +6,7 @@
 // is derived — a Mattermost theme has no word for a raised surface or a
 // border. And what it says unreadably is moved until it reads, never off its
 // hue: a value drawn as a dot in a chat client is a word here. A config whose
-// own answers already work comes out untouched, which is why the XXVI dark
+// own answers already work comes out untouched, which is why the Gandvík dark
 // half comes out of this exactly as styles.css declares it.
 
 import { AA, AA_MARK, BLACK, ensureReadable, mix, readableInk, toHex, WHITE, contrast, type RGB } from "./color";

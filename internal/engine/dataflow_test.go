@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 // A route whose middle stage owes the card a verdict, and whose fork reads it.

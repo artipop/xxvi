@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // Validation of a whole flow, in one place, because that is how it is saved:

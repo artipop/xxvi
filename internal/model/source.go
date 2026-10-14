@@ -11,7 +11,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/artipop/xxvi/internal/msg"
+	"github.com/artipop/gandvik/internal/msg"
 )
 
 // Sources turn outside events into cards. Everything entering the pipeline is

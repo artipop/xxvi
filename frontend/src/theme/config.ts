@@ -17,7 +17,7 @@
 //
 // What Mattermost has no word for — the raised surfaces, the two borders, the
 // two quieter inks, the shadow — is derived in `tokens.ts` unless the config
-// states it with one of XXVI_KEYS.
+// states it with one of GANDVIK_KEYS.
 
 import { parseColor, type RGB } from "./color";
 
@@ -50,7 +50,7 @@ export const MATTERMOST_KEYS = [
 
 // `surfaceBg` and `shadowColor` mean what they mean in xciii, so a theme from
 // there keeps its cards; the rest are this application's.
-export const XXVI_KEYS = [
+export const GANDVIK_KEYS = [
   "surfaceBg",
   "raisedBg",
   "borderColor",
@@ -60,7 +60,7 @@ export const XXVI_KEYS = [
   "shadowColor",
 ] as const;
 
-export type ColorKey = (typeof MATTERMOST_KEYS)[number] | (typeof XXVI_KEYS)[number];
+export type ColorKey = (typeof MATTERMOST_KEYS)[number] | (typeof GANDVIK_KEYS)[number];
 
 export type ThemeConfig = {
   id?: string;
@@ -87,7 +87,7 @@ export class ThemeConfigError extends Error {}
 export function parseTheme(config: ThemeConfig, fallbackId = "custom"): ParsedTheme {
   const colors: Partial<Record<ColorKey, RGB>> = {};
   const bad: string[] = [];
-  for (const key of [...MATTERMOST_KEYS, ...XXVI_KEYS]) {
+  for (const key of [...MATTERMOST_KEYS, ...GANDVIK_KEYS]) {
     const value = config[key];
     if (value === undefined || value === "") continue;
     const rgb = parseColor(value);

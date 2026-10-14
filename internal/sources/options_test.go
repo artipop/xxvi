@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/artipop/xxvi/internal/inbox"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/secrets"
+	"github.com/artipop/gandvik/internal/inbox"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/secrets"
 )
 
 // optionsManifest is a feed whose form offers boards and, for the one chosen,

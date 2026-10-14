@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 func TestLiveRenamePastSession(t *testing.T) {
@@ -75,7 +75,7 @@ func TestLiveRenamePastSession(t *testing.T) {
 			return response.Result
 		}
 	}
-	if err := encoder.Encode(map[string]any{"id": 1, "method": "initialize", "params": map[string]any{"clientInfo": map[string]string{"name": "xxvi_test", "version": "1"}}}); err != nil {
+	if err := encoder.Encode(map[string]any{"id": 1, "method": "initialize", "params": map[string]any{"clientInfo": map[string]string{"name": "gandvik_test", "version": "1"}}}); err != nil {
 		t.Fatal(err)
 	}
 	read(1)

@@ -1,5 +1,5 @@
 import type { JSX } from "@solidjs/web";
-import type { Screen, Stage, StageTemplate } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
+import type { Screen, Stage, StageTemplate } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
 import { list } from "../state";
 import { label, propName, t } from "../i18n";
 

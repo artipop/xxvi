@@ -4,7 +4,7 @@
 // the conversation id follows the CLI, and a return to the stage resumes that
 // conversation by id. It talks to real models — tiny prompts, but not free:
 //
-//	XXVI_LIVE_DIR=/a/folder/both/CLIs/already/trust \
+//	GANDVIK_LIVE_DIR=/a/folder/both/CLIs/already/trust \
 //	go test -tags liveagent ./internal/acp/ -run LiveTerminal -v -timeout 15m
 //
 // The folder has to be trusted beforehand: the trust dialog differs by vendor
@@ -17,12 +17,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/artipop/xxvi/internal/engine"
-	"github.com/artipop/xxvi/internal/model"
-	"github.com/artipop/xxvi/internal/msg"
-	"github.com/artipop/xxvi/internal/stagemcp"
-	"github.com/artipop/xxvi/internal/store"
-	"github.com/artipop/xxvi/internal/term"
+	"github.com/artipop/gandvik/internal/engine"
+	"github.com/artipop/gandvik/internal/model"
+	"github.com/artipop/gandvik/internal/msg"
+	"github.com/artipop/gandvik/internal/stagemcp"
+	"github.com/artipop/gandvik/internal/store"
+	"github.com/artipop/gandvik/internal/term"
 )
 
 type liveUI struct{ waits chan Attention }
@@ -57,9 +57,9 @@ type liveStage struct {
 }
 
 func newLiveStage(t *testing.T, kind, modelName string) *liveStage {
-	dir := os.Getenv("XXVI_LIVE_DIR")
+	dir := os.Getenv("GANDVIK_LIVE_DIR")
 	if dir == "" {
-		t.Skip("XXVI_LIVE_DIR is not set")
+		t.Skip("GANDVIK_LIVE_DIR is not set")
 	}
 	// Run from inside Claude Code, a child claude inherits its session and
 	// saves no transcript: nothing would be left to resume.
@@ -307,7 +307,7 @@ func TestLiveTerminalPauseClaude(t *testing.T) {
 // fire; the card says so as soon as the question is on the screen. Costs
 // nothing: the model is never reached.
 func TestLiveTerminalTrustQuestionClaude(t *testing.T) {
-	t.Setenv("XXVI_LIVE_DIR", t.TempDir())
+	t.Setenv("GANDVIK_LIVE_DIR", t.TempDir())
 	l := newLiveStage(t, model.KindClaude, "haiku")
 	run := l.start("Reply with just OK.")
 	opened := time.Now()

@@ -24,7 +24,7 @@ describe("theme", () => {
     }
   });
 
-  it("says in the XXVI dark half exactly what styles.css paints first", () => {
+  it("says in the Gandvík dark half exactly what styles.css paints first", () => {
     const tokens = themeTokens(parseTheme(THEME_FAMILIES[0].dark));
     for (const [token, value] of Object.entries(tokens)) {
       expect([token, same(declared(token) ?? "")]).toEqual([token, same(value)]);

@@ -7,7 +7,7 @@ package nativeterm
 #include <dlfcn.h>
 #include <stdlib.h>
 
-// The native half lives in libxxvinative.dylib, with Ghostty in it, and is
+// The native half lives in libgandviknative.dylib, with Ghostty in it, and is
 // opened at run time rather than linked: Ghostty's full library and the
 // libghostty-vt the holder uses share hundreds of symbols, and only separate
 // images keep them apart. Opening it late also keeps it out of every build and
@@ -49,7 +49,7 @@ import (
 
 // LibName is the native half's file, beside the executable in a bundle's
 // Frameworks (build/darwin/Taskfile.yml puts it there).
-const LibName = "libxxvinative.dylib"
+const LibName = "libgandviknative.dylib"
 
 var (
 	loadOnce sync.Once
@@ -57,11 +57,11 @@ var (
 )
 
 // Available says native terminals can be shown: the native half was found and
-// opened. XXVI_NATIVE_LIB names it outside a bundle.
+// opened. GANDVIK_NATIVE_LIB names it outside a bundle.
 func Available() bool {
 	loadOnce.Do(func() {
 		var paths []string
-		if p := os.Getenv("XXVI_NATIVE_LIB"); p != "" {
+		if p := os.Getenv("GANDVIK_NATIVE_LIB"); p != "" {
 			paths = append(paths, p)
 		}
 		if exe, err := os.Executable(); err == nil {

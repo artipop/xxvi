@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/artipop/xxvi/internal/model"
+	"github.com/artipop/gandvik/internal/model"
 )
 
 // What a stage leaves on the card, and how it gets there.

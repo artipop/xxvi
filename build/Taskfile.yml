@@ -13,7 +13,7 @@ tasks:
       TARGET_ARCH: '{{.ARCH | default ARCH}}'
       SRC: '{{.ROOT_DIR}}/build/ghostty/src'
       PREFIX: '{{.ROOT_DIR}}/build/ghostty/{{.TARGET_OS}}-{{.TARGET_ARCH}}'
-      STAMP: '{{.PREFIX}}/.xxvi-ghostty-commit'
+      STAMP: '{{.PREFIX}}/.gandvik-ghostty-commit'
       ZIG_TARGET: '{{if eq .TARGET_ARCH "amd64"}}x86_64{{else}}aarch64{{end}}-{{if eq .TARGET_OS "darwin"}}macos{{else if eq .TARGET_OS "windows"}}windows-gnu{{else}}linux-gnu{{end}}'
     status:
       - test -f "{{.PREFIX}}/share/pkgconfig/libghostty-vt-static.pc"
@@ -34,7 +34,7 @@ tasks:
       - printf '%s\n' "{{.GHOSTTY_COMMIT}}" > "{{.STAMP}}"
 
   ghostty:native:
-    summary: Builds the native half of internal/nativeterm — Ghostty's full library in libxxvinative.dylib (macOS)
+    summary: Builds the native half of internal/nativeterm — Ghostty's full library in libgandviknative.dylib (macOS)
     # Ghostty's own macOS library (the renderer, fonts, input) from the same
     # source as libghostty-vt, then our host code around it in one dylib. A
     # dylib because the two Ghostty builds share hundreds of symbols and cannot
@@ -46,13 +46,13 @@ tasks:
     vars:
       SRC: '{{.ROOT_DIR}}/build/ghostty/src'
       FRAMEWORK: '{{.ROOT_DIR}}/build/ghostty/src/macos/GhosttyKit.xcframework'
-      FRAMEWORK_STAMP: '{{.FRAMEWORK}}/.xxvi-ghostty-commit'
-      OUT: '{{.ROOT_DIR}}/build/nativeterm/libxxvinative.dylib'
+      FRAMEWORK_STAMP: '{{.FRAMEWORK}}/.gandvik-ghostty-commit'
+      OUT: '{{.ROOT_DIR}}/build/nativeterm/libgandviknative.dylib'
     sources:
       - internal/nativeterm/native/*.m
-      - build/ghostty/darwin-{{.ARCH | default ARCH}}/.xxvi-ghostty-commit
+      - build/ghostty/darwin-{{.ARCH | default ARCH}}/.gandvik-ghostty-commit
     generates:
-      - build/nativeterm/libxxvinative.dylib
+      - build/nativeterm/libgandviknative.dylib
     cmds:
       # The xcframework holds one slice, named for the machine it was built on.
       - |
@@ -73,7 +73,7 @@ tasks:
         mkdir -p "{{.ROOT_DIR}}/build/nativeterm"
         clang -dynamiclib -fobjc-arc -O2 -mmacosx-version-min=13.0 \
           "{{.ROOT_DIR}}/internal/nativeterm/native/view_darwin.m" -I"$KIT/Headers" "$KIT/libghostty-internal.a" \
-          -o "{{.OUT}}" -install_name @rpath/libxxvinative.dylib \
+          -o "{{.OUT}}" -install_name @rpath/libgandviknative.dylib \
           -framework Cocoa -framework Metal -framework MetalKit -framework QuartzCore -framework CoreText \
           -framework CoreGraphics -framework IOSurface -framework Carbon -framework UniformTypeIdentifiers \
           -framework CoreVideo -framework IOKit -framework Security -lc++

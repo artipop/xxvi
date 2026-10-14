@@ -3,7 +3,7 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "xxvi"
+name: "gandvik"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.1.0"
@@ -17,12 +17,12 @@ license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/xxvi"
-    dst: "/usr/local/bin/xxvi"
+  - src: "./bin/gandvik"
+    dst: "/usr/local/bin/gandvik"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/xxvi.png"
-  - src: "./build/linux/xxvi.desktop"
-    dst: "/usr/share/applications/xxvi.desktop"
+    dst: "/usr/share/icons/hicolor/128x128/apps/gandvik.png"
+  - src: "./build/linux/gandvik.desktop"
+    dst: "/usr/share/applications/gandvik.desktop"
 
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:

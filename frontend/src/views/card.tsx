@@ -1,5 +1,5 @@
 import { createSignal, For, Show } from "solid-js";
-import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
+import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
 import { agents, applyCard, attention, closeCard, folderName, guard, list, openCard, projectFolders, projects, showRibbon, taskFolder, vocabulary, workModes } from "../state";
 import { label, propName, propValue, t, waitText } from "../i18n";
 import { QuestionForm, WorktreeForm } from "./attention";
