@@ -50,15 +50,6 @@ export function AddCard(sourceName: string, title: string, body: string): $Cance
 }
 
 /**
- * AddItem files an item into a source by hand. It goes through the source's own
- * file rather than straight into a card, so a hand-added item is an item like
- * any other: it meets the same rules and survives the file being read again.
- */
-export function AddItem(sourceName: string, title: string, body: string): $CancellablePromise<model$0.InboxGroup[] | null> {
-    return $Call.ByID(1502436789, sourceName, title, body);
-}
-
-/**
  * AgentTerminal is where the terminal of one step is watched. It starts
  * nothing: the CLI was started by the stage and belongs to it, and a screen
  * that could start one would be a second way of working a step.

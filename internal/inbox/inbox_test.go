@@ -1,9 +1,6 @@
 package inbox
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -25,7 +22,7 @@ func setup(t *testing.T, src model.Source) (*store.Store, *Pipeline) {
 }
 
 func plain() model.Source {
-	return model.Source{Name: "Демо", Plugin: PluginDemo, Enabled: true}
+	return model.Source{Name: "Демо", Plugin: "test", Enabled: true}
 }
 
 func item(id, title string) model.Item {
@@ -245,7 +242,7 @@ func TestDisabledSourceBringsNothing(t *testing.T) {
 
 func TestInboxIsGroupedBySource(t *testing.T) {
 	st, p := setup(t, plain())
-	if _, err := st.SaveSource(model.Source{Name: "Телефон", Plugin: PluginDemo, Enabled: true}); err != nil {
+	if _, err := st.SaveSource(model.Source{Name: "Телефон", Plugin: "test", Enabled: true}); err != nil {
 		t.Fatalf("второй источник: %v", err)
 	}
 	p.Ingest("Демо", []model.Item{item("1", "Раз"), item("2", "Два")})
@@ -281,56 +278,3 @@ func TestManualCardLandsInTheInbox(t *testing.T) {
 }
 
 // ---- reading the file ----
-
-func TestReadItemsSkipsBlanksAndReportsBadLines(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, DemoFile)
-	content := `{"id":"1","title":"Раз"}
-
-// комментарий
-{сломано}
-{"id":"2","title":"Два"}
-`
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("файл: %v", err)
-	}
-	items, err := ReadItems(path)
-	if err == nil {
-		t.Fatal("про нечитаемую строку надо сказать")
-	}
-	if len(items) != 2 {
-		t.Fatalf("остальные строки должны прочитаться, получено %d", len(items))
-	}
-	// "Somewhere in this file" is not something a person can act on.
-	if !strings.Contains(err.Error(), "4") {
-		t.Fatalf("ошибка должна называть номер строки: %v", err)
-	}
-}
-
-// A source configured before anybody put anything in its file has nothing to
-// bring, which is not the same as being broken.
-func TestReadItemsTreatsAMissingFileAsEmpty(t *testing.T) {
-	items, err := ReadItems(filepath.Join(t.TempDir(), "нет-такого.jsonl"))
-	if err != nil || len(items) != 0 {
-		t.Fatalf("отсутствующий файл — это пусто, а не ошибка: %v (%d)", err, len(items))
-	}
-}
-
-// A hand-added item goes through the file so it is an item like any other: it
-// meets the same rules and survives the file being read again.
-func TestAppendItemRoundTrips(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "sub", DemoFile)
-	if err := AppendItem(path, model.Item{Title: "Своё", Body: "текст"}); err != nil {
-		t.Fatalf("дописать: %v", err)
-	}
-	items, err := ReadItems(path)
-	if err != nil || len(items) != 1 {
-		t.Fatalf("прочитать: %v (%d)", err, len(items))
-	}
-	if items[0].ExternalID == "" {
-		t.Fatal("у дописанного элемента должен появиться устойчивый идентификатор")
-	}
-	if items[0].At.IsZero() {
-		t.Fatal("время должно проставляться")
-	}
-}

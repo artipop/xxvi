@@ -328,7 +328,7 @@ func TestTheShippedXCIIIManifestMapsTheFeed(t *testing.T) {
 		t.Fatal("the shipped XCIII manifest is missing")
 	}
 	src := m.WithDefaults(model.Source{Name: "Доска", Config: map[string]string{
-		"board": "Работа", "column": "Сегодня", "url": "https://board.example",
+		"board": "Работа", "column": "Сегодня", "where": "server", "url": "https://board.example",
 	}})
 	argv, err := m.Argv(src)
 	if err != nil || argv[0] != "/Applications/XCIII.app/Contents/MacOS/XCIII" || argv[1] != "mcp" || argv[2] != "feed" {
@@ -405,4 +405,4 @@ func TestASourceThatDidNotStartIsTriedAgain(t *testing.T) {
 
 // demoManifest stands for a source the application reads itself, as the app
 // describes it to the catalog.
-var demoManifest = Manifest{Name: inbox.PluginDemo, Title: "Demo file"}
+var demoManifest = Manifest{Name: "demo", Title: "Demo file"}

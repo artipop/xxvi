@@ -5,7 +5,7 @@
   "command": "{{.Config.binary}}",
   "args": ["mcp", "feed"],
   "env": {
-    "XCIII_URL": "{{.Config.url}}"
+    "XCIII_URL": "{{if eq .Config.where \"server\"}}{{.Config.url}}{{end}}"
   },
   "tokenEnv": "XCIII_FEED_TOKEN",
   "auth": {"type": "token", "optional": true},
@@ -21,8 +21,12 @@
         "at": "columns", "value": "{{.name}}", "dependsOn": ["board"]
       }
     },
+    {"key": "where", "title": "Где работает XCIII", "type": "select", "values": ["local", "server"], "default": "local"},
     {"key": "binary", "title": "Где лежит XCIII", "default": "/Applications/XCIII.app/Contents/MacOS/XCIII"},
-    {"key": "url", "title": "Адрес сервера XCIII (пусто — приложение на этой машине)"}
+    {
+      "key": "url", "title": "Адрес сервера XCIII",
+      "showWhen": {"key": "where", "value": "server"}
+    }
   ],
   "mcp": {
     "tool": "list_column_cards",

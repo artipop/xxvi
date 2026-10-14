@@ -34,7 +34,7 @@ internal/term     pty: терминал экрана и терминал, в к�
 internal/stagemcp «шаг готов» — единственное, что агент из терминала говорит нам
 internal/appmcp   приложение снаружи: те же ходы по задаче, но инструментами
 internal/gitdiff  что изменилось в папке задачи: git и разбор его патча
-internal/inbox    источники, правила, демо-плагин
+internal/inbox    источники, правила
 internal/app      сборка, примеры на первый запуск, API для фронта
 frontend          Solid 2 + TypeScript, биндинги генерирует wails3
 ```

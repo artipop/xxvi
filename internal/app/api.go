@@ -14,7 +14,6 @@ import (
 	"github.com/artipop/xxvi/internal/engine"
 	"github.com/artipop/xxvi/internal/gitdiff"
 	"github.com/artipop/xxvi/internal/hosting"
-	"github.com/artipop/xxvi/internal/inbox"
 	"github.com/artipop/xxvi/internal/model"
 	"github.com/artipop/xxvi/internal/msg"
 	"github.com/artipop/xxvi/internal/nativeterm"
@@ -644,9 +643,6 @@ func (s *API) PollSource(name string) ([]model.InboxGroup, error) {
 		}
 		return s.Inbox()
 	}
-	if err := s.app.Poller.PollByName(name); err != nil {
-		return nil, err
-	}
 	return s.Inbox()
 }
 
@@ -700,29 +696,6 @@ func (s *API) SetSourceToken(name, token string) error {
 
 // SourceHasToken says whether a token is kept for a source — never the token.
 func (s *API) SourceHasToken(name string) bool { return s.app.Sources.HasToken(name) }
-
-// AddItem files an item into a source by hand. It goes through the source's own
-// file rather than straight into a card, so a hand-added item is an item like
-// any other: it meets the same rules and survives the file being read again.
-func (s *API) AddItem(sourceName, title, body string) ([]model.InboxGroup, error) {
-	src, err := s.app.Store.Source(sourceName)
-	if err != nil {
-		return nil, err
-	}
-	if src.Plugin != inbox.PluginDemo {
-		return nil, msg.Err("source.noManualItems", "source", src.Name)
-	}
-	if strings.TrimSpace(title) == "" {
-		return nil, msg.Err("item.noTitle")
-	}
-	if err := inbox.AppendItem(inbox.DemoPath(src), model.Item{Title: title, Body: body}); err != nil {
-		return nil, err
-	}
-	if err := s.app.Poller.Poll(src); err != nil {
-		return nil, err
-	}
-	return s.Inbox()
-}
 
 // AddCard files a card somebody typed straight into the inbox.
 func (s *API) AddCard(sourceName, title, body string) (model.Card, error) {

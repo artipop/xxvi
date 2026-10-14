@@ -30,6 +30,13 @@ export interface Field {
      * box, so a name is picked rather than typed and mistyped.
      */
     "options"?: Options | null;
+
+    /**
+     * ShowWhen keeps the field out of the form until another field has the
+     * given value: the address of a server means nothing for a program that
+     * runs on this machine, and asking for it anyway invites filling it in.
+     */
+    "showWhen"?: ShowWhen | null;
 }
 
 /**
@@ -66,6 +73,14 @@ export interface Options {
      * be asked — columns are those of a board — and that change the answer.
      */
     "dependsOn"?: string[] | null;
+}
+
+/**
+ * ShowWhen names the field and the value it must have for another to be shown.
+ */
+export interface ShowWhen {
+    "key": string;
+    "value": string;
 }
 
 /**

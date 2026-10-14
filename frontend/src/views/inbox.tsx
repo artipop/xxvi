@@ -1,7 +1,7 @@
 import { createSignal, For, Show } from "solid-js";
 import * as API from "../../bindings/github.com/artipop/xxvi/internal/app/api";
 import type { Card, InboxGroup } from "../../bindings/github.com/artipop/xxvi/internal/model/models";
-import { applyCard, flows, folderName, guard, inbox, workspace, list, loadInbox, openCardByID, projectFolders, projects, setInbox, showRibbon, sources, openOutside } from "../state";
+import { applyCard, flows, folderName, guard, inbox, workspace, list, loadInbox, openCardByID, projectFolders, projects, setInbox, showRibbon, openOutside } from "../state";
 import { propName, propValue, t } from "../i18n";
 import Markdown from "./markdown";
 import { Describing } from "./card";
@@ -44,7 +44,6 @@ export default function InboxView() {
 }
 
 function Group(props: { group: InboxGroup }) {
-  const [adding, setAdding] = createSignal(false);
   const review = () => props.group.plugin === "review";
   const name = () => (review()
     ? t("inbox.reviewGroup", { project: props.group.source })
@@ -63,17 +62,8 @@ function Group(props: { group: InboxGroup }) {
         <div class="spacer" />
         <Show when={props.group.source}>
           <button class="btn quiet" onClick={poll}>{t("inbox.poll")}</button>
-          <Show when={!review()}>
-            <button class="btn quiet" onClick={() => setAdding(!adding())}>
-              {adding() ? t("common.cancel") : t("inbox.addItem")}
-            </button>
-          </Show>
         </Show>
       </div>
-
-      <Show when={adding()}>
-        <AddItem source={props.group.source} onDone={() => setAdding(false)} />
-      </Show>
 
       <For each={props.group.cards}>{(card) => <InboxCard card={card} />}</For>
     </>
@@ -107,46 +97,6 @@ function AddOwn(props: { onDone: () => void }) {
       <div class="row">
         <div class="spacer" />
         <button class="btn primary" onClick={submit}>{t("inbox.create")}</button>
-      </div>
-    </div>
-  );
-}
-
-function AddItem(props: { source: string; onDone: () => void }) {
-  const [title, setTitle] = createSignal("");
-  const [body, setBody] = createSignal("");
-  const noisy = () => Boolean(sources().find((s) => s.name === props.source)?.noisy);
-
-  const submit = async () => {
-    if (!title().trim()) return;
-    // It goes into the source's own file, so a hand-added item is an item like
-    // any other: it meets the same rules and survives the file being reread.
-    const groups = await guard(() => API.AddItem(props.source, title(), body()));
-    if (groups) { setInbox(groups); props.onDone(); }
-  };
-
-  return (
-    <div class="card">
-      <label class="field">
-        <span>{t("inbox.itemTitle")}</span>
-        <input type="text" value={title()} onInput={(e) => setTitle(e.currentTarget.value)} />
-      </label>
-      <label class="field">
-        <span>{t("inbox.itemBody")}</span>
-        <textarea value={body()} onInput={(e) => setBody(e.currentTarget.value)} />
-      </label>
-      {/* A noisy source drops whatever no rule matched, and that is right for a
-          stream of notifications — but the button looks the same on every
-          source, and typing a task into this one would lose it without a word.
-          A rule here is a subscription; saying so is cheaper than the silence. */}
-      <Show when={noisy()}>
-        <div class="warn-note">{t("inbox.noisy", { source: props.source })}</div>
-      </Show>
-
-      <div class="row">
-        <span class="meta">{t("inbox.itemNote")}</span>
-        <div class="spacer" />
-        <button class="btn primary" onClick={submit}>{t("common.add")}</button>
       </div>
     </div>
   );

@@ -47,7 +47,6 @@ type App struct {
 	// same moves a person makes, as MCP tools (docs/system.md §13).
 	Outside  *appmcp.Server
 	Pipeline *inbox.Pipeline
-	Poller   *inbox.Poller
 	// Hosting is where projects push: merge requests opened, watched and
 	// reviewed (docs/system.md §15).
 	Hosting *hosting.Service
@@ -185,7 +184,6 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	a.Hosting.SetReporter(a.Engine)
 	a.Hosting.SetInbox(a.Pipeline, a.Agents, a.notifyHosting, func(event string) { a.Emit(event, map[string]any{}) })
 	a.Engine.SetPublisher(a.Hosting)
-	a.Poller = inbox.NewPoller(st, a.Pipeline, log)
 	catalog := sources.LoadCatalog(filepath.Join(dataDir, sources.ManifestsDir), builtinSources()...)
 	for _, problem := range catalog.Problems() {
 		log.Warn("source manifest skipped", "why", problem)
@@ -240,7 +238,6 @@ func (a *App) holdTerminals() {
 // Start begins the background work: reading sources and asking the hosting,
 // each on its own timer.
 func (a *App) Start() {
-	a.Poller.Start()
 	a.Hosting.Start()
 	a.startReminders()
 	a.Sources.Start()
@@ -250,7 +247,6 @@ func (a *App) Start() {
 // database closes under it is the one ordering mistake worth spelling out.
 func (a *App) Close() error {
 	a.stopReminders()
-	a.Poller.Stop()
 	a.Hosting.Stop()
 	a.Sources.Stop(5 * time.Second)
 	a.Agents.Close()
@@ -326,7 +322,7 @@ func (a *App) Emit(event string, payload any) {
 	}
 }
 
-// DefaultDataDir is where the database and the demo source's file live.
+// DefaultDataDir is where the database lives.
 func DefaultDataDir() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {

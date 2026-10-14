@@ -88,6 +88,17 @@ type Field struct {
 	// itself: its boards, its columns. The form offers them in place of a text
 	// box, so a name is picked rather than typed and mistyped.
 	Options *Options `json:"options,omitempty"`
+
+	// ShowWhen keeps the field out of the form until another field has the
+	// given value: the address of a server means nothing for a program that
+	// runs on this machine, and asking for it anyway invites filling it in.
+	ShowWhen *ShowWhen `json:"showWhen,omitempty"`
+}
+
+// ShowWhen names the field and the value it must have for another to be shown.
+type ShowWhen struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 // Options is a question put to an MCP server whose answer is a list of values
@@ -202,6 +213,15 @@ func (p Manifest) Validate() (Manifest, error) {
 		if !contains(fieldTypes, f.Type) {
 			return p, msg.Err("plugin.unknownFieldType", "plugin", p.Name, "field", f.Key,
 				"type", f.Type, "allowed", strings.Join(fieldTypes, ", "))
+		}
+		if w := f.ShowWhen; w != nil {
+			known := false
+			for _, other := range p.Fields {
+				known = known || (other.Key == w.Key && other.Key != f.Key)
+			}
+			if !known {
+				return p, msg.Err("plugin.showWhenUnknown", "plugin", p.Name, "field", f.Key, "key", w.Key)
+			}
 		}
 		if f.Options != nil {
 			opts, err := f.Options.validate(p, f)

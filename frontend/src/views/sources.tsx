@@ -73,6 +73,15 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
 
   const plugin = () => sourcePlugins().find((p) => p.name === draft.plugin);
   const refused = () => (isNew ? "" : sourceStatus()[props.source.name]?.field ?? "");
+  // A field that waits for another one's value is not in the form until it has
+  // it; the other field's default counts, or the form would open without it.
+  const shown = (f: Field) => {
+    const w = f.showWhen;
+    if (!w) return true;
+    const dep = list(plugin()?.fields).find((o) => o.key === w.key);
+    return (draft.config?.[w.key] || dep?.default || "") === w.value;
+  };
+
   const setConfig = (key: string, value: string) =>
     setDraft((d) => {
       const config = { ...(draft.config ?? {}), [key]: value };
@@ -143,7 +152,7 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
         {(p) => (
           <>
             <div class="grid2">
-              <For each={list(p().fields).filter((f) => f.type !== "bool")}>
+              <For each={list(p().fields).filter((f) => f.type !== "bool" && shown(f))}>
                 {(f) => (
                   <FieldInput plugin={p()} field={f} value={draft.config?.[f.key] ?? ""} refused={refused() === f.key}
                               source={() => JSON.parse(JSON.stringify(draft)) as Source} token={askToken}
@@ -175,7 +184,7 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
       <div class="row wrap toolbar">
         {/* A plugin's yes-or-no settings sit with the source's own: a checkbox
             in the grid of inputs would stand a line above its words. */}
-        <For each={list(plugin()?.fields).filter((f) => f.type === "bool")}>
+        <For each={list(plugin()?.fields).filter((f) => f.type === "bool" && shown(f))}>
           {(f) => (
             <label class="row check">
               <input type="checkbox" checked={(draft.config?.[f.key] || f.default) === "true"}
@@ -292,8 +301,13 @@ function fieldTitle(plugin: string, f: Field): string {
   return has(key) ? t(key) : f.title || f.key;
 }
 
-/** settingsLine is what a source the app reads itself was set to, for the card:
- *  a file it reads has no other face. */
+/** valueTitle words one value of a select, falling back to the value itself. */
+function valueTitle(plugin: string, key: string, value: string): string {
+  const k = `plugin.${plugin}.${key}.${value}`;
+  return has(k) ? t(k) : value;
+}
+
+/** settingsLine is what a source the app reads itself was set to, for the card. */
 function settingsLine(src: Source): string {
   return list(pluginOf(src.plugin)?.fields)
     .map((f) => src.config?.[f.key])
@@ -325,7 +339,7 @@ function FieldInput(props: {
                  onInput={(e) => props.onChange(e.currentTarget.value)} />
         }>
           <select value={props.value || props.field.default || ""} onChange={(e) => props.onChange(e.currentTarget.value)}>
-            <For each={list(props.field.values)}>{(v) => <option value={v}>{v}</option>}</For>
+            <For each={list(props.field.values)}>{(v) => <option value={v}>{valueTitle(props.plugin.name, props.field.key, v)}</option>}</For>
           </select>
         </Show>
       </label>
