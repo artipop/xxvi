@@ -151,8 +151,9 @@ func scrollableReplay(ctx context.Context, conn *websocket.Conn, tail, history [
 
 // releaseInput turns off what makes a finished terminal still act like a live
 // one under the mouse: with reporting on, a click is a report for a process
-// that is gone, and the text cannot be selected.
-const releaseInput = "\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1015l"
+// that is gone, and the text cannot be selected. The cursor goes too: blinking
+// in a prompt nobody reads, it invites typing that goes nowhere.
+const releaseInput = "\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1015l\x1b[?25l"
 
 // resetScreen is RIS: the emulator forgets what it drew and every mode the
 // process had set, so the history replayed after it lands on a blank screen.
