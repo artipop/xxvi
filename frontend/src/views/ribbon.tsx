@@ -612,8 +612,15 @@ function Folded(props: { label: JSX.Element; title?: string; class?: string; chi
   let box: HTMLDivElement | undefined;
   onSettled(() => {
     const away = (e: MouseEvent) => { if (box && !box.contains(e.target as Node)) setOpen(false); };
+    // A click in Ghostty's view never reaches the page as a mousedown; the
+    // view says it was clicked instead.
+    const shut = () => setOpen(false);
     document.addEventListener("mousedown", away);
-    return () => document.removeEventListener("mousedown", away);
+    window.addEventListener("native-terminal-focus", shut);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      window.removeEventListener("native-terminal-focus", shut);
+    };
   });
   return (
     <div class={`card-menu ${props.class ?? ""}`} ref={box}>
@@ -689,8 +696,13 @@ function CardMenu(props: { cardId: string; closed: boolean; onJournal: () => voi
     const away = (e: MouseEvent) => {
       if (box && !box.contains(e.target as Node)) { setOpen(false); setSure(false); }
     };
+    const shut = () => { setOpen(false); setSure(false); };
     document.addEventListener("mousedown", away);
-    return () => document.removeEventListener("mousedown", away);
+    window.addEventListener("native-terminal-focus", shut);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      window.removeEventListener("native-terminal-focus", shut);
+    };
   });
 
   const run = (fn: () => Promise<unknown>) => {
