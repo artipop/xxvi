@@ -1,13 +1,13 @@
 {
   "fill": {
-    "solid": "srgb:0.08235,0.09020,0.11373,1.00000"
+    "solid": "srgb:0.01176,0.11765,0.23529,1.00000"
   },
   "groups": [
     {
       "layers": [
         {
-          "image-name": "glyph.svg",
-          "name": "glyph",
+          "image-name": "artwork.png",
+          "name": "artwork",
           "glass": false
         }
       ],
