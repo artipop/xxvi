@@ -46,7 +46,7 @@ import * as $models from "./models.js";
  * AddCard files a card somebody typed straight into the inbox.
  */
 export function AddCard(sourceName: string, title: string, body: string): $CancellablePromise<model$0.Card> {
-    return $Call.ByID(3801214340, sourceName, title, body);
+    return $Call.ByID(1819502175, sourceName, title, body);
 }
 
 /**
@@ -59,7 +59,7 @@ export function AddCard(sourceName: string, title: string, body: string): $Cance
  * to should show (docs/system.md §12.2).
  */
 export function AgentTerminal(sessionID: string): $CancellablePromise<$models.TerminalHandle> {
-    return $Call.ByID(2753039464, sessionID);
+    return $Call.ByID(3618130655, sessionID);
 }
 
 /**
@@ -67,14 +67,14 @@ export function AgentTerminal(sessionID: string): $CancellablePromise<$models.Te
  * agent usable here" is the question a person opens that screen with.
  */
 export function Agents(): $CancellablePromise<$models.AgentsView> {
-    return $Call.ByID(4132736297);
+    return $Call.ByID(2953098768);
 }
 
 /**
  * Answer delivers a person's answer to an agent's question.
  */
 export function Answer(questionID: string, answer: acp$0.Answer): $CancellablePromise<void> {
-    return $Call.ByID(4238054837, questionID, answer);
+    return $Call.ByID(1299452688, questionID, answer);
 }
 
 /**
@@ -83,7 +83,7 @@ export function Answer(questionID: string, answer: acp$0.Answer): $CancellablePr
  * where the next move is the person's.
  */
 export function Attention(): $CancellablePromise<acp$0.Attention[] | null> {
-    return $Call.ByID(978520023);
+    return $Call.ByID(2312608852);
 }
 
 /**
@@ -92,7 +92,7 @@ export function Attention(): $CancellablePromise<acp$0.Attention[] | null> {
  * who forgot them would otherwise have no way to know.
  */
 export function BackgroundTerminals(): $CancellablePromise<$models.BackgroundTerminal[] | null> {
-    return $Call.ByID(140841648);
+    return $Call.ByID(3931622839);
 }
 
 /**
@@ -100,21 +100,21 @@ export function BackgroundTerminals(): $CancellablePromise<$models.BackgroundTer
  * no outcome: the person who stopped it decides what happens next.
  */
 export function CancelCard(cardID: string): $CancellablePromise<void> {
-    return $Call.ByID(1480875471, cardID);
+    return $Call.ByID(3539993858, cardID);
 }
 
 /**
  * Card is everything about one card.
  */
 export function Card(cardID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(1660277701, cardID);
+    return $Call.ByID(2526938820, cardID);
 }
 
 /**
  * CheckAgent asks a registered agent what it is and what it can do.
  */
 export function CheckAgent(name: string): $CancellablePromise<acp$0.AgentCheck> {
-    return $Call.ByID(971528406, name);
+    return $Call.ByID(1345443235, name);
 }
 
 /**
@@ -123,14 +123,14 @@ export function CheckAgent(name: string): $CancellablePromise<acp$0.AgentCheck> 
  * everything else rather than from a promise.
  */
 export function CheckForUpdate(): $CancellablePromise<void> {
-    return $Call.ByID(1344566209);
+    return $Call.ByID(1042027836);
 }
 
 /**
  * CloseNativeTerminal ends the view and its bridge; the terminal goes on.
  */
 export function CloseNativeTerminal(id: string): $CancellablePromise<void> {
-    return $Call.ByID(3447029870, id);
+    return $Call.ByID(523037993, id);
 }
 
 /**
@@ -138,7 +138,7 @@ export function CloseNativeTerminal(id: string): $CancellablePromise<void> {
  * in it, not just the window onto it — the ribbon has no windows to close.
  */
 export function CloseTerminal(id: string): $CancellablePromise<void> {
-    return $Call.ByID(575378589, id);
+    return $Call.ByID(3172357450, id);
 }
 
 /**
@@ -147,7 +147,7 @@ export function CloseTerminal(id: string): $CancellablePromise<void> {
  * recognise before anything is kept (docs/system.md §15.1).
  */
 export function ConnectHosting(projectID: string, provider: string, remote: string, server: string, token: string): $CancellablePromise<model$0.Project> {
-    return $Call.ByID(1835527855, projectID, provider, remote, server, token);
+    return $Call.ByID(419115994, projectID, provider, remote, server, token);
 }
 
 /**
@@ -157,7 +157,7 @@ export function ConnectHosting(projectID: string, provider: string, remote: stri
  * the card is named after the conversation.
  */
 export function ContinueSession(sessionID: string, sessionTitle: string, text: string, projectID: string, folderID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(562019854, sessionID, sessionTitle, text, projectID, folderID, workMode, agent, flowID);
+    return $Call.ByID(2674327385, sessionID, sessionTitle, text, projectID, folderID, workMode, agent, flowID);
 }
 
 /**
@@ -166,14 +166,14 @@ export function ContinueSession(sessionID: string, sessionTitle: string, text: s
  * empty.
  */
 export function ContinueStage(cardID: string, text: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(2366371620, cardID, text);
+    return $Call.ByID(2586896059, cardID, text);
 }
 
 /**
  * DeleteAgent removes an entry.
  */
 export function DeleteAgent(name: string): $CancellablePromise<void> {
-    return $Call.ByID(2879232337, name);
+    return $Call.ByID(2152635658, name);
 }
 
 /**
@@ -181,25 +181,25 @@ export function DeleteAgent(name: string): $CancellablePromise<void> {
  * and say so; nothing else happens to them.
  */
 export function DeleteFlow(flowID: string): $CancellablePromise<void> {
-    return $Call.ByID(2555422584, flowID);
+    return $Call.ByID(549481201, flowID);
 }
 
 export function DeletePastSession(agentName: string, projectID: string, folderID: string, sessionID: string): $CancellablePromise<void> {
-    return $Call.ByID(536171800, agentName, projectID, folderID, sessionID);
+    return $Call.ByID(945443411, agentName, projectID, folderID, sessionID);
 }
 
 /**
  * DeleteProject removes one, refusing while a card still names it.
  */
 export function DeleteProject(id: string): $CancellablePromise<void> {
-    return $Call.ByID(1914798965, id);
+    return $Call.ByID(3317184730, id);
 }
 
 /**
  * DeleteProxy removes an entry no agent uses.
  */
 export function DeleteProxy(id: string): $CancellablePromise<void> {
-    return $Call.ByID(2638986944, id);
+    return $Call.ByID(392296327, id);
 }
 
 /**
@@ -207,14 +207,14 @@ export function DeleteProxy(id: string): $CancellablePromise<void> {
  * the source is only where they came from.
  */
 export function DeleteSource(name: string): $CancellablePromise<void> {
-    return $Call.ByID(797133365, name);
+    return $Call.ByID(595803212, name);
 }
 
 /**
  * DeleteStageTemplate removes a template from the palette.
  */
 export function DeleteStageTemplate(id: string): $CancellablePromise<void> {
-    return $Call.ByID(440779808, id);
+    return $Call.ByID(2473615951, id);
 }
 
 /**
@@ -226,7 +226,7 @@ export function DeleteStageTemplate(id: string): $CancellablePromise<void> {
  * the question the person is deciding by.
  */
 export function Diff(cardID: string, ref: string): $CancellablePromise<gitdiff$0.Diff> {
-    return $Call.ByID(615019952, cardID, ref);
+    return $Call.ByID(810437781, cardID, ref);
 }
 
 /**
@@ -234,14 +234,14 @@ export function Diff(cardID: string, ref: string): $CancellablePromise<gitdiff$0
  * stops with it.
  */
 export function DisconnectHosting(projectID: string): $CancellablePromise<model$0.Project> {
-    return $Call.ByID(3360420581, projectID);
+    return $Call.ByID(3369836726, projectID);
 }
 
 /**
  * Done is the closed cards, newest first.
  */
 export function Done(): $CancellablePromise<model$0.Card[] | null> {
-    return $Call.ByID(669172479);
+    return $Call.ByID(2480727902);
 }
 
 /**
@@ -250,28 +250,28 @@ export function Done(): $CancellablePromise<model$0.Card[] | null> {
  * somebody asks about later.
  */
 export function DropCard(cardID: string): $CancellablePromise<void> {
-    return $Call.ByID(216846176, cardID);
+    return $Call.ByID(68328253, cardID);
 }
 
 /**
  * EditCard changes a card's own text.
  */
 export function EditCard(cardID: string, title: string, body: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(2223589865, cardID, title, body);
+    return $Call.ByID(4094704576, cardID, title, body);
 }
 
 /**
  * FlowOverview is one flow and where its cards are along it.
  */
 export function FlowOverview(flowID: string): $CancellablePromise<engine$0.FlowOverview> {
-    return $Call.ByID(283715336, flowID);
+    return $Call.ByID(3039448961, flowID);
 }
 
 /**
  * Flows is every flow, whole.
  */
 export function Flows(): $CancellablePromise<model$0.Flow[] | null> {
-    return $Call.ByID(2493457172);
+    return $Call.ByID(2939124803);
 }
 
 /**
@@ -279,7 +279,7 @@ export function Flows(): $CancellablePromise<model$0.Flow[] | null> {
  * on screen; "" gives it back to the page. The ribbon calls it as it moves.
  */
 export function FocusNativeTerminal(id: string): $CancellablePromise<void> {
-    return $Call.ByID(1303741490, id);
+    return $Call.ByID(1879820465, id);
 }
 
 /**
@@ -287,14 +287,14 @@ export function FocusNativeTerminal(id: string): $CancellablePromise<void> {
  * somebody who has seen enough of it, or wants to arrange the two by hand.
  */
 export function GiveBackWindow(screenID: string): $CancellablePromise<void> {
-    return $Call.ByID(3957263001, screenID);
+    return $Call.ByID(199570252, screenID);
 }
 
 /**
  * HideNativeTerminal takes the view off screen, keeping it.
  */
 export function HideNativeTerminal(id: string): $CancellablePromise<void> {
-    return $Call.ByID(2877064744, id);
+    return $Call.ByID(1436168965, id);
 }
 
 /**
@@ -302,21 +302,21 @@ export function HideNativeTerminal(id: string): $CancellablePromise<void> {
  * remotes, each with the server and repository its address suggests.
  */
 export function HostingRemotes(projectID: string): $CancellablePromise<hosting$0.RemoteOption[] | null> {
-    return $Call.ByID(628130670, projectID);
+    return $Call.ByID(1212455799, projectID);
 }
 
 /**
  * InWork is every card currently travelling a flow.
  */
 export function InWork(): $CancellablePromise<$models.CardSummary[] | null> {
-    return $Call.ByID(2027618605);
+    return $Call.ByID(352860436);
 }
 
 /**
  * Inbox is everything waiting to be taken into work, grouped by what brought it.
  */
 export function Inbox(): $CancellablePromise<model$0.InboxGroup[] | null> {
-    return $Call.ByID(64525769);
+    return $Call.ByID(3929245558);
 }
 
 /**
@@ -324,7 +324,7 @@ export function Inbox(): $CancellablePromise<model$0.InboxGroup[] | null> {
  * the latest release.
  */
 export function InstallAdapter(kind: string): $CancellablePromise<acp$0.InstallResult> {
-    return $Call.ByID(2112661601, kind);
+    return $Call.ByID(1971451340, kind);
 }
 
 /**
@@ -333,14 +333,14 @@ export function InstallAdapter(kind: string): $CancellablePromise<acp$0.InstallR
  * replaced until RestartToUpdate.
  */
 export function InstallUpdate(): $CancellablePromise<void> {
-    return $Call.ByID(1867268347);
+    return $Call.ByID(1963060124);
 }
 
 /**
  * Journal is the card's audit: who did what to it and when, oldest first.
  */
 export function Journal(cardID: string): $CancellablePromise<model$0.JournalEntry[] | null> {
-    return $Call.ByID(1991929330, cardID);
+    return $Call.ByID(3580596225, cardID);
 }
 
 /**
@@ -348,14 +348,14 @@ export function Journal(cardID: string): $CancellablePromise<model$0.JournalEntr
  * again.
  */
 export function KeepCardWorktree(cardID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(3848316773, cardID);
+    return $Call.ByID(3754352096, cardID);
 }
 
 /**
  * Language is the person's choice of language and what the system would say.
  */
 export function Language(): $CancellablePromise<$models.Language> {
-    return $Call.ByID(4071161989);
+    return $Call.ByID(919783348);
 }
 
 /**
@@ -363,7 +363,7 @@ export function Language(): $CancellablePromise<$models.Language> {
  * nothing yet.
  */
 export function LaunchAddress(screenID: string): $CancellablePromise<string> {
-    return $Call.ByID(3762337740, screenID);
+    return $Call.ByID(323843231, screenID);
 }
 
 /**
@@ -371,7 +371,7 @@ export function LaunchAddress(screenID: string): $CancellablePromise<string> {
  * prefer is the stage's own hint (the screen's ref): which kind to put first.
  */
 export function LaunchPlan(cardID: string, screenID: string, prefer: string): $CancellablePromise<$models.LaunchPlan> {
-    return $Call.ByID(2050705135, cardID, screenID, prefer);
+    return $Call.ByID(824932206, cardID, screenID, prefer);
 }
 
 /**
@@ -380,7 +380,7 @@ export function LaunchPlan(cardID: string, screenID: string, prefer: string): $C
  * that language is applied.
  */
 export function LocalizeSeeds(tag: string): $CancellablePromise<void> {
-    return $Call.ByID(3221472078, tag);
+    return $Call.ByID(114038941, tag);
 }
 
 /**
@@ -398,14 +398,14 @@ export function LocalizeSeeds(tag: string): $CancellablePromise<void> {
  * A pass clears them: remarks from an earlier round are not about this one.
  */
 export function MarkOutcome(cardID: string, value: string, remarks: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(4204052738, cardID, value, remarks);
+    return $Call.ByID(3860547021, cardID, value, remarks);
 }
 
 /**
  * MoveTo puts a card on a stage by hand. A person is always above the graph.
  */
 export function MoveTo(cardID: string, stageID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(3200309791, cardID, stageID);
+    return $Call.ByID(3674946190, cardID, stageID);
 }
 
 /**
@@ -413,14 +413,14 @@ export function MoveTo(cardID: string, stageID: string): $CancellablePromise<$mo
  * views over the page (internal/nativeterm), and its library is macOS's.
  */
 export function NativeTerminals(): $CancellablePromise<boolean> {
-    return $Call.ByID(2597766577);
+    return $Call.ByID(2560704130);
 }
 
 /**
  * OpenClient starts one of the installed HTTP clients.
  */
 export function OpenClient(name: string): $CancellablePromise<void> {
-    return $Call.ByID(645346320, name);
+    return $Call.ByID(3699702245, name);
 }
 
 /**
@@ -432,11 +432,11 @@ export function OpenClient(name: string): $CancellablePromise<void> {
  * takes — must not leave a second shell behind each time.
  */
 export function OpenTerminal(cardID: string, screenID: string, command: string): $CancellablePromise<$models.TerminalHandle> {
-    return $Call.ByID(3998944851, cardID, screenID, command);
+    return $Call.ByID(3710586646, cardID, screenID, command);
 }
 
 export function PastSessionPreview(agentName: string, sessionID: string): $CancellablePromise<string> {
-    return $Call.ByID(1951607699, agentName, sessionID);
+    return $Call.ByID(1048686238, agentName, sessionID);
 }
 
 /**
@@ -445,7 +445,7 @@ export function PastSessionPreview(agentName: string, sessionID: string): $Cance
  * with no project works in a fresh folder, where nobody has talked to anyone.
  */
 export function PastSessions(agentName: string, projectID: string, folderID: string): $CancellablePromise<acp$0.PastSession[] | null> {
-    return $Call.ByID(4283328862, agentName, projectID, folderID);
+    return $Call.ByID(1804879299, agentName, projectID, folderID);
 }
 
 /**
@@ -460,7 +460,7 @@ export function PastSessions(agentName: string, projectID: string, folderID: str
  * The dialog's title is the UI's, like every other word on the screen.
  */
 export function PickFolder(title: string, $from: string): $CancellablePromise<string> {
-    return $Call.ByID(78060566, title, $from);
+    return $Call.ByID(1139922819, title, $from);
 }
 
 /**
@@ -468,14 +468,14 @@ export function PickFolder(title: string, $from: string): $CancellablePromise<st
  * change.
  */
 export function PollSource(name: string): $CancellablePromise<model$0.InboxGroup[] | null> {
-    return $Call.ByID(3976612943, name);
+    return $Call.ByID(4240429106, name);
 }
 
 /**
  * Projects is the registry of places work happens.
  */
 export function Projects(): $CancellablePromise<model$0.Project[] | null> {
-    return $Call.ByID(3674097273);
+    return $Call.ByID(2506676796);
 }
 
 /**
@@ -488,7 +488,7 @@ export function Projects(): $CancellablePromise<model$0.Project[] | null> {
  * ribbon refusing to show a blank page.
  */
 export function ReadDoc(cardID: string, name: string): $CancellablePromise<string> {
-    return $Call.ByID(3010567507, cardID, name);
+    return $Call.ByID(1787421536, cardID, name);
 }
 
 /**
@@ -497,18 +497,18 @@ export function ReadDoc(cardID: string, name: string): $CancellablePromise<strin
  * uncommitted changes and removing it anyway.
  */
 export function RemoveCardWorktree(cardID: string, discard: boolean): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(860297316, cardID, discard);
+    return $Call.ByID(891923173, cardID, discard);
 }
 
 /**
  * RemoveFromFlow takes a card off its flow and back into the inbox.
  */
 export function RemoveFromFlow(cardID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(361858351, cardID);
+    return $Call.ByID(547524418, cardID);
 }
 
 export function RenamePastSession(agentName: string, projectID: string, folderID: string, sessionID: string, title: string): $CancellablePromise<string> {
-    return $Call.ByID(337737323, agentName, projectID, folderID, sessionID, title);
+    return $Call.ByID(1759550040, agentName, projectID, folderID, sessionID, title);
 }
 
 /**
@@ -516,7 +516,7 @@ export function RenamePastSession(agentName: string, projectID: string, folderID
  * in, telling the agent nothing: the person looks, then decides.
  */
 export function ReopenStage(cardID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(4096095204, cardID);
+    return $Call.ByID(2566297139, cardID);
 }
 
 /**
@@ -525,7 +525,7 @@ export function ReopenStage(cardID: string): $CancellablePromise<$models.CardVie
  * otherwise stay over the new one.
  */
 export function ResetNativeTerminals(): $CancellablePromise<void> {
-    return $Call.ByID(4086894574);
+    return $Call.ByID(2445542999);
 }
 
 /**
@@ -533,7 +533,7 @@ export function ResetNativeTerminals(): $CancellablePromise<void> {
  * handle): what the person asked for once they have seen how it ended.
  */
 export function RestartTerminal(cardID: string, screenID: string, command: string): $CancellablePromise<$models.TerminalHandle> {
-    return $Call.ByID(4148187250, cardID, screenID, command);
+    return $Call.ByID(3533177981, cardID, screenID, command);
 }
 
 /**
@@ -542,7 +542,7 @@ export function RestartTerminal(cardID: string, screenID: string, command: strin
  * not, and is closed the way quitting closes it.
  */
 export function RestartToUpdate(): $CancellablePromise<void> {
-    return $Call.ByID(2248632910);
+    return $Call.ByID(2312712569);
 }
 
 /**
@@ -550,14 +550,14 @@ export function RestartToUpdate(): $CancellablePromise<void> {
  * the conversation it had there.
  */
 export function ReturnToFlow(cardID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(2475077336, cardID);
+    return $Call.ByID(1271918505, cardID);
 }
 
 /**
  * Ribbon is one card's strip of screens.
  */
 export function Ribbon(cardID: string): $CancellablePromise<engine$0.RibbonView> {
-    return $Call.ByID(898382539, cardID);
+    return $Call.ByID(1474180762, cardID);
 }
 
 /**
@@ -565,14 +565,14 @@ export function Ribbon(cardID: string): $CancellablePromise<engine$0.RibbonView>
  * no other kind (docs/system.md §12.1).
  */
 export function Ribbons(): $CancellablePromise<engine$0.RibbonView[] | null> {
-    return $Call.ByID(62943144);
+    return $Call.ByID(1003516107);
 }
 
 /**
  * SaveAgent adds or replaces a registry entry.
  */
 export function SaveAgent(a: model$0.Agent): $CancellablePromise<model$0.Agent> {
-    return $Call.ByID(1761974331, a);
+    return $Call.ByID(1112921792, a);
 }
 
 /**
@@ -580,7 +580,7 @@ export function SaveAgent(a: model$0.Agent): $CancellablePromise<model$0.Agent> 
  * is taken, and a refusal says which part is wrong.
  */
 export function SaveFlow(flow: model$0.Flow): $CancellablePromise<model$0.Flow> {
-    return $Call.ByID(2157757914, flow);
+    return $Call.ByID(1026661903, flow);
 }
 
 /**
@@ -591,7 +591,7 @@ export function SaveFlow(flow: model$0.Flow): $CancellablePromise<model$0.Flow> 
  * with a typo in it is refused while they can still see what they typed.
  */
 export function SaveProject(p: model$0.Project): $CancellablePromise<model$0.Project> {
-    return $Call.ByID(4242958159, p);
+    return $Call.ByID(3542593872, p);
 }
 
 /**
@@ -600,14 +600,14 @@ export function SaveProject(p: model$0.Project): $CancellablePromise<model$0.Pro
  * unless the username changed, which asks for a new one.
  */
 export function SaveProxy(p: model$0.Proxy): $CancellablePromise<model$0.Proxy> {
-    return $Call.ByID(2185562538, p);
+    return $Call.ByID(3222493389, p);
 }
 
 /**
  * SaveSource adds or replaces a source.
  */
 export function SaveSource(src: model$0.Source): $CancellablePromise<model$0.Source> {
-    return $Call.ByID(890995235, src);
+    return $Call.ByID(1761729254, src);
 }
 
 /**
@@ -616,14 +616,14 @@ export function SaveSource(src: model$0.Source): $CancellablePromise<model$0.Sou
  * setting it goes on following.
  */
 export function SaveStageTemplate(t: model$0.StageTemplate): $CancellablePromise<model$0.StageTemplate> {
-    return $Call.ByID(406235778, t);
+    return $Call.ByID(2104504381, t);
 }
 
 /**
  * SendRequest makes one request to a started service on the screen's behalf.
  */
 export function SendRequest(r: launch$0.Request): $CancellablePromise<launch$0.Response> {
-    return $Call.ByID(2625788658, r);
+    return $Call.ByID(82949877, r);
 }
 
 /**
@@ -636,7 +636,7 @@ export function SendRequest(r: launch$0.Request): $CancellablePromise<launch$0.R
  * ribbon shows are one record.
  */
 export function SessionEvents(sessionID: string, sinceSeq: number): $CancellablePromise<store$0.SessionEvent[] | null> {
-    return $Call.ByID(1587394828, sessionID, sinceSeq);
+    return $Call.ByID(2638961103, sessionID, sinceSeq);
 }
 
 /**
@@ -644,7 +644,7 @@ export function SessionEvents(sessionID: string, sinceSeq: number): $Cancellable
  * work it"; anything else means a person took it, and then no agent starts.
  */
 export function SetAssignee(cardID: string, who: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(3654695766, cardID, who);
+    return $Call.ByID(2045430377, cardID, who);
 }
 
 /**
@@ -653,7 +653,7 @@ export function SetAssignee(cardID: string, who: string): $CancellablePromise<$m
  * loaded — or with no window at all — is still briefed in it.
  */
 export function SetBriefLanguage(name: string): $CancellablePromise<void> {
-    return $Call.ByID(139583429, name);
+    return $Call.ByID(2579138220, name);
 }
 
 /**
@@ -663,7 +663,7 @@ export function SetBriefLanguage(name: string): $CancellablePromise<void> {
  * graph's.
  */
 export function SetCardProject(cardID: string, projectID: string, folderID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(1424901168, cardID, projectID, folderID);
+    return $Call.ByID(4017142801, cardID, projectID, folderID);
 }
 
 /**
@@ -674,7 +674,7 @@ export function SetCardProject(cardID: string, projectID: string, folderID: stri
  * there with nothing pointing at it.
  */
 export function SetCardWorkMode(cardID: string, mode: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(4227310037, cardID, mode);
+    return $Call.ByID(2884880646, cardID, mode);
 }
 
 /**
@@ -682,7 +682,7 @@ export function SetCardWorkMode(cardID: string, mode: string): $CancellablePromi
  * tags there are words for is the UI's to know, so any tag is kept as given.
  */
 export function SetLanguage(chosen: string): $CancellablePromise<void> {
-    return $Call.ByID(3814571559, chosen);
+    return $Call.ByID(2692567916, chosen);
 }
 
 /**
@@ -691,7 +691,7 @@ export function SetLanguage(chosen: string): $CancellablePromise<void> {
  * starts and whenever the language changes; headless, there is no menu.
  */
 export function SetMenuWords(words: { [_ in string]?: string } | null): $CancellablePromise<void> {
-    return $Call.ByID(1495517587, words);
+    return $Call.ByID(2771787318, words);
 }
 
 /**
@@ -700,7 +700,7 @@ export function SetMenuWords(words: { [_ in string]?: string } | null): $Cancell
  * starts and whenever the language changes.
  */
 export function SetNotificationWords(words: $models.NotificationWords): $CancellablePromise<void> {
-    return $Call.ByID(2706622007, words);
+    return $Call.ByID(2705103978, words);
 }
 
 /**
@@ -710,7 +710,7 @@ export function SetNotificationWords(words: $models.NotificationWords): $Cancell
  * simply not addressed to it.
  */
 export function SetProp(cardID: string, name: string, value: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(3244103020, cardID, name, value);
+    return $Call.ByID(1248754751, cardID, name, value);
 }
 
 /**
@@ -718,7 +718,7 @@ export function SetProp(cardID: string, name: string, value: string): $Cancellab
  * project come into the inbox (docs/system.md §15.4).
  */
 export function SetReviewInbox(projectID: string, on: boolean): $CancellablePromise<model$0.Project> {
-    return $Call.ByID(1877603571, projectID, on);
+    return $Call.ByID(3750861158, projectID, on);
 }
 
 /**
@@ -726,7 +726,7 @@ export function SetReviewInbox(projectID: string, on: boolean): $CancellableProm
  * again with it. An empty token forgets the one kept.
  */
 export function SetSourceToken(name: string, token: string): $CancellablePromise<void> {
-    return $Call.ByID(1772905961, name, token);
+    return $Call.ByID(4004877184, name, token);
 }
 
 /**
@@ -734,7 +734,7 @@ export function SetSourceToken(name: string, token: string): $CancellablePromise
  * next tick, not at the next launch.
  */
 export function SetUpdatesEnabled(enabled: boolean): $CancellablePromise<$models.UpdateState> {
-    return $Call.ByID(2468448178, enabled);
+    return $Call.ByID(1896837853, enabled);
 }
 
 /**
@@ -746,7 +746,7 @@ export function SetUpdatesEnabled(enabled: boolean): $CancellablePromise<$models
  * above the page, and the page shows through them.
  */
 export function ShowNativeTerminal(id: string, url: string, x: number, y: number, w: number, h: number, cx: number, cy: number, cw: number, ch: number, dpr: number, fontSize: number, holes: number[] | null): $CancellablePromise<void> {
-    return $Call.ByID(3350580757, id, url, x, y, w, h, cx, cy, cw, ch, dpr, fontSize, holes);
+    return $Call.ByID(1095686592, id, url, x, y, w, h, cx, cy, cw, ch, dpr, fontSize, holes);
 }
 
 /**
@@ -754,7 +754,7 @@ export function ShowNativeTerminal(id: string, url: string, x: number, y: number
  * restarts, or the button would mean «until restart».
  */
 export function SkipUpdate(): $CancellablePromise<void> {
-    return $Call.ByID(1510861001);
+    return $Call.ByID(4179234748);
 }
 
 /**
@@ -763,14 +763,14 @@ export function SkipUpdate(): $CancellablePromise<void> {
  * stands, and the token is the one typed in it, if any.
  */
 export function SourceFieldOptions(src: model$0.Source, token: string, field: string): $CancellablePromise<sources$0.Option[] | null> {
-    return $Call.ByID(4272691212, src, token, field);
+    return $Call.ByID(1401902053, src, token, field);
 }
 
 /**
  * SourceHasToken says whether a token is kept for a source — never the token.
  */
 export function SourceHasToken(name: string): $CancellablePromise<boolean> {
-    return $Call.ByID(1981689811, name);
+    return $Call.ByID(213939686, name);
 }
 
 /**
@@ -778,28 +778,28 @@ export function SourceHasToken(name: string): $CancellablePromise<boolean> {
  * the application reads itself, in one list.
  */
 export function SourcePlugins(): $CancellablePromise<$models.SourcePlugin[] | null> {
-    return $Call.ByID(3228240310);
+    return $Call.ByID(713800793);
 }
 
 /**
  * SourceStatuses is what every plugin source is doing now.
  */
 export function SourceStatuses(): $CancellablePromise<sources$0.Status[] | null> {
-    return $Call.ByID(1795282636);
+    return $Call.ByID(158243153);
 }
 
 /**
  * Sources is the registry with every source's rules.
  */
 export function Sources(): $CancellablePromise<model$0.Source[] | null> {
-    return $Call.ByID(3797444719);
+    return $Call.ByID(3929707192);
 }
 
 /**
  * StageTemplates is the flow editor's palette (model.StageTemplate).
  */
 export function StageTemplates(): $CancellablePromise<model$0.StageTemplate[] | null> {
-    return $Call.ByID(1356522090);
+    return $Call.ByID(2056121835);
 }
 
 /**
@@ -807,7 +807,7 @@ export function StageTemplates(): $CancellablePromise<model$0.StageTemplate[] | 
  * running: a changed command is a restart, not a second process.
  */
 export function StartLaunch(cardID: string, screenID: string, p: launch$0.Profile): $CancellablePromise<$models.LaunchRun> {
-    return $Call.ByID(214137578, cardID, screenID, p);
+    return $Call.ByID(4131348001, cardID, screenID, p);
 }
 
 /**
@@ -824,21 +824,21 @@ export function StartLaunch(cardID: string, screenID: string, p: launch$0.Profil
  * person's language.
  */
 export function StartTask(text: string, untitled: string, projectID: string, folderID: string, workMode: string, agent: string, flowID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(289388112, text, untitled, projectID, folderID, workMode, agent, flowID);
+    return $Call.ByID(1336370763, text, untitled, projectID, folderID, workMode, agent, flowID);
 }
 
 /**
  * StopBackgroundTerminals ends what BackgroundTerminals lists.
  */
 export function StopBackgroundTerminals(): $CancellablePromise<void> {
-    return $Call.ByID(289135256);
+    return $Call.ByID(1330101023);
 }
 
 /**
  * StopLaunch ends a screen's process and gives the screen back.
  */
 export function StopLaunch(screenID: string): $CancellablePromise<void> {
-    return $Call.ByID(3418810420, screenID);
+    return $Call.ByID(861377593, screenID);
 }
 
 /**
@@ -846,7 +846,7 @@ export function StopLaunch(screenID: string): $CancellablePromise<void> {
  * starts moving, and it is a person's decision.
  */
 export function TakeIntoWork(cardID: string, flowID: string): $CancellablePromise<$models.CardView> {
-    return $Call.ByID(1683275391, cardID, flowID);
+    return $Call.ByID(1087130726, cardID, flowID);
 }
 
 /**
@@ -854,7 +854,7 @@ export function TakeIntoWork(cardID: string, flowID: string): $CancellablePromis
  * in: where to send a person who has no token yet.
  */
 export function TokenURL(provider: string, server: string): $CancellablePromise<string> {
-    return $Call.ByID(3538060801, provider, server);
+    return $Call.ByID(3494379860, provider, server);
 }
 
 /**
@@ -863,19 +863,19 @@ export function TokenURL(provider: string, server: string): $CancellablePromise<
  * nothing else, rather than an empty panel.
  */
 export function UpdateState(): $CancellablePromise<$models.UpdateState> {
-    return $Call.ByID(3371956631);
+    return $Call.ByID(3556352240);
 }
 
 /**
  * Vocabulary returns those sets.
  */
 export function Vocabulary(): $CancellablePromise<$models.Vocabulary> {
-    return $Call.ByID(3928170955);
+    return $Call.ByID(4061039286);
 }
 
 /**
  * WriteDoc saves a notes screen's file, creating the folders it needs.
  */
 export function WriteDoc(cardID: string, name: string, text: string): $CancellablePromise<void> {
-    return $Call.ByID(130752024, cardID, name, text);
+    return $Call.ByID(2554012281, cardID, name, text);
 }
