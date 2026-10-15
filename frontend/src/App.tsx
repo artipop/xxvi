@@ -1,8 +1,8 @@
 import { lazy, onSettled, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
-import { BackgroundNotice } from "./views/background";
+import { Notes } from "./views/notes";
 import { followSide, resetNative } from "./views/native";
-import { error, loadAll, loadLanguage, setError, subscribe } from "./state";
+import { loadAll, loadLanguage, subscribe } from "./state";
 import InboxView from "./views/inbox";
 import AgentsView from "./views/agents";
 import SourcesView from "./views/sources";
@@ -40,16 +40,12 @@ export default function App(): JSX.Element {
         when={!whole()}
         fallback={
           <div class="full">
-            <div class="floating-notes">
-              <Show when={error()}>
-                <div class="error">
-                  <pre>{error()}</pre>
-                  <button class="btn quiet tiny" onClick={() => setError("")}>×</button>
-                </div>
-              </Show>
-              <BackgroundNotice />
-            </div>
-            <Show when={tab() === "ribbon"} fallback={<FlowsView />}>
+            {/* The ribbon gives the notes a line of their own: floating, they
+                would go under a terminal Ghostty draws over the page. */}
+            <Show when={tab() === "ribbon"} fallback={<>
+              <div class="floating-notes"><Notes /></div>
+              <FlowsView />
+            </>}>
               <RibbonView />
             </Show>
           </div>
@@ -57,13 +53,7 @@ export default function App(): JSX.Element {
       >
         <main class={`main ${cardBeside() ? "with-panel" : ""}`}>
           <div>
-            <Show when={error()}>
-              <div class="error">
-                <pre>{error()}</pre>
-                <button class="btn quiet tiny" onClick={() => setError("")}>×</button>
-              </div>
-            </Show>
-            <BackgroundNotice />
+            <Notes />
 
             <Show when={tab() === "inbox"}><InboxView /></Show>
             <Show when={tab() === "attention"}><AttentionView /></Show>

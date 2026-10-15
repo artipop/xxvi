@@ -12,6 +12,7 @@ import {
 } from "../state";
 import { QuestionForm } from "./attention";
 import { JournalOf } from "./journal";
+import { Notes } from "./notes";
 import { Compose } from "./compose";
 import Markdown from "./markdown";
 import { entryText, label, propName, questionText, say, t } from "../i18n";
@@ -504,6 +505,9 @@ export default function Ribbon(): JSX.Element {
         <Workspaces />
       </header>
 
+      <div class="ribbon-notes"><Notes /></div>
+
+      <div class="ribbon-body">
         <div class="stack" ref={stack}>
           <For each={inWorkspace()}>
             {(view) => (
@@ -586,6 +590,7 @@ export default function Ribbon(): JSX.Element {
             )}
           </For>
         </Show>
+      </div>
 
         {/* Where you are in the stack, and which other jobs moved while you
             were not looking. One job needs no map of itself. */}
