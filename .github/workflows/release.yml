@@ -160,9 +160,9 @@ jobs:
         if: matrix.target.platform == 'darwin'
         run: |
           wails3 task darwin:package:dmg
-          ditto -c -k --keepParent "bin/gandvik.app" \
+          ditto -c -k --keepParent "bin/Gandvík.app" \
             "dist/update/gandvik-${{ steps.version.outputs.version }}-darwin-${{ matrix.target.arch }}.zip"
-          mv "bin/gandvik.dmg" \
+          mv "bin/Gandvík.dmg" \
             "dist/install/gandvik-${{ steps.version.outputs.version }}-darwin-${{ matrix.target.arch }}.dmg"
 
       # ── Windows ──────────────────────────────────────────────────────────

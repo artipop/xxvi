@@ -204,7 +204,7 @@ xterm.js в странице, и в настройках Mac его можно �
 ```json
 {
   "mcpServers": {
-    "gandvik": { "command": "/Applications/gandvik.app/Contents/MacOS/gandvik", "args": ["mcp"] }
+    "gandvik": { "command": "/Applications/Gandvík.app/Contents/MacOS/gandvik", "args": ["mcp"] }
   }
 }
 ```
