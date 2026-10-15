@@ -134,6 +134,19 @@ function seenOf(el: HTMLElement, r: { left: number; top: number; width: number; 
   return c;
 }
 
+// What the page opens over its panes. Ghostty's view is above the whole page
+// and nothing in the page can lie over it, so a terminal one of these crosses
+// is taken off screen while it is open, rather than drawn over it.
+const COVERS = ".ribbon-journal";
+
+function covered(c: { left: number; top: number; right: number; bottom: number }): boolean {
+  for (const el of document.querySelectorAll<HTMLElement>(COVERS)) {
+    const b = el.getBoundingClientRect();
+    if (b.width > 0 && b.left < c.right && b.right > c.left && b.top < c.bottom && b.bottom > c.top) return true;
+  }
+  return false;
+}
+
 // boxOf is the rounded box that clips el's content: the nearest ancestor
 // with rounded corners, inside its border, and the radius there. The page's
 // own content is clipped to it by CSS; a native view lies over the page and is
@@ -167,7 +180,7 @@ function followNatively(handle: { id: string; url: string }, host: () => HTMLEle
       const pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
       const r = { left: b.left + pl, top: b.top + pt, width: b.width - pl - pr, height: b.height - pt - pb };
       const c = seenOf(el, r);
-      const visible = r.width > 8 && r.height > 8 && c.right - c.left > 8 && c.bottom - c.top > 8;
+      const visible = r.width > 8 && r.height > 8 && c.right - c.left > 8 && c.bottom - c.top > 8 && !covered(c);
       const box = boxOf(el);
       const dpr = window.devicePixelRatio || 1;
       const key = visible
