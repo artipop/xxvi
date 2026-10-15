@@ -86,10 +86,6 @@ export const en: Dict = {
   "settings.themeMode.system": "System",
   "settings.themeMode.light": "Light",
   "settings.themeMode.dark": "Dark",
-  "settings.terminal": "Terminal",
-  "settings.terminalNative": "Ghostty",
-  "settings.terminalWeb": "xterm.js in the page",
-  "settings.terminalHint": "xterm.js draws terminals on Windows and Linux; it is here to see how that looks. Applies to new terminals.",
   "lang.system": "As in the system — {name}",
 
   // ---- notifications (worded here, shown by the system) ----

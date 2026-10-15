@@ -3,7 +3,7 @@ import type { JSX } from "@solidjs/web";
 import { report } from "../state";
 import { errorText, t } from "../i18n";
 import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
-import { nativeWanted } from "./native";
+import { nativeAvailable } from "./native";
 import { drawInPage } from "./xterm";
 
 // A terminal screen: a real pty on the other end of a socket, drawn by Ghostty —
@@ -52,7 +52,7 @@ export default function Terminal(props: {
     const start = async () => {
       const handle = await props.open();
       if (disposed) return;
-      if (!(await nativeWanted())) {
+      if (!(await nativeAvailable())) {
         if (disposed || !host) return;
         const stopPage = await drawInPage(handle.url, host, FONT_SIZE, props.ended ?? t("terminal.shellEnded"), setStatus);
         if (disposed) {

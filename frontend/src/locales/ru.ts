@@ -96,10 +96,6 @@ export const ru: Dict = {
   "settings.themeMode.system": "Как в системе",
   "settings.themeMode.light": "Светлое",
   "settings.themeMode.dark": "Тёмное",
-  "settings.terminal": "Терминал",
-  "settings.terminalNative": "Ghostty",
-  "settings.terminalWeb": "xterm.js в странице",
-  "settings.terminalHint": "xterm.js рисует терминал на Windows и Linux, здесь он — посмотреть, как там. Действует на новые терминалы.",
   "lang.system": "Как в системе — {name}",
 
   // ---- notifications ----
