@@ -125,7 +125,7 @@ func Dial(ctx context.Context, spec Spec) (*Client, error) {
 
 	name := spec.ClientName
 	if name == "" {
-		name = "Gandvík"
+		name = "Gandvik"
 	}
 	var result struct {
 		ProtocolVersion string     `json:"protocolVersion"`

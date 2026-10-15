@@ -119,7 +119,7 @@ func openMCP(ctx context.Context, src model.Source, manifest Manifest, cred plug
 		Command:    argv,
 		Dir:        manifest.Dir,
 		Env:        envList(env),
-		ClientName: "Gandvík",
+		ClientName: "Gandvik",
 	})
 	if err != nil {
 		return nil, err

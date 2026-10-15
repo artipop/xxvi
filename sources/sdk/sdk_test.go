@@ -38,7 +38,7 @@ func drive(t *testing.T, source Source, requests ...string) []map[string]any {
 
 const initRequest = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":` +
 	`{"protocolVersion":1,"source":{"name":"проверка","config":{"label":"INBOX"}},` +
-	`"credentials":{"accessToken":"t0k"},"host":{"name":"Gandvík"}}}`
+	`"credentials":{"accessToken":"t0k"},"host":{"name":"Gandvik"}}}`
 
 func TestAPluginAnswersTheHandshakeWithWhatItCanDo(t *testing.T) {
 	got := drive(t, Source{Capabilities: protocol.Capabilities{Poll: true, Cursor: true}}, initRequest)

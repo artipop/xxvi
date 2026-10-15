@@ -100,7 +100,7 @@ func dialPlugin(ctx context.Context, src model.Source, manifest Manifest, cred p
 		Env:         envList(env),
 		Source:      plugin.SourceInfo{Name: src.Name, Config: src.Config},
 		Credentials: cred,
-		Host:        plugin.HostInfo{Name: "Gandvík"},
+		Host:        plugin.HostInfo{Name: "Gandvik"},
 	}, handler)
 }
 

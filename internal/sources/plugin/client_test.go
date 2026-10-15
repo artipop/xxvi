@@ -166,7 +166,7 @@ func dialTestPlugin(t *testing.T, mode string, handler Handler) (*Client, error)
 		Command: []string{os.Args[0]},
 		Env:     []string{pluginModeEnv + "=" + mode},
 		Source:  SourceInfo{Name: "телефон", Config: map[string]string{"label": "INBOX"}},
-		Host:    HostInfo{Name: "Gandvík"},
+		Host:    HostInfo{Name: "Gandvik"},
 	}, handler)
 }
 
