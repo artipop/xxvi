@@ -144,8 +144,11 @@ tasks:
     summary: Creates a configurable `.dmg` from the `.app` bundle
     platforms: [darwin]
     cmds:
+      # The name goes in decomposed (NFD): the DMG is HFS+, which stores «í» as
+      # i + U+0301, and Finder looks the icon positions in .DS_Store up by that
+      # spelling. Given NFC, the app icon loses its place in the window.
       - >-
-        wails3 tool package --format dmg --name "{{.PRODUCT_NAME}}" --out "{{.BIN_DIR}}"
+        wails3 tool package --format dmg --name "$(printf '%s' '{{.PRODUCT_NAME}}' | iconv -f UTF-8 -t UTF-8-MAC)" --out "{{.BIN_DIR}}"
         --background "{{.DMG_BACKGROUND}}"
         --volume-icon "{{.DMG_VOLUME_ICON}}"
         --file-icon "{{.DMG_FILE_ICON}}"
