@@ -212,6 +212,13 @@ tasks:
       - 'echo "Skipping codesign (not available on {{OS}}). Sign the .app on macOS before distribution."'
 
   run:
+    # The dev bundle takes whatever binary was built last, and a release one
+    # in it opens the released application's data folder and holder: two
+    # applications on one database, each thinking it is alone.
+    preconditions:
+      # Not `! … | grep -q`: under task's shell that pipeline fails either way.
+      - sh: 'test -z "$(go version -m "{{.BIN_DIR}}/{{.APP_NAME}}" | grep -e "-tags=.*production")"'
+        msg: "{{.BIN_DIR}}/{{.APP_NAME}} is a release build and would open the released data folder. Build it with DEV=true first: wails3 build DEV=true"
     cmds:
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/MacOS"
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/Resources"
