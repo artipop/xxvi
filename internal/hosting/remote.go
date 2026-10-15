@@ -113,7 +113,7 @@ func TokenURL(provider, server string) string {
 		if server == "" {
 			return ""
 		}
-		return server + "/-/user_settings/personal_access_tokens?name=Gandv%C3%ADk&scopes=api"
+		return server + "/-/user_settings/personal_access_tokens?name=Gandvik&scopes=api"
 	}
 	return ""
 }
