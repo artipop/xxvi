@@ -348,50 +348,6 @@ static BOOL isControl(NSString *t) {
 }
 @end
 
-// The view's clip, with holes where the page has something over the pane — a
-// menu, the journal. The view is above the whole page, and no z-index in it
-// can climb over a native view; a hole shows the page underneath, which draws
-// what lies over the pane itself. A layer mask only hides: clicks in a hole
-// would still land on the terminal, so hit testing skips the holes too and
-// AppKit goes on to the web view.
-@interface NTClip : NSView
-@property(nonatomic, copy) NSArray<NSValue *> *holes;
-@end
-
-@implementation NTClip
-- (NSView *)hitTest:(NSPoint)p {
-  NSPoint q = [self convertPoint:p fromView:self.superview];
-  for (NSValue *h in self.holes)
-    if (NSPointInRect(q, h.rectValue)) return nil;
-  return [super hitTest:p];
-}
-
-// cut makes rects, each with its corner radius in radii, holes in the clip.
-- (void)cut:(NSArray<NSValue *> *)rects radii:(NSArray<NSNumber *> *)radii {
-  self.holes = rects;
-  [CATransaction begin];
-  [CATransaction setDisableActions:YES];
-  if (rects.count == 0) {
-    self.layer.mask = nil;
-  } else {
-    CGMutablePathRef path = CGPathCreateMutable();
-    CGPathAddRect(path, NULL, self.bounds);
-    for (NSUInteger i = 0; i < rects.count; i++) {
-      NSRect r = rects[i].rectValue;
-      CGFloat rad = MIN(radii[i].doubleValue, MIN(r.size.width, r.size.height) / 2);
-      CGPathAddRoundedRect(path, NULL, r, rad, rad);
-    }
-    CAShapeLayer *mask = [CAShapeLayer layer];
-    mask.frame = self.bounds;
-    mask.path = path;
-    mask.fillRule = kCAFillRuleEvenOdd;
-    CGPathRelease(path);
-    self.layer.mask = mask;
-  }
-  [CATransaction commit];
-}
-@end
-
 // ---- the app's callbacks ----
 
 static void wakeup(void *ud) {
@@ -533,13 +489,9 @@ static bool ensureApp(void) {
 __attribute__((visibility("default")))
 void nt_show_in(void *nswindow, const char *cid, const char *ccommand, double x, double y, double w, double h,
                 double cx, double cy, double cw, double ch, double dpr, double font,
-                double bx, double by, double bw, double bh, double radius,
-                const double *holes, int nholes) {
+                double bx, double by, double bw, double bh, double radius) {
   NSString *ident = [NSString stringWithUTF8String:cid];
   NSString *command = [NSString stringWithUTF8String:ccommand];
-  // Copied now: the caller frees them as this returns, before the main
-  // thread gets to them.
-  NSData *cut = [NSData dataWithBytes:holes length:sizeof(double) * 5 * (nholes > 0 ? nholes : 0)];
   onMain(^{
     if (!ensureApp()) return;
     NSWindow *win = (__bridge NSWindow *)nswindow;
@@ -571,7 +523,7 @@ void nt_show_in(void *nswindow, const char *cid, const char *ccommand, double x,
       // scrolled out of the ribbon would otherwise be drawn whole, over
       // whatever lies beside the ribbon. The clip does what the page's
       // overflow does for its own panes.
-      NTClip *clip = [[NTClip alloc] initWithFrame:clipFrame];
+      NSView *clip = [[NSView alloc] initWithFrame:clipFrame];
       clip.wantsLayer = YES;
       clip.layer.masksToBounds = YES;
       [clip addSubview:v];
@@ -620,17 +572,6 @@ void nt_show_in(void *nswindow, const char *cid, const char *ccommand, double x,
       v.layer.mask = nil;
     }
     [CATransaction commit];
-    // Each hole is x, y, w, h and a corner radius, in the page's terms like
-    // the rest, and goes into the clip's own.
-    const double *hs = cut.bytes;
-    NSMutableArray<NSValue *> *rects = [NSMutableArray new];
-    NSMutableArray<NSNumber *> *radii = [NSMutableArray new];
-    for (NSUInteger i = 0; i < cut.length / (sizeof(double) * 5); i++, hs += 5) {
-      NSRect hole = NSOffsetRect(inContent(hs[0], hs[1], hs[2], hs[3]), -clipFrame.origin.x, -clipFrame.origin.y);
-      [rects addObject:[NSValue valueWithRect:hole]];
-      [radii addObject:@(hs[4] * k)];
-    }
-    [(NTClip *)v.superview cut:rects radii:radii];
     if (appears && [wanted isEqualToString:ident]) [win makeFirstResponder:v];
   });
 }

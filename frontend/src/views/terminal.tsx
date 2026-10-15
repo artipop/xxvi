@@ -134,27 +134,6 @@ function seenOf(el: HTMLElement, r: { left: number; top: number; width: number; 
   return c;
 }
 
-// What the page opens over its panes: menus, the journal, notes, the
-// sidebar's pills. The native view is above the whole page, and no z-index
-// gets anything over it; these are cut out of it instead, and the page shows
-// through.
-const OVER_PANES = ".menu, .ribbon-journal, .floating-notes > *, .tip";
-
-// holesIn lists, five numbers each — x, y, w, h and a corner radius — what of
-// OVER_PANES is on screen and crosses the seen part of a pane.
-function holesIn(c: { left: number; top: number; right: number; bottom: number }): number[] {
-  const out: number[] = [];
-  for (const el of document.querySelectorAll<HTMLElement>(OVER_PANES)) {
-    const b = el.getBoundingClientRect();
-    if (b.width === 0 || b.right <= c.left || b.left >= c.right || b.bottom <= c.top || b.top >= c.bottom) continue;
-    const cs = getComputedStyle(el);
-    // A pill waiting for its hover is there at no opacity.
-    if (cs.visibility === "hidden" || parseFloat(cs.opacity) < 0.05) continue;
-    out.push(b.left, b.top, b.width, b.height, parseFloat(cs.borderTopLeftRadius) || 0);
-  }
-  return out;
-}
-
 // boxOf is the rounded box that clips el's content: the nearest ancestor
 // with rounded corners, inside its border, and the radius there. The page's
 // own content is clipped to it by CSS; a native view lies over the page and is
@@ -189,16 +168,15 @@ function followNatively(handle: { id: string; url: string }, host: () => HTMLEle
       const r = { left: b.left + pl, top: b.top + pt, width: b.width - pl - pr, height: b.height - pt - pb };
       const c = seenOf(el, r);
       const visible = r.width > 8 && r.height > 8 && c.right - c.left > 8 && c.bottom - c.top > 8;
-      const holes = visible ? holesIn(c) : [];
       const box = boxOf(el);
       const dpr = window.devicePixelRatio || 1;
       const key = visible
-        ? [r.left, r.top, r.width, r.height, c.left, c.top, c.right, c.bottom, box.x, box.y, box.w, box.h, box.radius, ...holes].map(Math.round).join(",") + "," + dpr
+        ? [r.left, r.top, r.width, r.height, c.left, c.top, c.right, c.bottom, box.x, box.y, box.w, box.h, box.radius].map(Math.round).join(",") + "," + dpr
         : "hidden";
       if (key !== last) {
         last = key;
         if (visible) void API.ShowNativeTerminal(handle.id, handle.url, r.left, r.top, r.width, r.height,
-          c.left, c.top, c.right - c.left, c.bottom - c.top, dpr, FONT_SIZE, box.x, box.y, box.w, box.h, box.radius, holes);
+          c.left, c.top, c.right - c.left, c.bottom - c.top, dpr, FONT_SIZE, box.x, box.y, box.w, box.h, box.radius);
         else void API.HideNativeTerminal(handle.id);
       }
     }

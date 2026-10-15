@@ -12,7 +12,7 @@ package nativeterm
 // libghostty-vt the holder uses share hundreds of symbols, and only separate
 // images keep them apart. Opening it late also keeps it out of every build and
 // test that does not show a native terminal.
-typedef void (*nt_show_fn)(void *, const char *, const char *, double, double, double, double, double, double, double, double, double, double, double, double, double, double, double, const double *, int);
+typedef void (*nt_show_fn)(void *, const char *, const char *, double, double, double, double, double, double, double, double, double, double, double, double, double, double, double);
 typedef void (*nt_id_fn)(const char *);
 typedef void (*nt_void_fn)(void);
 typedef void (*nt_int_fn)(int);
@@ -33,7 +33,7 @@ static int nt_load(const char *path) {
 	p_scheme = (nt_int_fn)dlsym(h, "nt_set_scheme");
 	return p_show && p_hide && p_close && p_close_all && p_focus && p_init && p_scheme;
 }
-static void nt_call_show(void *w, const char *id, const char *cmd, double x, double y, double wd, double ht, double cx, double cy, double cw, double ch, double dpr, double font, double bx, double by, double bw, double bh, double radius, const double *holes, int nholes) { p_show(w, id, cmd, x, y, wd, ht, cx, cy, cw, ch, dpr, font, bx, by, bw, bh, radius, holes, nholes); }
+static void nt_call_show(void *w, const char *id, const char *cmd, double x, double y, double wd, double ht, double cx, double cy, double cw, double ch, double dpr, double font, double bx, double by, double bw, double bh, double radius) { p_show(w, id, cmd, x, y, wd, ht, cx, cy, cw, ch, dpr, font, bx, by, bw, bh, radius); }
 static void nt_call_hide(const char *id) { p_hide(id); }
 static void nt_call_close(const char *id) { p_close(id); }
 static void nt_call_close_all(void) { p_close_all(); }
@@ -105,24 +105,15 @@ func Init() {
 // Only the part inside the clip rectangle cx, cy, cw, ch is seen: what of the
 // pane the page itself would show. The box bx, by, bw, bh rounded by radius
 // clips it the way the page's overflow clips the page: the pane the view
-// lives in. Holes are what the page has over the pane,
-// five numbers each — x, y, w, h and a corner radius — and the page shows
-// through them.
-func Show(nswindow unsafe.Pointer, id, command string, x, y, w, h, cx, cy, cw, ch, dpr, fontSize, bx, by, bw, bh, radius float64, holes []float64) {
+// lives in.
+func Show(nswindow unsafe.Pointer, id, command string, x, y, w, h, cx, cy, cw, ch, dpr, fontSize, bx, by, bw, bh, radius float64) {
 	if !Available() {
 		return
 	}
 	cid, ccmd := C.CString(id), C.CString(command)
 	defer C.free(unsafe.Pointer(cid))
 	defer C.free(unsafe.Pointer(ccmd))
-	n := len(holes) / 5
-	var choles *C.double
-	if n > 0 {
-		choles = (*C.double)(C.malloc(C.size_t(n*5) * C.size_t(unsafe.Sizeof(C.double(0)))))
-		defer C.free(unsafe.Pointer(choles))
-		copy(unsafe.Slice((*float64)(unsafe.Pointer(choles)), n*5), holes)
-	}
-	C.nt_call_show(nswindow, cid, ccmd, C.double(x), C.double(y), C.double(w), C.double(h), C.double(cx), C.double(cy), C.double(cw), C.double(ch), C.double(dpr), C.double(fontSize), C.double(bx), C.double(by), C.double(bw), C.double(bh), C.double(radius), choles, C.int(n))
+	C.nt_call_show(nswindow, cid, ccmd, C.double(x), C.double(y), C.double(w), C.double(h), C.double(cx), C.double(cy), C.double(cw), C.double(ch), C.double(dpr), C.double(fontSize), C.double(bx), C.double(by), C.double(bw), C.double(bh), C.double(radius))
 }
 
 // Hide takes the view off screen and keeps it — and its bridge — alive.

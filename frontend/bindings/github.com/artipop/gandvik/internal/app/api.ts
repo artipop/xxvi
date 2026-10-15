@@ -750,12 +750,10 @@ export function SetUpdatesEnabled(enabled: boolean): $CancellablePromise<$models
  * rectangle (CSS pixels, at the page's device pixel ratio dpr), seen only
  * within the clip rectangle cx, cy, cw, ch, in the page's terminal font size, starting it the first time: Ghostty runs this executable as `term-attach url`, a bridge from
  * its pty to the terminal's socket. The box bx, by, bw, bh rounded by radius
- * clips it, as the pane clips the page's own content. Holes — x, y, w, h and a corner radius
- * each — are where the page has a menu or a panel over the pane: the view is
- * above the page, and the page shows through them.
+ * clips it, as the pane clips the page's own content.
  */
-export function ShowNativeTerminal(id: string, url: string, x: number, y: number, w: number, h: number, cx: number, cy: number, cw: number, ch: number, dpr: number, fontSize: number, bx: number, by: number, bw: number, bh: number, radius: number, holes: number[] | null): $CancellablePromise<void> {
-    return $Call.ByID(1095686592, id, url, x, y, w, h, cx, cy, cw, ch, dpr, fontSize, bx, by, bw, bh, radius, holes);
+export function ShowNativeTerminal(id: string, url: string, x: number, y: number, w: number, h: number, cx: number, cy: number, cw: number, ch: number, dpr: number, fontSize: number, bx: number, by: number, bw: number, bh: number, radius: number): $CancellablePromise<void> {
+    return $Call.ByID(1095686592, id, url, x, y, w, h, cx, cy, cw, ch, dpr, fontSize, bx, by, bw, bh, radius);
 }
 
 /**
