@@ -184,10 +184,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sidebar.wide .nav.toggle { width: 32px; height: 32px; padding: 0; justify-content: center; }
 .nav.toggle { color: var(--faint); }
 .nav-rule { align-self: stretch; border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
-.nav:hover { background: var(--panel-2); color: var(--text); }
+.nav:hover { background: color-mix(in srgb, var(--panel-2) 55%, transparent); color: var(--text); }
 /* Where you are is the accent; where the pointer is, only lighter. Both on the
    same grey read as two places you might be. */
-.nav.on, .nav.on:hover { background: var(--accent-wash); color: var(--accent-text); box-shadow: inset 3px 0 0 var(--accent); }
+.nav.on, .nav.on:hover { background: var(--accent-wash); color: var(--accent-text); }
 .nav .icon { width: 18px; height: 18px; flex: none; }
 .nav .nav-label { display: none; }
 .sidebar.wide .nav .nav-label { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
