@@ -147,8 +147,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* On the right, so the window's own buttons keep the left corner to
    themselves. Narrow is icons alone, and the names come as the system's
-   tooltips on hover; wide is the old sidebar. Not animated between the two: a terminal
-   refits on every frame of a width that is changing. */
+   tooltips on hover; wide is the old sidebar. Not animated between the two: a
+   terminal refits on every frame of a width that is changing. */
 .sidebar {
   position: relative;
   width: 52px;
@@ -185,7 +185,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .nav.toggle { color: var(--faint); }
 .nav-rule { align-self: stretch; border: 0; border-top: 1px solid var(--line); margin: 6px 0; }
 .nav:hover { background: var(--panel-2); color: var(--text); }
-.nav.on { background: var(--panel-2); color: var(--text); }
+/* Where you are is the accent; where the pointer is, only lighter. Both on the
+   same grey read as two places you might be. */
+.nav.on, .nav.on:hover { background: var(--accent-wash); color: var(--accent-text); box-shadow: inset 3px 0 0 var(--accent); }
 .nav .icon { width: 18px; height: 18px; flex: none; }
 .nav .nav-label { display: none; }
 .sidebar.wide .nav .nav-label { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
