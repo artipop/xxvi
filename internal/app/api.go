@@ -484,10 +484,11 @@ func (s *API) NativeTerminals() bool {
 // ShowNativeTerminal lays the terminal behind url over the page at the pane's
 // rectangle (CSS pixels, at the page's device pixel ratio dpr), seen only
 // within the clip rectangle cx, cy, cw, ch, in the page's terminal font size, starting it the first time: Ghostty runs this executable as `term-attach url`, a bridge from
-// its pty to the terminal's socket. Holes — x, y, w, h and a corner radius
+// its pty to the terminal's socket. The box bx, by, bw, bh rounded by radius
+// clips it, as the pane clips the page's own content. Holes — x, y, w, h and a corner radius
 // each — are where the page has a menu or a panel over the pane: the view is
 // above the page, and the page shows through them.
-func (s *API) ShowNativeTerminal(id, url string, x, y, w, h, cx, cy, cw, ch, dpr, fontSize float64, holes []float64) error {
+func (s *API) ShowNativeTerminal(id, url string, x, y, w, h, cx, cy, cw, ch, dpr, fontSize, bx, by, bw, bh, radius float64, holes []float64) error {
 	win := s.app.nativeWindow()
 	if !nativeterm.Available() || win == nil {
 		return errors.New("native terminals are not available")
@@ -497,7 +498,7 @@ func (s *API) ShowNativeTerminal(id, url string, x, y, w, h, cx, cy, cw, ch, dpr
 		return err
 	}
 	command := strconv.Quote(self) + " term-attach " + strconv.Quote(url)
-	nativeterm.Show(win, id, command, x, y, w, h, cx, cy, cw, ch, dpr, fontSize, holes)
+	nativeterm.Show(win, id, command, x, y, w, h, cx, cy, cw, ch, dpr, fontSize, bx, by, bw, bh, radius, holes)
 	return nil
 }
 
@@ -510,6 +511,10 @@ func (s *API) HideNativeTerminal(id string) { nativeterm.Hide(id) }
 
 // CloseNativeTerminal ends the view and its bridge; the terminal goes on.
 func (s *API) CloseNativeTerminal(id string) { nativeterm.Close(id) }
+
+// SetNativeTerminalScheme puts the native terminals on the window's light or
+// dark side.
+func (s *API) SetNativeTerminalScheme(dark bool) { nativeterm.SetScheme(dark) }
 
 // ResetNativeTerminals closes every native terminal view. The page calls it as
 // it starts: views a page before it laid out — reloaded since — would

@@ -69,6 +69,7 @@ export default function Terminal(props: {
       // and finds it by this; a pane focused before the terminal was up asks
       // for it here.
       if (host) host.dataset.term = handle.id;
+      host?.classList.add("native");
       stop = followNatively(handle, () => host, () => disposed);
       setStatus("live");
       if (host?.closest(".screen.on")) void API.FocusNativeTerminal(handle.id);
@@ -154,6 +155,26 @@ function holesIn(c: { left: number; top: number; right: number; bottom: number }
   return out;
 }
 
+// boxOf is the rounded box that clips el's content: the nearest ancestor
+// with rounded corners, inside its border, and the radius there. The page's
+// own content is clipped to it by CSS; a native view lies over the page and is
+// handed the same box to be clipped by.
+function boxOf(el: HTMLElement) {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const cs = getComputedStyle(p);
+    const outer = parseFloat(cs.borderTopLeftRadius) || 0;
+    if (outer === 0) continue;
+    const b = p.getBoundingClientRect();
+    const bl = parseFloat(cs.borderLeftWidth) || 0, br = parseFloat(cs.borderRightWidth) || 0;
+    const bt = parseFloat(cs.borderTopWidth) || 0, bb = parseFloat(cs.borderBottomWidth) || 0;
+    return {
+      x: b.left + bl, y: b.top + bt, w: b.width - bl - br, h: b.height - bt - bb,
+      radius: Math.max(0, outer - Math.max(bl, bt)),
+    };
+  }
+  return { x: 0, y: 0, w: 0, h: 0, radius: 0 };
+}
+
 function followNatively(handle: { id: string; url: string }, host: () => HTMLElement | undefined, gone: () => boolean): () => void {
   let last = "";
   let frame = 0;
@@ -161,9 +182,6 @@ function followNatively(handle: { id: string; url: string }, host: () => HTMLEle
     if (gone()) return;
     const el = host();
     if (el) {
-      // Inside the host's padding, as xterm.js draws: the view is not clipped
-      // by the page, and its square edge laid on the pane's rounded border
-      // looks like the terminal running off the bottom.
       const b = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
       const pl = parseFloat(cs.paddingLeft) || 0, pr = parseFloat(cs.paddingRight) || 0;
@@ -172,14 +190,15 @@ function followNatively(handle: { id: string; url: string }, host: () => HTMLEle
       const c = seenOf(el, r);
       const visible = r.width > 8 && r.height > 8 && c.right - c.left > 8 && c.bottom - c.top > 8;
       const holes = visible ? holesIn(c) : [];
+      const box = boxOf(el);
       const dpr = window.devicePixelRatio || 1;
       const key = visible
-        ? [r.left, r.top, r.width, r.height, c.left, c.top, c.right, c.bottom, ...holes].map(Math.round).join(",") + "," + dpr
+        ? [r.left, r.top, r.width, r.height, c.left, c.top, c.right, c.bottom, box.x, box.y, box.w, box.h, box.radius, ...holes].map(Math.round).join(",") + "," + dpr
         : "hidden";
       if (key !== last) {
         last = key;
         if (visible) void API.ShowNativeTerminal(handle.id, handle.url, r.left, r.top, r.width, r.height,
-          c.left, c.top, c.right - c.left, c.bottom - c.top, dpr, FONT_SIZE, holes);
+          c.left, c.top, c.right - c.left, c.bottom - c.top, dpr, FONT_SIZE, box.x, box.y, box.w, box.h, box.radius, holes);
         else void API.HideNativeTerminal(handle.id);
       }
     }

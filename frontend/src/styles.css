@@ -59,10 +59,10 @@
      page's code and the native terminal read the same. */
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 
-  /* The terminal is dark under every theme: it is a real tty, and programs
-     choose their colours for a dark screen. Ghostty is given the same two
-     (internal/nativeterm/native/view_darwin.m), so neither engine changes
-     with the theme. */
+  /* xterm.js's terminal is dark under every theme: it is a real tty, and
+     programs choose their colours for a dark screen. Ghostty follows the
+     window's side with a light and a dark theme of its own
+     (internal/nativeterm/native/view_darwin.m). */
   --term-bg: #111216;
   --term-text: #e6e8ee;
 
@@ -943,6 +943,9 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
    page opens over the pane. */
 .terminal-host { --bg: var(--term-bg); --text: var(--term-text); flex: 1; min-height: 0; padding: 6px 8px; background: var(--bg); isolation: isolate; }
 .terminal-host .xterm { height: 100%; }
+/* Ghostty's view fills the pane edge to edge and draws its own padding, in its
+   own colours, which the page does not know. */
+.terminal-host.native { padding: 0; background: none; }
 .terminal .meta { padding: 4px 10px; border-top: 1px solid var(--line); }
 
 .browser { flex: 1; min-height: 0; display: flex; flex-direction: column; }

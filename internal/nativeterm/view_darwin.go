@@ -12,10 +12,12 @@ package nativeterm
 // libghostty-vt the holder uses share hundreds of symbols, and only separate
 // images keep them apart. Opening it late also keeps it out of every build and
 // test that does not show a native terminal.
-typedef void (*nt_show_fn)(void *, const char *, const char *, double, double, double, double, double, double, double, double, double, double, const double *, int);
+typedef void (*nt_show_fn)(void *, const char *, const char *, double, double, double, double, double, double, double, double, double, double, double, double, double, double, double, const double *, int);
 typedef void (*nt_id_fn)(const char *);
 typedef void (*nt_void_fn)(void);
+typedef void (*nt_int_fn)(int);
 static nt_show_fn p_show;
+static nt_int_fn p_scheme;
 static nt_id_fn p_hide, p_close, p_focus;
 static nt_void_fn p_close_all, p_init;
 
@@ -28,14 +30,16 @@ static int nt_load(const char *path) {
 	p_close_all = (nt_void_fn)dlsym(h, "nt_close_all");
 	p_focus = (nt_id_fn)dlsym(h, "nt_focus");
 	p_init = (nt_void_fn)dlsym(h, "nt_init");
-	return p_show && p_hide && p_close && p_close_all && p_focus && p_init;
+	p_scheme = (nt_int_fn)dlsym(h, "nt_set_scheme");
+	return p_show && p_hide && p_close && p_close_all && p_focus && p_init && p_scheme;
 }
-static void nt_call_show(void *w, const char *id, const char *cmd, double x, double y, double wd, double ht, double cx, double cy, double cw, double ch, double dpr, double font, const double *holes, int nholes) { p_show(w, id, cmd, x, y, wd, ht, cx, cy, cw, ch, dpr, font, holes, nholes); }
+static void nt_call_show(void *w, const char *id, const char *cmd, double x, double y, double wd, double ht, double cx, double cy, double cw, double ch, double dpr, double font, double bx, double by, double bw, double bh, double radius, const double *holes, int nholes) { p_show(w, id, cmd, x, y, wd, ht, cx, cy, cw, ch, dpr, font, bx, by, bw, bh, radius, holes, nholes); }
 static void nt_call_hide(const char *id) { p_hide(id); }
 static void nt_call_close(const char *id) { p_close(id); }
 static void nt_call_close_all(void) { p_close_all(); }
 static void nt_call_focus(const char *id) { p_focus(id); }
 static void nt_call_init(void) { p_init(); }
+static void nt_call_scheme(int dark) { p_scheme(dark); }
 */
 import "C"
 
@@ -99,10 +103,12 @@ func Init() {
 // rectangle (CSS pixels from the top left, at the page's device pixel ratio
 // dpr), starting its bridge with command the first time, in fontSize points.
 // Only the part inside the clip rectangle cx, cy, cw, ch is seen: what of the
-// pane the page itself would show. Holes are what the page has over the pane,
+// pane the page itself would show. The box bx, by, bw, bh rounded by radius
+// clips it the way the page's overflow clips the page: the pane the view
+// lives in. Holes are what the page has over the pane,
 // five numbers each — x, y, w, h and a corner radius — and the page shows
 // through them.
-func Show(nswindow unsafe.Pointer, id, command string, x, y, w, h, cx, cy, cw, ch, dpr, fontSize float64, holes []float64) {
+func Show(nswindow unsafe.Pointer, id, command string, x, y, w, h, cx, cy, cw, ch, dpr, fontSize, bx, by, bw, bh, radius float64, holes []float64) {
 	if !Available() {
 		return
 	}
@@ -116,7 +122,7 @@ func Show(nswindow unsafe.Pointer, id, command string, x, y, w, h, cx, cy, cw, c
 		defer C.free(unsafe.Pointer(choles))
 		copy(unsafe.Slice((*float64)(unsafe.Pointer(choles)), n*5), holes)
 	}
-	C.nt_call_show(nswindow, cid, ccmd, C.double(x), C.double(y), C.double(w), C.double(h), C.double(cx), C.double(cy), C.double(cw), C.double(ch), C.double(dpr), C.double(fontSize), choles, C.int(n))
+	C.nt_call_show(nswindow, cid, ccmd, C.double(x), C.double(y), C.double(w), C.double(h), C.double(cx), C.double(cy), C.double(cw), C.double(ch), C.double(dpr), C.double(fontSize), C.double(bx), C.double(by), C.double(bw), C.double(bh), C.double(radius), choles, C.int(n))
 }
 
 // Hide takes the view off screen and keeps it — and its bridge — alive.
@@ -156,4 +162,17 @@ func Focus(id string) {
 	cid := C.CString(id)
 	defer C.free(unsafe.Pointer(cid))
 	C.nt_call_focus(cid)
+}
+
+// SetScheme tells the terminals which side the window is on: Ghostty takes the
+// light or dark half of its theme.
+func SetScheme(dark bool) {
+	if !Available() {
+		return
+	}
+	d := C.int(0)
+	if dark {
+		d = 1
+	}
+	C.nt_call_scheme(d)
 }

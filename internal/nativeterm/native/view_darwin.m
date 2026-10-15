@@ -11,6 +11,10 @@
 #include "ghostty.h"
 
 static ghostty_app_t app;
+// The settings as loaded, kept: a change of scheme asks for them again, and
+// Ghostty resolves the light or dark half from the same set.
+static ghostty_config_t cfg;
+static ghostty_color_scheme_e scheme = GHOSTTY_COLOR_SCHEME_DARK;
 static NSMutableDictionary<NSString *, NSView *> *views;
 // The terminal the page wants the keyboard in. The page may ask before the view
 // is there or while it is off screen; it gets the keyboard as it appears.
@@ -394,7 +398,19 @@ static void wakeup(void *ud) {
   dispatch_async(dispatch_get_main_queue(), ^{ if (app) ghostty_app_tick(app); });
 }
 
-static bool action(ghostty_app_t a, ghostty_target_s t, ghostty_action_s act) { return false; }
+// A change of scheme reaches the host as a request to reload the settings
+// (soft: the same ones, resolved again), and Ghostty does nothing until the
+// host hands them back — as its own macOS host does.
+static bool action(ghostty_app_t a, ghostty_target_s t, ghostty_action_s act) {
+  switch (act.tag) {
+  case GHOSTTY_ACTION_RELOAD_CONFIG:
+    if (t.tag == GHOSTTY_TARGET_APP) ghostty_app_update_config(a, cfg);
+    else if (t.tag == GHOSTTY_TARGET_SURFACE) ghostty_surface_update_config(t.target.surface, cfg);
+    return true;
+  default:
+    return false;
+  }
+}
 
 // Only plain text crosses: a terminal pastes text, and asks for nothing else.
 static ghostty_clipboard_read_result_e readClip(void *ud, ghostty_clipboard_e loc, void *state,
@@ -455,13 +471,18 @@ static bool ensureApp(void) {
   if (app) return true;
   static char *argv[] = {"gandvik", NULL};
   if (ghostty_init(1, argv) != 0) return false;
-  ghostty_config_t cfg = ghostty_config_new();
-  // The application's colours first, so a terminal without settings of its own
-  // looks like part of the window (styles.css --bg, --text) rather than a grey
-  // patch in it; then the person's own Ghostty settings, which win.
+  cfg = ghostty_config_new();
+  // A light and a dark theme of Ghostty's own, so the terminal follows the
+  // window's side without colours of ours; then the person's own Ghostty
+  // settings, which win. The themes are files the bundle carries
+  // (build/darwin/Taskfile.yml): Ghostty finds its named ones only in its own
+  // app's resources.
+  NSString *themes = [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"ghostty-themes"];
+  NSString *conf = [NSString stringWithFormat:
+      @"theme = light:%@/Apple System Colors Light,dark:%@/Apple System Colors\n"
+       "window-padding-x = 6\nwindow-padding-y = 4\n", themes, themes];
   NSString *base = [NSTemporaryDirectory() stringByAppendingPathComponent:@"gandvik-ghostty.conf"];
-  [@"background = #111216\nforeground = #e6e8ee\nwindow-padding-x = 6\nwindow-padding-y = 4\n"
-      writeToFile:base atomically:YES encoding:NSUTF8StringEncoding error:nil];
+  [conf writeToFile:base atomically:YES encoding:NSUTF8StringEncoding error:nil];
   ghostty_config_load_file(cfg, base.fileSystemRepresentation);
   ghostty_config_load_default_files(cfg);
   ghostty_config_finalize(cfg);
@@ -474,6 +495,7 @@ static bool ensureApp(void) {
   rt.close_surface_cb = closeSurface;
   app = ghostty_app_new(&rt, cfg);
   views = [NSMutableDictionary new];
+  ghostty_app_set_color_scheme(app, scheme);
 
   // A key on its way to a focused terminal goes straight to it. AppKit first
   // offers every key to every view in the window as a key equivalent, and the
@@ -511,6 +533,7 @@ static bool ensureApp(void) {
 __attribute__((visibility("default")))
 void nt_show_in(void *nswindow, const char *cid, const char *ccommand, double x, double y, double w, double h,
                 double cx, double cy, double cw, double ch, double dpr, double font,
+                double bx, double by, double bw, double bh, double radius,
                 const double *holes, int nholes) {
   NSString *ident = [NSString stringWithUTF8String:cid];
   NSString *command = [NSString stringWithUTF8String:ccommand];
@@ -525,12 +548,20 @@ void nt_show_in(void *nswindow, const char *cid, const char *ccommand, double x,
     // smaller than the window's points; its device pixel ratio over the
     // screen's says by how much.
     double k = win.backingScaleFactor > 0 && dpr > 0 ? dpr / win.backingScaleFactor : 1;
-    double px = x * k, py = y * k, pw = w * k, ph = h * k;
-    double qx = cx * k, qy = cy * k, qw = cw * k, qh = ch * k;
-    // The page measures from the top, the content view from the bottom; the
-    // view sits in its clip, which is where the page lets it be seen.
-    NSRect clipFrame = NSMakeRect(qx, content.bounds.size.height - qy - qh, qw, qh);
-    NSRect frame = NSMakeRect(px - qx, (qy + qh) - (py + ph), pw, ph);
+    // The page's rectangles are taken through the page's own view, which
+    // AppKit knows the place and the flip of: the web view does not start at
+    // the content view's top, and a height reckoned from that put every view a
+    // point below where the page drew its pane.
+    NSView *page = pageIn(content);
+    NSRect (^inContent)(double, double, double, double) = ^NSRect(double rx, double ry, double rw, double rh) {
+      NSRect r = NSMakeRect(rx * k, ry * k, rw * k, rh * k);
+      if (page) return [page convertRect:r toView:content];
+      return NSMakeRect(r.origin.x, content.bounds.size.height - NSMaxY(r), r.size.width, r.size.height);
+    };
+    // The view sits in its clip, which is where the page lets it be seen.
+    NSRect clipFrame = inContent(cx, cy, cw, ch);
+    NSRect whole = inContent(x, y, w, h);
+    NSRect frame = NSOffsetRect(whole, -clipFrame.origin.x, -clipFrame.origin.y);
     NTView *v = (NTView *)views[ident];
     BOOL appears = !v || v.hidden;
     if (!v) {
@@ -560,6 +591,7 @@ void nt_show_in(void *nswindow, const char *cid, const char *ccommand, double x,
         return;
       }
       ghostty_surface_set_content_scale(v.surface, win.backingScaleFactor, win.backingScaleFactor);
+      ghostty_surface_set_color_scheme(v.surface, scheme);
       views[ident] = v;
     }
     v.hidden = NO;
@@ -567,14 +599,35 @@ void nt_show_in(void *nswindow, const char *cid, const char *ccommand, double x,
     [v.superview setFrame:clipFrame];
     [v setFrame:frame];
     [v setFrameSize:frame.size];
+    // The box the view lives in — bx, by, bw, bh, rounded by radius — clips it
+    // as the page's overflow clips the page's own content: the view lies over
+    // the page and is not clipped by it. Snapped inward to whole pixels: the
+    // page's edges fall between them, and a half-covered pixel at the edge is
+    // drawn over the pane's border.
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    if (radius > 0) {
+      NSRect box = [v convertRect:[content backingAlignedRect:inContent(bx, by, bw, bh) options:NSAlignAllEdgesInward]
+                         fromView:content];
+      CGFloat r = MIN(radius * k, MIN(box.size.width, box.size.height) / 2);
+      CGPathRef path = CGPathCreateWithRoundedRect(box, r, r, NULL);
+      CAShapeLayer *shape = [CAShapeLayer layer];
+      shape.frame = v.bounds;
+      shape.path = path;
+      CGPathRelease(path);
+      v.layer.mask = shape;
+    } else {
+      v.layer.mask = nil;
+    }
+    [CATransaction commit];
     // Each hole is x, y, w, h and a corner radius, in the page's terms like
     // the rest, and goes into the clip's own.
     const double *hs = cut.bytes;
     NSMutableArray<NSValue *> *rects = [NSMutableArray new];
     NSMutableArray<NSNumber *> *radii = [NSMutableArray new];
     for (NSUInteger i = 0; i < cut.length / (sizeof(double) * 5); i++, hs += 5) {
-      double hx = hs[0] * k, hy = hs[1] * k, hw = hs[2] * k, hh = hs[3] * k;
-      [rects addObject:[NSValue valueWithRect:NSMakeRect(hx - qx, (qy + qh) - (hy + hh), hw, hh)]];
+      NSRect hole = NSOffsetRect(inContent(hs[0], hs[1], hs[2], hs[3]), -clipFrame.origin.x, -clipFrame.origin.y);
+      [rects addObject:[NSValue valueWithRect:hole]];
       [radii addObject:@(hs[4] * k)];
     }
     [(NTClip *)v.superview cut:rects radii:radii];
@@ -646,3 +699,16 @@ void nt_focus(const char *cid) {
 // call it at any other moment.
 __attribute__((visibility("default")))
 void nt_init(void) { ensureApp(); }
+
+// nt_set_scheme follows the window's light or dark side.
+__attribute__((visibility("default")))
+void nt_set_scheme(int dark) {
+  onMain(^{
+    scheme = dark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT;
+    if (!ensureApp()) return;
+    ghostty_app_set_color_scheme(app, scheme);
+    for (NTView *v in views.allValues) {
+      if (v.surface) ghostty_surface_set_color_scheme(v.surface, scheme);
+    }
+  });
+}

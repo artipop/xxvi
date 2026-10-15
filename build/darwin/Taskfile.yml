@@ -190,6 +190,14 @@ tasks:
           mkdir -p "{{.APP}}/Contents/Frameworks"
           cp build/nativeterm/libgandviknative.dylib "{{.APP}}/Contents/Frameworks/"
         fi
+      # The light and dark themes the native terminal follows the window with
+      # (internal/nativeterm/native/view_darwin.m), from the same Ghostty build.
+      - |
+        THEMES=build/ghostty/src/zig-out/share/ghostty/themes
+        if [ -d "$THEMES" ]; then
+          mkdir -p "{{.APP}}/Contents/Resources/ghostty-themes"
+          cp "$THEMES/Apple System Colors" "$THEMES/Apple System Colors Light" "{{.APP}}/Contents/Resources/ghostty-themes/"
+        fi
 
   codesign:adhoc:
     summary: Ad-hoc signs the app bundle (macOS only)

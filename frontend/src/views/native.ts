@@ -1,4 +1,5 @@
 import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
+import { watchSide } from "../theme";
 
 /** TERMINAL_ENGINE is where the choice between Ghostty and xterm.js is kept:
  *  «web» for xterm.js, anything else for Ghostty where it is available. The
@@ -27,4 +28,12 @@ export function nativeWanted(): Promise<boolean> {
   let engine = "";
   try { engine = localStorage.getItem(TERMINAL_ENGINE) ?? ""; } catch { /* no storage: the default stands */ }
   return engine === "web" ? Promise.resolve(false) : nativeAvailable();
+}
+
+/** followSide keeps Ghostty on the window's light or dark side. */
+export function followSide() {
+  void nativeAvailable().then((ok) => {
+    if (!ok) return;
+    watchSide((dark) => { void API.SetNativeTerminalScheme(dark).catch(() => { /* no native terminals after all */ }); });
+  });
 }

@@ -47,6 +47,16 @@ export const themeMode = mode;
 
 const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
 
+let side = true;
+const sideWatchers: ((dark: boolean) => void)[] = [];
+
+/** watchSide calls f with the side the window is on — now, and after every
+ *  change — for what lives outside the page and cannot read its CSS. */
+export function watchSide(f: (dark: boolean) => void) {
+  sideWatchers.push(f);
+  f(side);
+}
+
 // The values are passed rather than read back: Solid holds a write until the
 // next flush, and a read straight after it answers with the old value.
 function apply({ family: id, mode: m }: Kept) {
@@ -61,6 +71,8 @@ function apply({ family: id, mode: m }: Kept) {
   root.style.colorScheme = theme.dark ? "dark" : "light";
   for (const [token, value] of Object.entries(themeTokens(theme))) root.style.setProperty(token, value);
   setPainted((n) => n + 1);
+  side = theme.dark;
+  for (const f of sideWatchers) f(side);
 }
 
 function keep(kept: Kept) {
