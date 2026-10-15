@@ -6,9 +6,10 @@ import { NAV } from "./nav";
 import { setTab, tab } from "./state";
 
 // Narrow by default: on every screen, the ribbon included, so leaving a
-// section never takes a menu to be opened first. Names come as pills over the
-// work on hover, and a click on the top button spreads the sidebar out when
-// the icons are not enough.
+// section never takes a menu to be opened first. Names come as the system's
+// tooltips on hover — a pill drawn by the page would go under a terminal
+// Ghostty draws over it — and a click on the top button spreads the sidebar
+// out when the icons are not enough.
 const KEY = "gandvik.sidebar.wide";
 
 function rememberedWide(): boolean {
@@ -28,9 +29,9 @@ export default function Sidebar(): JSX.Element {
     <aside class={`sidebar ${wide() ? "wide" : ""}`}>
       <div class="sidebar-head">
         <Show when={wide()}><span class="brand">Gandvík</span></Show>
-        <button class="nav toggle" onClick={toggle} aria-label={wide() ? t("nav.collapse") : t("nav.expand")}>
+        <button class="nav toggle" onClick={toggle} aria-label={wide() ? t("nav.collapse") : t("nav.expand")}
+                title={wide() ? undefined : t("nav.expand")}>
           <Icon name={wide() ? "collapse" : "expand"} />
-          <span class="tip">{t("nav.expand")}</span>
         </button>
       </div>
       <For each={NAV}>
@@ -41,6 +42,7 @@ export default function Sidebar(): JSX.Element {
             class={`nav ${tab() === item.tab ? "on" : ""}`}
             onClick={() => setTab(item.tab)}
             aria-label={item.label()}
+            title={wide() ? undefined : [item.label(), item.mark?.() ? t("nav.updateMark") : ""].filter(Boolean).join(" · ")}
           >
             <Icon name={item.icon} />
             <span class="nav-label">{item.label()}</span>
@@ -50,10 +52,6 @@ export default function Sidebar(): JSX.Element {
             <Show when={item.mark && item.mark()}>
               <span class="mark" />
             </Show>
-            <span class="tip">
-              {item.label()}
-              <Show when={item.mark && item.mark()}><span class="tip-note">{t("nav.updateMark")}</span></Show>
-            </span>
           </button>
           </>
         )}

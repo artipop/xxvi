@@ -146,11 +146,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .shell { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); height: 100%; }
 
 /* On the right, so the window's own buttons keep the left corner to
-   themselves. Narrow is icons alone, and the names come over the work as pills
-   on hover; wide is the old sidebar. Not animated between the two: a terminal
+   themselves. Narrow is icons alone, and the names come as the system's
+   tooltips on hover; wide is the old sidebar. Not animated between the two: a terminal
    refits on every frame of a width that is changing. */
 .sidebar {
-  position: relative; z-index: 6; /* the pills go out over whatever is beside it */
+  position: relative;
   width: 52px;
   background: var(--panel);
   border-left: 1px solid var(--line);
@@ -205,24 +205,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sidebar:not(.wide) .nav .count.alert { background: var(--warn); color: var(--on-accent); }
 .sidebar:not(.wide) .nav .mark { position: absolute; top: 5px; right: 5px; margin: 0; }
 .sidebar:not(.wide) .nav .count + .mark { top: auto; bottom: 5px; }
-
-.tip {
-  position: absolute; right: calc(100% + 12px); top: 50%;
-  transform: translate(4px, -50%);
-  display: flex; align-items: baseline; gap: 8px;
-  padding: 5px 13px; border-radius: 999px;
-  background: var(--panel-2); border: 1px solid var(--line-strong);
-  box-shadow: 0 6px 18px var(--shadow);
-  color: var(--text); font-size: 12.5px; font-weight: 500; white-space: nowrap;
-  opacity: 0; pointer-events: none;
-  transition: opacity .12s, transform .12s;
-}
-.tip-note { color: var(--accent); font-size: 11.5px; font-weight: 400; }
-.nav:hover .tip, .nav:focus-visible .tip { opacity: 1; transform: translate(0, -50%); }
-.sidebar.wide .tip { display: none; }
-@media (prefers-reduced-motion: reduce) {
-  .tip { transition: none; transform: translate(0, -50%); }
-}
 
 .main { min-height: 0; isolation: isolate; overflow: auto; overscroll-behavior: contain; padding: 44px 24px 40px; }
 .main.with-panel { display: grid; grid-template-columns: 1fr minmax(360px, 460px); gap: 20px; align-items: start; }
@@ -618,7 +600,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
    pretending to be one. */
 
 /* Isolated, like .main, so nothing inside — xterm's own layers go up to z-index
-   7 — can climb over the sidebar's pills. */
+   7 — can climb over the sidebar. */
 .full { position: relative; isolation: isolate; min-width: 0; height: 100dvh; overflow: hidden; }
 
 .ribbon {
