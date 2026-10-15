@@ -1,0 +1,28 @@
+{
+  "id": "xxvi-light",
+  "name": "XXVI Light",
+  "type": "light",
+
+  "centerChannelBg": "#f3f4f6",
+  "centerChannelColor": "#1b1e25",
+  "surfaceBg": "#ffffff",
+  "raisedBg": "#eceef2",
+  "borderColor": "#dadde3",
+  "borderStrongColor": "#bfc4ce",
+  "dimColor": "#555b69",
+  "faintColor": "#7e8494",
+
+  "sidebarBg": "#ffffff",
+  "sidebarText": "#555b69",
+
+  "buttonBg": "#17786e",
+  "buttonColor": "#ffffff",
+  "linkColor": "#17786e",
+
+  "onlineIndicator": "#2f7a3b",
+  "awayIndicator": "#955c0c",
+  "dndIndicator": "#c23342",
+  "errorTextColor": "#c23342",
+
+  "shadowColor": "#1b1e25"
+}

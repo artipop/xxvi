@@ -1,0 +1,28 @@
+{
+  "id": "xxvi-dark",
+  "name": "XXVI Dark",
+  "type": "dark",
+
+  "centerChannelBg": "#111216",
+  "centerChannelColor": "#e6e8ee",
+  "surfaceBg": "#171920",
+  "raisedBg": "#1d202a",
+  "borderColor": "#282c38",
+  "borderStrongColor": "#3a4056",
+  "dimColor": "#949aab",
+  "faintColor": "#656b7c",
+
+  "sidebarBg": "#171920",
+  "sidebarText": "#949aab",
+
+  "buttonBg": "#4fb8ad",
+  "buttonColor": "#111216",
+  "linkColor": "#4fb8ad",
+
+  "onlineIndicator": "#7bc47f",
+  "awayIndicator": "#e0a458",
+  "dndIndicator": "#e06c75",
+  "errorTextColor": "#e06c75",
+
+  "shadowColor": "#000000"
+}

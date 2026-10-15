@@ -3,26 +3,26 @@
   "name": "Gandvík Light",
   "type": "light",
 
-  "centerChannelBg": "#f3f4f6",
-  "centerChannelColor": "#1b1e25",
+  "centerChannelBg": "#f0f4f6",
+  "centerChannelColor": "#09172a",
   "surfaceBg": "#ffffff",
-  "raisedBg": "#eceef2",
-  "borderColor": "#dadde3",
-  "borderStrongColor": "#bfc4ce",
-  "dimColor": "#555b69",
-  "faintColor": "#7e8494",
+  "raisedBg": "#e5ecf0",
+  "borderColor": "#d6e0e7",
+  "borderStrongColor": "#b0c2cf",
+  "dimColor": "#45596d",
+  "faintColor": "#74889a",
 
-  "sidebarBg": "#ffffff",
-  "sidebarText": "#555b69",
+  "sidebarBg": "#e8eef2",
+  "sidebarText": "#45596d",
 
-  "buttonBg": "#17786e",
-  "buttonColor": "#ffffff",
-  "linkColor": "#17786e",
+  "buttonBg": "#315c81",
+  "buttonColor": "#f0f4f6",
+  "linkColor": "#315c81",
 
-  "onlineIndicator": "#2f7a3b",
-  "awayIndicator": "#955c0c",
-  "dndIndicator": "#c23342",
-  "errorTextColor": "#c23342",
+  "onlineIndicator": "#2c7a57",
+  "awayIndicator": "#94600e",
+  "dndIndicator": "#b8323f",
+  "errorTextColor": "#b8323f",
 
-  "shadowColor": "#1b1e25"
+  "shadowColor": "#09172a"
 }

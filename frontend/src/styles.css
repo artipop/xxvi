@@ -9,20 +9,20 @@
 :root {
   color-scheme: dark;
 
-  --bg: #111216;
-  --panel: #171920;
-  --panel-2: #1d202a;
-  --line: #282c38;
-  --line-strong: #3a4056;
-  --text: #e6e8ee;
-  --dim: #949aab;
-  --faint: #656b7c;
-  --accent: #4fb8ad;
-  --on-accent: #111216;
-  --ok: #7bc47f;
-  --warn: #e0a458;
-  --bad: #e06c75;
-  --shadow: rgba(0, 0, 0, .45);
+  --bg: #09172a;
+  --panel: #0e1f36;
+  --panel-2: #142d46;
+  --line: #1a3350;
+  --line-strong: #315c81;
+  --text: #f0f4f6;
+  --dim: #9fb4c5;
+  --faint: #62809a;
+  --accent: #b7ddeb;
+  --on-accent: #09172a;
+  --ok: #7cc4a4;
+  --warn: #e2b46c;
+  --bad: #e88080;
+  --shadow: rgba(2, 7, 15, .45);
 
   /* Mixed rather than listed, so a theme cannot forget one. The wash is a
      state laid over the ground, the edge is its border, and the text is what
