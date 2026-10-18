@@ -147,7 +147,8 @@ func Open(dataDir string, log *slog.Logger) (*App, error) {
 	acp.KeepAdaptersIn(filepath.Join(dataDir, "adapters"))
 	a.Engine = engine.New(st, nil, a, log)
 	a.Agents = acp.New(st, a.Engine, a, acp.Options{
-		WorkDir: filepath.Join(dataDir, "work"),
+		WorkDir:           filepath.Join(dataDir, "work"),
+		DefaultProjectDir: filepath.Join(dataDir, "default_project"),
 	}, log)
 	// The two know about each other, so one of them is wired second.
 	a.Engine.SetRunner(a.Agents)

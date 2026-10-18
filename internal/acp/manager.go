@@ -39,9 +39,10 @@ const (
 
 // Options are the machine's own settings for running agents.
 type Options struct {
-	// WorkDir is where agents work. One directory per card, created under it,
-	// so two cards never share a working copy.
+	// WorkDir holds worktrees and working folders created by older versions.
 	WorkDir string
+	// DefaultProjectDir is shared by new cards without a project.
+	DefaultProjectDir string
 	// MaxConcurrent bounds how many turns run at once on this machine. The
 	// stage's own limit is checked by the engine; this is the machine's.
 	MaxConcurrent int
@@ -740,13 +741,14 @@ func (m *Manager) WorkDir(cardID string) (string, error) { return m.workDir(card
 // A card that asked for a branch of its own gets it here, in a separate
 // working tree or in the folder itself (workspace.go).
 //
-// Otherwise a directory of the card's own, so two cards never share a working
-// copy and the agent's file jail means something. That is the right answer for
-// work that starts from a blank page, which is why an empty project is a real
-// answer rather than an unfinished one.
+// New drafts share a default project. Existing drafts keep their original
+// folder because the agent's saved conversation can be tied to its cwd.
 func (m *Manager) workDir(cardID string) (string, error) {
 	card, err := m.store.Card(cardID)
-	if err == nil && card.Project != "" {
+	if err != nil {
+		return "", err
+	}
+	if card.Project != "" {
 		project, err := m.store.CardProject(card)
 		if err != nil {
 			return "", err
@@ -765,7 +767,30 @@ func (m *Manager) workDir(cardID string) (string, error) {
 	if base == "" {
 		base = filepath.Join(os.TempDir(), "gandvik-work")
 	}
-	dir := filepath.Join(base, cardID)
+	dir := m.opts.DefaultProjectDir
+	if dir == "" {
+		dir = filepath.Join(base, "default_project")
+	}
+	legacy := filepath.Join(base, cardID)
+	if info, err := os.Stat(legacy); err == nil {
+		if !info.IsDir() {
+			return "", fmt.Errorf("working folder is not a directory: %s", legacy)
+		}
+		dir = legacy
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("read working folder: %w", err)
+	} else {
+		sessions, err := m.store.SessionsForCard(cardID)
+		if err != nil {
+			return "", err
+		}
+		for _, session := range sessions {
+			if session.Cwd == legacy {
+				dir = legacy
+				break
+			}
+		}
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create working folder: %w", err)
 	}

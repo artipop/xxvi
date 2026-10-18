@@ -1,11 +1,13 @@
 package acp
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/artipop/gandvik/internal/model"
 	"github.com/artipop/gandvik/internal/msg"
@@ -252,5 +254,58 @@ func TestClosedCardsTreeIsRemovedOnlyWhenAsked(t *testing.T) {
 	}
 	if head, _ := git(back, "rev-parse", "--abbrev-ref", "HEAD"); head != a.Branch {
 		t.Fatalf("вернувшееся дерево на ветке карточки, а не на %q", head)
+	}
+}
+
+func TestDraftsShareDefaultProject(t *testing.T) {
+	m, st := newWorkspaceManager(t)
+	m.opts.DefaultProjectDir = filepath.Join(t.TempDir(), "default_project")
+	a := cardIn(t, st, "First draft", model.Project{}, model.WorkModeFolder)
+	b := cardIn(t, st, "Second draft", model.Project{}, model.WorkModeFolder)
+	first, err := m.WorkDir(a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != m.opts.DefaultProjectDir {
+		t.Fatalf("draft folder: %q", first)
+	}
+	if err := os.WriteFile(filepath.Join(first, "notes.md"), []byte("shared"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	second, err := m.WorkDir(b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(filepath.Join(second, "notes.md"))
+	if err != nil || string(contents) != "shared" {
+		t.Fatalf("drafts must share files: %q, %v", contents, err)
+	}
+	for _, c := range []model.Card{a, b} {
+		if _, err := os.Stat(filepath.Join(m.opts.WorkDir, c.ID)); !os.IsNotExist(err) {
+			t.Fatalf("unexpected per-card folder: %v", err)
+		}
+	}
+}
+
+func TestExistingDraftKeepsItsWorkingFolder(t *testing.T) {
+	for _, folderExists := range []bool{true, false} {
+		t.Run(fmt.Sprint(folderExists), func(t *testing.T) {
+			m, st := newWorkspaceManager(t)
+			c := cardIn(t, st, "Existing draft", model.Project{}, model.WorkModeFolder)
+			legacy := filepath.Join(m.opts.WorkDir, c.ID)
+			if folderExists {
+				if err := os.MkdirAll(legacy, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := st.InsertSession(store.Session{ID: "old-session", CardID: c.ID, Cwd: legacy, Status: store.StatusPaused, StartedAt: time.Now()}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := m.WorkDir(c.ID)
+			if err != nil || got != legacy {
+				t.Fatalf("existing conversation moved: %q, %v", got, err)
+			}
+		})
 	}
 }

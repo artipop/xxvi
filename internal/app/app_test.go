@@ -273,8 +273,6 @@ func TestACardWorksInItsProjectFolder(t *testing.T) {
 		t.Fatalf("заметки должны лечь в папку проекта: %v", err)
 	}
 
-	// And without a project the card keeps a folder of its own, which is the
-	// right answer for work that starts from a blank page.
 	other, _ := api.AddCard("", "С чистого листа", "")
 	if err := api.WriteDoc(other.ID, "plan.md", "# план"); err != nil {
 		t.Fatalf("записать заметки: %v", err)
@@ -282,8 +280,8 @@ func TestACardWorksInItsProjectFolder(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(folder, "plan.md")); err != nil {
 		t.Fatal("папка проекта не должна была измениться")
 	}
-	if _, err := os.Stat(filepath.Join(a.DataDir, "work", other.ID, "plan.md")); err != nil {
-		t.Fatalf("карточка без проекта работает в своей папке: %v", err)
+	if _, err := os.Stat(filepath.Join(a.DataDir, "default_project", "plan.md")); err != nil {
+		t.Fatalf("карточка без проекта работает в общей папке черновиков: %v", err)
 	}
 }
 
