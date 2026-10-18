@@ -151,7 +151,7 @@ export const en: Dict = {
   "card.propValue": "value",
   "card.setProp": "Set",
   "card.project": "Project",
-  "card.noProjects": "No projects, so the task works in an empty folder of its own.",
+  "card.noProjects": "Tasks without a project use the shared drafts folder, default_project.",
   "card.opensIn": "The agent, the terminal and the notes open in {path}",
   "card.ownFolderNote": "The task will open in the shared drafts folder, default_project.",
   "card.onWorktree": "Separate working tree",
@@ -237,7 +237,8 @@ export const en: Dict = {
   // ---- projects ----
   "projects.title": "Projects",
   "projects.new": "+ Project",
-  "projects.empty": "No projects, so every task works in an empty folder of its own.",
+  "projects.newTitle": "New project",
+  "projects.empty": "Tasks without a project use the shared drafts folder, default_project.",
   "projects.pickTitle": "Project folder",
   "projects.name": "Name",
   "projects.kind": "Kind",

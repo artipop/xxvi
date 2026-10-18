@@ -140,6 +140,9 @@ body {
 }
 
 button, input, select, textarea { font: inherit; color: inherit; }
+button, .btn, summary, [role="button"], .ribbon-bar, .sidebar {
+  -webkit-user-select: none; user-select: none;
+}
 
 /* ---- shell ---- */
 
@@ -603,14 +606,14 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 
 /* Isolated, like .main, so nothing inside — xterm's own layers go up to z-index
    7 — can climb over the sidebar. */
-.full { position: relative; isolation: isolate; min-width: 0; height: 100dvh; overflow: hidden; }
+.full { position: relative; isolation: isolate; min-width: 0; min-height: 0; height: 100%; overflow: clip; }
 
 .ribbon {
   --bar: 44px;      /* what the window reserves for its hidden title bar */
   --rail-space: 20px;
-  height: 100dvh;
+  height: 100%; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
-  overflow: hidden;
+  overflow: clip;
 }
 
 /* Room for the window's own buttons, and the name of the job in front of you —
@@ -623,6 +626,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   border-bottom: 1px solid var(--line);
   font-size: 12px; color: var(--faint);
   --wails-draggable: drag;
+  cursor: default;
 }
 /* Dragging the window from a button is not what pressing it means. */
 .ribbon-bar button, .ribbon-bar a, .ribbon-bar .card-menu { --wails-draggable: no-drag; }
@@ -641,7 +645,14 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .ribbon-notes > * { margin: 8px 8px 0; }
 
 /* The stack and what opens over it, the journal, under the notes. */
-.ribbon-body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.ribbon-body { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; overflow: clip; }
+.ribbon-project {
+  flex: 0 0 min(440px, 45%); min-width: 0; overflow: auto;
+  padding: 12px; border-right: 1px solid var(--line); background: var(--panel);
+}
+.ribbon-project h3 { margin: 0 0 12px; }
+.ribbon-project .panel { margin: 0; }
+.ribbon-project .grid2 { grid-template-columns: minmax(0, 1fr); }
 
 .popup-menu {
   position: fixed; z-index: 1000; min-width: 200px; max-width: calc(100vw - 8px);
@@ -661,8 +672,10 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .ribbon-stage { color: var(--faint); opacity: .7; }
 
 .card-menu { position: relative; display: flex; }
-.workspaces > .btn { display: inline-flex; align-items: center; gap: 3px; }
-.workspaces .icon { width: 12px; height: 12px; opacity: .6; }
+.workspaces { flex: 0 1 auto; min-width: 0; max-width: 240px; }
+.workspaces > .btn { display: inline-flex; align-items: center; gap: 5px; min-width: 0; color: var(--text); }
+.workspaces > .btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspaces .icon { flex: none; width: 12px; height: 12px; opacity: .6; }
 
 /* Over the strip rather than beside it: the strip is the whole window, and
    the journal is looked at and put away, not worked next to. */
@@ -767,7 +780,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
    or the rail — and `overflow: hidden` still scrolls when asked in code, which
    is the only thing that asks. */
 .stack {
-  flex: 1 1 auto; min-height: 0;
+  flex: 1 1 auto; min-width: 0; min-height: 0;
   container-type: size;
   /* Native terminals sit above the page, so the rail needs room outside
      the stack's clipping bounds; a higher z-index cannot keep it visible. */
@@ -775,6 +788,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   overflow: hidden;
   scroll-behavior: smooth;
   overscroll-behavior: contain;
+  overflow-anchor: none;
 }
 
 /* One ribbon fills the stack exactly, so the n-th starts at n heights and the
@@ -796,6 +810,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   scroll-snap-type: x proximity;
   scroll-behavior: smooth;
   scrollbar-width: none;
+  overflow-anchor: none;
 }
 .band::-webkit-scrollbar { display: none; }
 

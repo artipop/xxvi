@@ -10,7 +10,7 @@ import { errorText, label, t } from "../i18n";
 // project can be renamed without dragging anything behind it. A project can
 // live in several folders, a front and a back, and a task picks one of them.
 
-function blank(): Project {
+export function blankProject(): Project {
   return { id: "", name: "", kind: "folder", path: "", folders: [{ id: "", name: "", path: "" }] };
 }
 
@@ -28,7 +28,7 @@ export default function ProjectsView() {
       <div class="row">
         <h1>{t("projects.title")}</h1>
         <div class="spacer" />
-        <button class="btn" onClick={() => setEditing(blank())}>{t("projects.new")}</button>
+        <button class="btn" onClick={() => setEditing(blankProject())}>{t("projects.new")}</button>
       </div>
 
       <Show when={editing()}>
@@ -83,15 +83,27 @@ function basename(path: string): string {
   return parts[parts.length - 1] ?? "";
 }
 
-function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (p: Project) => void }) {
+export function ProjectForm(props: {
+  project: Project;
+  onDone: () => void;
+  onChanged: (p: Project) => void;
+  onSaved?: (p: Project) => void | Promise<void>;
+}) {
   const [draft, setDraft] = createStore<Project>({ ...props.project });
   const [error, setError] = createSignal<unknown>(null);
   const [confirming, setConfirming] = createSignal(false);
+  const [saving, setSaving] = createSignal(false);
 
   const save = async () => {
+    if (saving()) return;
+    setSaving(true);
     setError(null);
     try {
       const saved = await API.SaveProject({ ...draft });
+      if (props.onSaved) {
+        await props.onSaved(saved);
+        return;
+      }
       // A new repository stays open: connecting its hosting is the next thing
       // somebody setting it up does, and it is done here.
       if (!draft.id && saved.repo) {
@@ -104,6 +116,8 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
       // Shown here rather than at the top of the screen: a path with a typo in
       // it is refused while the person can still see what they typed.
       setError(e);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -192,7 +206,7 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
           </Show>
         </Show>
         <button class="btn quiet" onClick={props.onDone}>{t("common.close")}</button>
-        <button class="btn primary" onClick={save}>{t("common.save")}</button>
+        <button class="btn primary" disabled={saving()} onClick={save}>{t("common.save")}</button>
       </div>
     </div>
   );

@@ -161,7 +161,7 @@ export const ru: Dict = {
   "card.propValue": "значение",
   "card.setProp": "Задать",
   "card.project": "Проект",
-  "card.noProjects": "Проектов нет, задача работает в своей пустой папке.",
+  "card.noProjects": "Задачи без проекта работают в общей папке черновиков default_project.",
   "card.opensIn": "Агент, терминал и заметки открываются в {path}",
   "card.ownFolderNote": "Задача откроется в общей папке черновиков default_project.",
   "card.onWorktree": "Отдельное рабочее дерево",
@@ -247,7 +247,8 @@ export const ru: Dict = {
   // ---- projects ----
   "projects.title": "Проекты",
   "projects.new": "+ Проект",
-  "projects.empty": "Проектов нет, каждая задача работает в своей пустой папке.",
+  "projects.newTitle": "Новый проект",
+  "projects.empty": "Задачи без проекта работают в общей папке черновиков default_project.",
   "projects.pickTitle": "Папка проекта",
   "projects.name": "Название",
   "projects.kind": "Вид",
