@@ -712,6 +712,28 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
    the work is watched, in the strip, and the text is the only thing in it. */
 .screen.draft { flex-basis: 100%; }
 .compose { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.compose-entry { flex: 1; min-height: 0; display: grid; place-items: center; overflow: auto; padding: 24px; }
+.compose-entry-content { width: min(620px, 100%); text-align: center; }
+.compose-entry h2 { margin: 8px 0 20px; }
+.compose-project { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compose-entry .compose-project { margin: 0; color: var(--accent); }
+.compose-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 24px; }
+.compose-choice {
+  display: flex; flex-direction: column; gap: 10px; padding: 24px;
+  text-align: left; background: var(--panel-2); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-surface); cursor: pointer;
+}
+.compose-choice:hover, .compose-choice:focus-visible { border-color: var(--accent); background: var(--accent-wash); }
+.compose-choice strong { font-size: 16px; }
+.compose-choice span { font-size: 13px; color: var(--dim); }
+.compose-heading { flex: none; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.compose-heading h3 { margin: 0; white-space: nowrap; }
+.compose-heading .compose-project { margin-left: auto; }
+.compose > .compose-settings { flex: none; align-items: end; padding: 12px 18px; border-top: 0; border-bottom: 1px solid var(--line); }
+.compose-settings .field { min-width: 140px; max-width: 260px; margin: 0; }
+.compose-settings select { width: 100%; }
+.compose-actions { flex: none; padding: 10px 18px; border-top: 1px solid var(--line); }
+.compose-selected { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .compose-text {
   flex: 1; min-height: 0; resize: none;
   border: 0; border-radius: 0; background: var(--bg);
@@ -719,12 +741,6 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   overscroll-behavior-y: contain;
 }
 .compose-text:focus { outline: none; }
-.compose-location {
-  flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--panel);
-}
-.compose > .row { padding: 8px 12px; border-top: 1px solid var(--line); }
-.compose select { width: auto; }
 /* The conversations to continue take the text's place: a continued task has
    nothing to type. */
 .compose-sessions {
@@ -764,15 +780,10 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   font-family: var(--mono); font-size: 12px; line-height: 1.6;
   white-space: pre-wrap; overflow-wrap: anywhere; overscroll-behavior: contain;
 }
-/* Two ways to begin, one of which is always chosen. */
-.compose-mode { display: flex; border: 1px solid var(--line); border-radius: var(--radius-control); overflow: hidden; }
-.compose-mode button {
-  background: none; border: 0; border-radius: 0; padding: 4px 12px;
-  color: var(--dim); cursor: pointer;
+@container (width < 520px) {
+  .compose-choices { grid-template-columns: minmax(0, 1fr); }
+  .compose-choice { padding: 16px; }
 }
-.compose-mode button + button { border-left: 1px solid var(--line); }
-.compose-mode button:hover { color: var(--text); }
-.compose-mode button.on { background: var(--panel-2); color: var(--accent); }
 
 /* The stack does not scroll under the hand: a plain wheel belongs to whatever
    is under the pointer, and taking it here is how a ribbon starts fighting the

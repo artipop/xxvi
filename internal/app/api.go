@@ -1075,28 +1075,39 @@ func (s *API) checkWorkMode(projectID, folderID, mode string) error {
 // pastSessionsTimeout bounds asking an agent for its conversations.
 const pastSessionsTimeout = 90 * time.Second
 
+func (s *API) pastSessionDir(projectID, folderID string) (string, error) {
+	if projectID == "" {
+		dir := filepath.Join(s.app.DataDir, "default_project")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "", err
+		}
+		return dir, nil
+	}
+	whole, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return "", err
+	}
+	project, err := whole.In(folderID)
+	if err != nil {
+		return "", err
+	}
+	return project.Path, nil
+}
+
 // PastSessions lists the conversations an agent already had in a project's
-// folder, for a card to continue one of them. A project is required: a card
-// with no project works in a fresh folder, where nobody has talked to anyone.
+// folder, or in the shared draft folder, for a card to continue one of them.
 func (s *API) PastSessions(agentName, projectID, folderID string) ([]acp.PastSession, error) {
 	agent, err := s.app.Store.Agent(agentName)
 	if err != nil {
 		return nil, err
 	}
-	if projectID == "" {
-		return nil, msg.Err("sessions.needProject")
-	}
-	whole, err := s.app.Store.Project(projectID)
-	if err != nil {
-		return nil, err
-	}
-	project, err := whole.In(folderID)
+	dir, err := s.pastSessionDir(projectID, folderID)
 	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), pastSessionsTimeout)
 	defer cancel()
-	return acp.PastSessions(ctx, agent, project.Path)
+	return acp.PastSessions(ctx, agent, dir)
 }
 
 func (s *API) PastSessionPreview(agentName, sessionID string) (string, error) {
@@ -1118,20 +1129,13 @@ func (s *API) RenamePastSession(agentName, projectID, folderID, sessionID, title
 	if err != nil {
 		return "", err
 	}
-	if projectID == "" {
-		return "", msg.Err("sessions.needProject")
-	}
-	whole, err := s.app.Store.Project(projectID)
-	if err != nil {
-		return "", err
-	}
-	project, err := whole.In(folderID)
+	dir, err := s.pastSessionDir(projectID, folderID)
 	if err != nil {
 		return "", err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), pastSessionsTimeout)
 	defer cancel()
-	return acp.RenamePastSession(ctx, agent, project.Path, sessionID, title)
+	return acp.RenamePastSession(ctx, agent, dir, sessionID, title)
 }
 
 func (s *API) DeletePastSession(agentName, projectID, folderID, sessionID string) error {
@@ -1139,20 +1143,13 @@ func (s *API) DeletePastSession(agentName, projectID, folderID, sessionID string
 	if err != nil {
 		return err
 	}
-	if projectID == "" {
-		return msg.Err("sessions.needProject")
-	}
-	whole, err := s.app.Store.Project(projectID)
-	if err != nil {
-		return err
-	}
-	project, err := whole.In(folderID)
+	dir, err := s.pastSessionDir(projectID, folderID)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), pastSessionsTimeout)
 	defer cancel()
-	return acp.DeletePastSession(ctx, agent, project.Path, sessionID)
+	return acp.DeletePastSession(ctx, agent, dir, sessionID)
 }
 
 // CheckAgent asks a registered agent what it is and what it can do.

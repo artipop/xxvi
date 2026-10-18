@@ -343,16 +343,15 @@ export const en: Dict = {
   // ---- a task typed into the ribbon ----
   "compose.placeholder": "What should be done? The first line is the title. Leave it empty to tell the agent in the terminal.",
   "compose.untitled": "Untitled task",
-  "compose.who": "Who does it",
+  "compose.who": "Agent",
   "compose.flow": "Which flow",
   "compose.folder": "Which folder",
   "compose.draftFolder": "The session will open in the shared drafts folder, default_project.",
   "compose.startDraft": "Open draft",
   "compose.start": "Start ↵",
-  "compose.modeNew": "New",
-  "compose.fromSession": "From a session",
+  "compose.modeNew": "New session",
+  "compose.fromSession": "Existing session",
   "compose.fromSessionWhy": "Continue a conversation this agent already had in the project folder",
-  "compose.sessionsNeedProject": "Choose a project: sessions are looked up in its folder.",
   "compose.sessionsLoading": "Asking the agent…",
   "compose.sessionsNone": "This agent has no sessions in the project folder.",
   "compose.confirmDeleteSession": "Permanently delete this conversation?",
@@ -361,6 +360,13 @@ export const en: Dict = {
   "compose.previewHint": "Saved history: up to 5000 recent lines",
   "compose.renameSession": "Rename",
   "compose.sessionName": "Conversation name",
+
+  "compose.chooseStart": "How would you like to start?",
+  "compose.newHint": "Start a conversation and choose how to work in the folder.",
+  "compose.back": "← Back",
+  "compose.workMode": "Working copy",
+  "compose.openSession": "Open session",
+  "compose.noAgents": "Add an agent in Agents to open its sessions.",
 
   // ---- terminal ----
   "terminal.shellEnded": "the shell has ended",

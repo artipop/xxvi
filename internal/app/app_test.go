@@ -634,3 +634,40 @@ func TestWorkModeIsARepositoryQuestionAnsweredOnce(t *testing.T) {
 		t.Fatal("задача с деревом в папке без git — отказ до создания")
 	}
 }
+
+func TestPastSessionFoldersMatchWhereConversationsResume(t *testing.T) {
+	a := open(t)
+	api := NewAPI(a)
+	dev := mustFlow(t, a, "Development")
+	project, err := api.SaveProject(model.Project{Name: "Two folders", Folders: []model.Folder{
+		{Name: "front", Path: t.TempDir()}, {Name: "back", Path: t.TempDir()},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, project, folder, want string }{
+		{"drafts", "", "", filepath.Join(a.DataDir, "default_project")},
+		{"second folder", project.ID, project.Folders[1].ID, project.Folders[1].Path},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, err := api.pastSessionDir(tc.project, tc.folder)
+			if err != nil || dir != tc.want {
+				t.Fatalf("session lookup folder: %q, %v", dir, err)
+			}
+			view, err := api.ContinueSession("saved-conversation", "Continue", "", tc.project, tc.folder, "", "Claude", dev.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cwd, err := a.Agents.WorkDir(view.Card.ID)
+			if err != nil || cwd != dir {
+				t.Fatalf("conversation resumed in a different folder: %q, %v", cwd, err)
+			}
+		})
+	}
+	if _, err := api.pastSessionDir("missing", ""); err == nil {
+		t.Fatal("unknown project must not become drafts")
+	}
+	if _, err := api.pastSessionDir(project.ID, "missing"); err == nil {
+		t.Fatal("unknown folder must not become the first folder")
+	}
+}

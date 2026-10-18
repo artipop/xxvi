@@ -441,8 +441,7 @@ export function PastSessionPreview(agentName: string, sessionID: string): $Cance
 
 /**
  * PastSessions lists the conversations an agent already had in a project's
- * folder, for a card to continue one of them. A project is required: a card
- * with no project works in a fresh folder, where nobody has talked to anyone.
+ * folder, or in the shared draft folder, for a card to continue one of them.
  */
 export function PastSessions(agentName: string, projectID: string, folderID: string): $CancellablePromise<acp$0.PastSession[] | null> {
     return $Call.ByID(1804879299, agentName, projectID, folderID);

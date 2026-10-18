@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
 import type { PastSession } from "../../bindings/github.com/artipop/gandvik/internal/acp/models";
@@ -20,6 +20,7 @@ import { SessionPreview } from "./session-preview";
 // question with a known answer.
 
 const KEY = "gandvik.compose";
+type SessionChoice = PastSession & { folderID: string };
 
 function remembered(): { workMode?: string; agent?: string; flow?: string; folders?: Record<string, string> } {
   try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; }
@@ -35,21 +36,23 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   // between again only when the work moves from one to the other.
   const [folders, setFolders] = createSignal<Record<string, string>>(was.folders ?? {});
   const [busy, setBusy] = createSignal(false);
-  const [fromSession, setFromSession] = createSignal(false);
-  const [sessions, setSessions] = createSignal<PastSession[] | undefined>();
+  const [step, setStep] = createSignal<"new" | "existing" | null>(null);
+  const fromSession = () => step() === "existing";
+  const [sessions, setSessions] = createSignal<SessionChoice[] | undefined>();
   const [sessionsError, setSessionsError] = createSignal("");
-  const [session, setSession] = createSignal<PastSession | undefined>();
+  const [session, setSession] = createSignal<SessionChoice | undefined>();
   const [confirming, setConfirming] = createSignal("");
   const [deleting, setDeleting] = createSignal("");
   const [preview, setPreview] = createSignal<PastSession | undefined>();
   const [editing, setEditing] = createSignal("");
   const [sessionTitle, setSessionTitle] = createSignal("");
   const [savingTitle, setSavingTitle] = createSignal("");
-  let box: HTMLTextAreaElement | undefined;
+  createEffect(workspace, () => { setStep(null); });
 
   // The project is where the task is typed, not a question: the workspace
   // standing open is the answer.
   const projectID = () => (projects().some((p) => p.id === workspace()) ? workspace() : "");
+  const projectName = () => projects().find((p) => p.id === projectID())?.name ?? t("ribbon.noProject");
   // Which of the project's folders: a question only when it has more than one.
   const folder = () => taskFolder(projectID(), folders()[projectID()]) ?? taskFolder(projectID(), "");
   const folderID = () => folder()?.id ?? "";
@@ -69,7 +72,8 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   // The answer to an older question is dropped: a slow adapter must not fill
   // the list for an agent that is no longer chosen.
   let asked = 0;
-  createEffect(() => [fromSession(), agentName(), projectID(), folderID()] as const, ([on, who, where, dir]) => {
+  onCleanup(() => { ++asked; });
+  createEffect(() => [fromSession(), agentName(), projectID(), projectFolders(projectID()).map((f) => f.id).join("|")] as const, ([on, who, where]) => {
     const n = ++asked;
     setSession(undefined);
     setSessions(undefined);
@@ -80,26 +84,37 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     setEditing("");
     setSessionTitle("");
     setSavingTitle("");
-    if (!on || !who || !where) return;
-    API.PastSessions(who, where, dir).then(
-      (got) => { if (n === asked) setSessions(got ?? []); },
-      (err) => { if (n === asked) setSessionsError(errorText(err)); },
-    );
+    if (!on || !who) return;
+    const dirs = projectFolders(where);
+    const ids = dirs.length > 0 ? dirs.map((f) => f.id) : [""];
+    void Promise.allSettled(ids.map(async (id) =>
+      (await API.PastSessions(who, where, id) ?? []).map((past) => ({ ...past, folderID: id }))
+    )).then((results) => {
+      if (n !== asked) return;
+      const found: SessionChoice[] = [];
+      const errors: string[] = [];
+      results.forEach((result, i) => {
+        if (result.status === "fulfilled") found.push(...result.value);
+        else errors.push((dirs.length > 1 ? folderName(dirs[i]) + ": " : "") + errorText(result.reason));
+      });
+      setSessions(found.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")));
+      setSessionsError(errors.join("\n"));
+    });
   });
 
   const sessionBusy = () => busy() || !!deleting() || !!savingTitle();
-  const ready = () => !sessionBusy() && !editing() && !preview() && !!flowID() && (!fromSession() || !!session());
+  const ready = () => !!step() && !!agentName() && !sessionBusy() && !editing() && !preview() && !!flowID() && (!fromSession() || !!session());
 
-  const renameSession = async (s: PastSession) => {
+  const renameSession = async (s: SessionChoice) => {
     if (sessionBusy() || editing() !== s.id || !sessionTitle().trim()) return;
     const n = asked;
     setSavingTitle(s.id);
     setSessionsError("");
     try {
-      const title = await API.RenamePastSession(agentName(), projectID(), folderID(), s.id, sessionTitle());
+      const title = await API.RenamePastSession(agentName(), projectID(), s.folderID, s.id, sessionTitle());
       if (n !== asked) return;
-      setSessions((got) => got?.map((past) => past.id === s.id ? { ...past, title } : past));
-      if (session()?.id === s.id) setSession({ ...s, title });
+      setSessions((got) => got?.map((past) => past.id === s.id && past.folderID === s.folderID ? { ...past, title } : past));
+      if (session()?.id === s.id && session()?.folderID === s.folderID) setSession({ ...s, title });
       setEditing("");
     } catch (err) {
       if (n === asked) setSessionsError(errorText(err));
@@ -108,16 +123,16 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     }
   };
 
-  const removeSession = async (s: PastSession) => {
+  const removeSession = async (s: SessionChoice) => {
     if (sessionBusy() || confirming() !== s.id) return;
     const n = asked;
     setDeleting(s.id);
     setSessionsError("");
     try {
-      await API.DeletePastSession(agentName(), projectID(), folderID(), s.id);
+      await API.DeletePastSession(agentName(), projectID(), s.folderID, s.id);
       if (n !== asked) return;
-      setSessions((got) => got?.filter((past) => past.id !== s.id));
-      if (session()?.id === s.id) setSession(undefined);
+      setSessions((got) => got?.filter((past) => past.id !== s.id || past.folderID !== s.folderID));
+      if (session()?.id === s.id && session()?.folderID === s.folderID) setSession(undefined);
       setConfirming("");
     } catch (err) {
       if (n === asked) setSessionsError(errorText(err));
@@ -125,10 +140,6 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
       if (n === asked) setDeleting("");
     }
   };
-
-  // Without scrolling: the stack moves by whole ribbons and only when asked,
-  // and a focus that dragged it would land it between two of them.
-  onSettled(() => { box?.focus({ preventScroll: true }); });
 
   const start = async () => {
     if (!ready()) return;
@@ -139,7 +150,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     // the agent is handed what was typed, and here that is nothing.
     const view = await guard(() =>
       from
-        ? API.ContinueSession(from.id, from.title ?? "", "", projectID(), folderID(), "", agentName(), flowID())
+        ? API.ContinueSession(from.id, from.title ?? "", "", projectID(), from.folderID, "", agentName(), flowID())
         : API.StartTask(text(), t("compose.untitled"), projectID(), folderID(), mode(), agentName(), flowID()));
     setBusy(false);
     if (!view) return;
@@ -147,7 +158,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
       localStorage.setItem(KEY, JSON.stringify({ workMode: workMode(), agent: agentName(), flow: flowID(), folders: folders() }));
     } catch { /* a convenience, not a record */ }
     setText("");
-    setFromSession(false);
+    setStep(null);
     applyCard(view);
     props.onStarted?.();
     showRibbon(view.card.id);
@@ -160,144 +171,181 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
         // The ribbon listens on the window, and a key meant for this form stays here.
         if (e.key === "Escape") {
           if (preview()) { e.preventDefault(); e.stopPropagation(); setPreview(undefined); }
-          else if (props.onCancel) { e.stopPropagation(); props.onCancel(); }
+          else if (step() && !sessionBusy()) { e.preventDefault(); e.stopPropagation(); setStep(null); }
+          else if (props.onCancel && !sessionBusy()) { e.stopPropagation(); props.onCancel(); }
         }
       }}
     >
-      <Show when={!projectID() && !fromSession()}>
-        <div class="compose-location" role="status">
-          <strong class="draft-label">{t("ribbon.draft")}</strong>
-          <span>{t("compose.draftFolder")}</span>
+      <Show when={!step()}>
+        <div class="compose-entry">
+          <div class="compose-entry-content">
+            <p class="compose-project">{projectName()}</p>
+            <h2>{t("compose.chooseStart")}</h2>
+            <Show when={!projectID()}>
+              <p class="meta">{t("compose.draftFolder")}</p>
+            </Show>
+            <div class="compose-choices">
+              <button class="compose-choice" onClick={() => setStep("new")}>
+                <strong>{t("compose.modeNew")}</strong>
+                <span>{t("compose.newHint")}</span>
+              </button>
+              <button class="compose-choice" onClick={() => setStep("existing")}>
+                <strong>{t("compose.fromSession")}</strong>
+                <span>{t("compose.fromSessionWhy")}</span>
+              </button>
+            </div>
+          </div>
         </div>
       </Show>
-      <Show
-        when={fromSession()}
-        fallback={
-          <textarea
-            ref={box}
-            class="compose-text"
-            placeholder={t("compose.placeholder")}
-            value={text()}
-            onInput={(e) => setText(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              // Enter sends, as in a chat; a new line is Shift+Enter.
-              if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); void start(); }
-            }}
-          />
-        }
-      >
-        <div class="compose-sessions">
-          <Show when={preview()}>
-            {(past) => <SessionPreview agentName={agentName()} session={past()} onClose={() => setPreview(undefined)} />}
-          </Show>
-          <Show when={!preview()}>
-            <Show when={!projectID()}>
-              <p class="empty">{t("compose.sessionsNeedProject")}</p>
+      <Show when={step()}>
+        <header class="compose-heading row">
+          <button class="btn quiet" disabled={sessionBusy()} onClick={() => setStep(null)}>{t("compose.back")}</button>
+          <h3>{fromSession() ? t("compose.fromSession") : t("compose.modeNew")}</h3>
+          <span class="meta compose-project">{projectName()}</span>
+        </header>
+        <Show when={!preview()}>
+          <div class="compose-settings row wrap">
+            <Show when={!fromSession() && projectFolders(projectID()).length > 1}>
+              <label class="field">
+                <span>{t("compose.folder")}</span>
+                <select aria-label={t("compose.folder")} value={folderID()} disabled={sessionBusy()}
+                        onChange={(e) => { const id = e.currentTarget.value; setFolders((f) => ({ ...f, [projectID()]: id })); }}>
+                  <For each={projectFolders(projectID())}>{(f) => <option value={f.id}>{folderName(f)}</option>}</For>
+                </select>
+              </label>
             </Show>
-            <Show when={projectID() && sessionsError()}>
-              <div class="screen-error">{sessionsError()}</div>
+            <Show when={isRepo() && !fromSession()}>
+              <label class="field">
+                <span>{t("compose.workMode")}</span>
+                <select aria-label={t("compose.workMode")} value={mode()} disabled={sessionBusy()} onChange={(e) => setWorkMode(e.currentTarget.value)}
+                        title={workModes().find((m) => m.value === mode())?.why}>
+                  <For each={workModes()}>{(m) => <option value={m.value}>{m.label}</option>}</For>
+                </select>
+              </label>
             </Show>
-            <Show when={projectID() && !sessionsError() && !sessions()}>
-              <p class="empty loading"><span class="spinner" />{t("compose.sessionsLoading")}</p>
+            <label class="field">
+              <span>{t("compose.who")}</span>
+              <select aria-label={t("compose.who")} value={agentName()} disabled={sessionBusy()} onChange={(e) => setAgent(e.currentTarget.value)}>
+                <For each={list(agents().agents)}>{(a) => <option value={a.name}>{a.name}</option>}</For>
+              </select>
+            </label>
+            <Show when={!fromSession()}>
+              <label class="field">
+                <span>{t("compose.flow")}</span>
+                <select aria-label={t("compose.flow")} value={flowID()} disabled={sessionBusy()} onChange={(e) => setFlow(e.currentTarget.value)}>
+                  <For each={flows()}>{(f) => <option value={f.id}>{f.name}</option>}</For>
+                </select>
+              </label>
             </Show>
-            <Show when={sessions()?.length === 0}>
-              <p class="empty">{t("compose.sessionsNone")}</p>
+          </div>
+        </Show>
+        <Show
+          when={fromSession()}
+          fallback={
+            <textarea
+              ref={(el) => { queueMicrotask(() => { if (el.isConnected) el.focus({ preventScroll: true }); }); }}
+              class="compose-text"
+              disabled={busy()}
+              placeholder={t("compose.placeholder")}
+              value={text()}
+              onInput={(e) => setText(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                // Enter sends, as in a chat; a new line is Shift+Enter.
+                if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); void start(); }
+              }}
+            />
+          }
+        >
+          <div class="compose-sessions">
+            <Show when={preview()}>
+              {(past) => <SessionPreview agentName={agentName()} session={past()} onClose={() => setPreview(undefined)} />}
             </Show>
-            <For each={sessions() ?? []}>
-              {(s) => (
-                <div
-                  class={`compose-session ${session()?.id === s.id ? "on" : ""}`}
-                >
-                  <Show when={editing() !== s.id} fallback={
-                    <form class="compose-session-rename" onSubmit={(e) => { e.preventDefault(); void renameSession(s); }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          e.preventDefault(); e.stopPropagation();
-                          if (!savingTitle()) setEditing("");
-                        }
-                      }}>
-                      <input value={sessionTitle()} aria-label={t("compose.sessionName")} disabled={sessionBusy()}
-                        ref={(el) => { queueMicrotask(() => { el.focus({ preventScroll: true }); el.select(); }); }}
-                        onInput={(e) => setSessionTitle(e.currentTarget.value)} />
-                      <button class="btn primary" type="submit" disabled={sessionBusy() || !sessionTitle().trim()}>
-                        <Show when={savingTitle() === s.id}><span class="spinner" /></Show>
-                        {t("common.save")}
+            <Show when={!preview()}>
+              <Show when={!agentName()}>
+                <p class="empty">{t("compose.noAgents")}</p>
+              </Show>
+              <Show when={sessionsError()}>
+                <div class="screen-error">{sessionsError()}</div>
+              </Show>
+              <Show when={agentName() && !sessionsError() && !sessions()}>
+                <p class="empty loading"><span class="spinner" />{t("compose.sessionsLoading")}</p>
+              </Show>
+              <Show when={!sessionsError() && sessions()?.length === 0}>
+                <p class="empty">{t("compose.sessionsNone")}</p>
+              </Show>
+              <For each={sessions() ?? []}>
+                {(s) => (
+                  <div
+                    class={`compose-session ${session()?.id === s.id && session()?.folderID === s.folderID ? "on" : ""}`}
+                  >
+                    <Show when={editing() !== s.id} fallback={
+                      <form class="compose-session-rename" onSubmit={(e) => { e.preventDefault(); void renameSession(s); }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            e.preventDefault(); e.stopPropagation();
+                            if (!savingTitle()) setEditing("");
+                          }
+                        }}>
+                        <input value={sessionTitle()} aria-label={t("compose.sessionName")} disabled={sessionBusy()}
+                          ref={(el) => { queueMicrotask(() => { el.focus({ preventScroll: true }); el.select(); }); }}
+                          onInput={(e) => setSessionTitle(e.currentTarget.value)} />
+                        <button class="btn primary" type="submit" disabled={sessionBusy() || !sessionTitle().trim()}>
+                          <Show when={savingTitle() === s.id}><span class="spinner" /></Show>
+                          {t("common.save")}
+                        </button>
+                        <button class="btn quiet" type="button" disabled={!!savingTitle()}
+                          onClick={() => setEditing("")}>{t("common.cancel")}</button>
+                      </form>
+                    }>
+                      <button class="compose-session-pick" title={s.cwd} disabled={sessionBusy()}
+                        onClick={() => { setSession(s); setConfirming(""); }}
+                        onDblClick={() => { if (canManage()) setPreview(s); }}>
+                        <span class="meta">{when(s.updatedAt, false)}</span>
+                        <span class="compose-session-title">{s.title || s.id}</span>
                       </button>
-                      <button class="btn quiet" type="button" disabled={!!savingTitle()}
-                        onClick={() => setEditing("")}>{t("common.cancel")}</button>
-                    </form>
-                  }>
-                    <button class="compose-session-pick" title={s.cwd} disabled={sessionBusy()}
-                      onClick={() => { setSession(s); setConfirming(""); }}
-                      onDblClick={() => { if (canManage()) setPreview(s); }}>
-                      <span class="meta">{when(s.updatedAt, false)}</span>
-                      <span class="compose-session-title">{s.title || s.id}</span>
-                    </button>
-                    <Show when={canManage() && confirming() !== s.id}>
-                      <button class="btn quiet" disabled={sessionBusy()}
-                        onClick={() => { setConfirming(""); setPreview(s); }}>{t("compose.previewSession")}</button>
-                    </Show>
-                    <Show when={canManage() && confirming() !== s.id}>
-                      <button class="btn quiet" disabled={sessionBusy()}
-                        onClick={() => { setConfirming(""); setSessionTitle(s.title ?? ""); setEditing(s.id); }}>
-                        {t("compose.renameSession")}
-                      </button>
-                    </Show>
-                    <Show when={canManage()}>
-                      <Show when={confirming() === s.id} fallback={
+                      <Show when={canManage() && confirming() !== s.id}>
                         <button class="btn quiet" disabled={sessionBusy()}
-                          onClick={() => setConfirming(s.id)}>{t("common.delete")}</button>
-                      }>
-                        <span class="meta">{t("compose.confirmDeleteSession")}</span>
-                        <button class="btn quiet" disabled={!!deleting()}
-                          onClick={() => setConfirming("")}>{t("common.cancel")}</button>
-                        <button class="btn danger" disabled={sessionBusy()}
-                          onClick={() => void removeSession(s)}>
-                          <Show when={deleting() === s.id}><span class="spinner" /></Show>
-                          {t("common.delete")}
+                          onClick={() => { setConfirming(""); setPreview(s); }}>{t("compose.previewSession")}</button>
+                      </Show>
+                      <Show when={canManage() && confirming() !== s.id}>
+                        <button class="btn quiet" disabled={sessionBusy()}
+                          onClick={() => { setConfirming(""); setSessionTitle(s.title ?? ""); setEditing(s.id); }}>
+                          {t("compose.renameSession")}
                         </button>
                       </Show>
+                      <Show when={canManage()}>
+                        <Show when={confirming() === s.id} fallback={
+                          <button class="btn quiet" disabled={sessionBusy()}
+                            onClick={() => setConfirming(s.id)}>{t("common.delete")}</button>
+                        }>
+                          <span class="meta">{t("compose.confirmDeleteSession")}</span>
+                          <button class="btn quiet" disabled={!!deleting()}
+                            onClick={() => setConfirming("")}>{t("common.cancel")}</button>
+                          <button class="btn danger" disabled={sessionBusy()}
+                            onClick={() => void removeSession(s)}>
+                            <Show when={deleting() === s.id}><span class="spinner" /></Show>
+                            {t("common.delete")}
+                          </button>
+                        </Show>
+                      </Show>
                     </Show>
-                  </Show>
-                </div>
-              )}
-            </For>
-          </Show>
-        </div>
-      </Show>
-      <Show when={!preview()}>
-        <div class="row wrap">
-          <div class="compose-mode" role="group">
-            <button class={!fromSession() ? "on" : ""} onClick={() => setFromSession(false)}>
-              {t("compose.modeNew")}
-            </button>
-            <button class={fromSession() ? "on" : ""} onClick={() => setFromSession(true)} title={t("compose.fromSessionWhy")}>
-              {t("compose.fromSession")}
-            </button>
+                  </div>
+                )}
+              </For>
+            </Show>
           </div>
-          <Show when={projectFolders(projectID()).length > 1}>
-            <select value={folderID()} title={t("compose.folder")}
-                    onChange={(e) => { const id = e.currentTarget.value; setFolders((f) => ({ ...f, [projectID()]: id })); }}>
-              <For each={projectFolders(projectID())}>{(f) => <option value={f.id}>{folderName(f)}</option>}</For>
-            </select>
-          </Show>
-          <Show when={isRepo() && !fromSession()}>
-            <select value={mode()} onChange={(e) => setWorkMode(e.currentTarget.value)}
-                    title={workModes().find((m) => m.value === mode())?.why}>
-              <For each={workModes()}>{(m) => <option value={m.value}>{m.label}</option>}</For>
-            </select>
-          </Show>
-          <select value={agentName()} onChange={(e) => setAgent(e.currentTarget.value)} title={t("compose.who")}>
-            <For each={list(agents().agents)}>{(a) => <option value={a.name}>{a.name}</option>}</For>
-          </select>
-          <select value={flowID()} onChange={(e) => setFlow(e.currentTarget.value)} title={t("compose.flow")}>
-            <For each={flows()}>{(f) => <option value={f.id}>{f.name}</option>}</For>
-          </select>
-          <div class="spacer" />
-          <button class="btn primary" onClick={start} disabled={!ready()}>
-            {!projectID() && !fromSession() ? t("compose.startDraft") : t("compose.start")}
-          </button>
-        </div>
+        </Show>
+        <Show when={!preview()}>
+          <footer class="compose-actions row">
+            <Show when={fromSession() && session()}>
+              <span class="meta compose-selected">{session()!.title || session()!.id}</span>
+            </Show>
+            <div class="spacer" />
+            <button class="btn primary" onClick={start} disabled={!ready()}>
+              {fromSession() ? t("compose.openSession") : !projectID() ? t("compose.startDraft") : t("compose.start")}
+            </button>
+          </footer>
+        </Show>
       </Show>
     </div>
   );

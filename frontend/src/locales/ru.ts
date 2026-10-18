@@ -355,16 +355,15 @@ export const ru: Dict = {
   // ---- a task typed into the ribbon ----
   "compose.placeholder": "Что сделать? Первая строка — заголовок. Можно оставить пустым и сказать всё агенту в терминале.",
   "compose.untitled": "Задача без описания",
-  "compose.who": "Кто делает",
+  "compose.who": "Агент",
   "compose.flow": "По какому флоу",
   "compose.folder": "В какой папке",
   "compose.draftFolder": "Сессия откроется в общей папке черновиков default_project.",
   "compose.startDraft": "Открыть черновик",
   "compose.start": "Начать ↵",
-  "compose.modeNew": "Новая",
-  "compose.fromSession": "Из сессии",
+  "compose.modeNew": "Новая сессия",
+  "compose.fromSession": "Из существующей",
   "compose.fromSessionWhy": "Продолжить разговор, который уже был с этим агентом в папке проекта",
-  "compose.sessionsNeedProject": "Выберите проект: сессии ищутся в его папке.",
   "compose.sessionsLoading": "Спрашиваю агента…",
   "compose.sessionsNone": "В папке проекта у этого агента сессий нет.",
   "compose.confirmDeleteSession": "Удалить разговор навсегда?",
@@ -373,6 +372,13 @@ export const ru: Dict = {
   "compose.previewHint": "Сохранённая история: до 5000 последних строк",
   "compose.renameSession": "Переименовать",
   "compose.sessionName": "Название разговора",
+
+  "compose.chooseStart": "С чего начнём?",
+  "compose.newHint": "Начать разговор с агентом и настроить рабочую папку.",
+  "compose.back": "← Назад",
+  "compose.workMode": "Рабочая копия",
+  "compose.openSession": "Открыть сессию",
+  "compose.noAgents": "Добавьте агента в разделе «Агенты», чтобы открыть его сессии.",
 
   // ---- terminal ----
   "terminal.shellEnded": "шелл завершился",
