@@ -627,6 +627,11 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 /* Dragging the window from a button is not what pressing it means. */
 .ribbon-bar button, .ribbon-bar a, .ribbon-bar .card-menu { --wails-draggable: no-drag; }
 .ribbon-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-label {
+  flex: none; padding: 3px 7px; border: 1px solid var(--accent);
+  border-radius: var(--radius-control); color: var(--accent);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+}
 
 /* Notes take a line under the bar and push the stack down rather than float
    over it: Ghostty draws its terminals over the page, and a note floating
@@ -700,7 +705,10 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   overscroll-behavior-y: contain;
 }
 .compose-text:focus { outline: none; }
-.compose-location { margin: 0; padding: 8px 12px; }
+.compose-location {
+  flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--panel);
+}
 .compose > .row { padding: 8px 12px; border-top: 1px solid var(--line); }
 .compose select { width: auto; }
 /* The conversations to continue take the text's place: a continued task has

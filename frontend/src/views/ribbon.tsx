@@ -443,6 +443,9 @@ export default function Ribbon(): JSX.Element {
       {/* The only chrome: room for the window's own buttons, the name of the
           job in front of you, and the one offer the ribbon ever makes. */}
       <header class="ribbon-bar">
+        <Show when={current() ? !current()!.project : !projects().some((p) => p.id === workspace())}>
+          <span class="draft-label" title={t("ribbon.draftHint")}>{t("ribbon.draft")}</span>
+        </Show>
         <span class="ribbon-where" title={current()
           ? (selected()?.segment.detail ? say(selected()!.segment.detail) : undefined)
           : t("ribbon.draftKeys")}>
