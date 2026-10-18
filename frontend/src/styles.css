@@ -631,6 +631,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   flex: none; padding: 3px 7px; border: 1px solid var(--accent);
   border-radius: var(--radius-control); color: var(--accent);
   font-size: 12px; font-weight: 600; white-space: nowrap;
+  -webkit-user-select: none; user-select: none; cursor: default;
 }
 
 /* Notes take a line under the bar and push the stack down rather than float
