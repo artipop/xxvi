@@ -345,6 +345,7 @@ export const en: Dict = {
   "compose.who": "Who does it",
   "compose.flow": "Which flow",
   "compose.folder": "Which folder",
+  "compose.draftFolder": "The session will open in its own draft folder.",
   "compose.start": "Start ↵",
   "compose.modeNew": "New",
   "compose.fromSession": "From a session",

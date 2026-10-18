@@ -357,6 +357,7 @@ export const ru: Dict = {
   "compose.who": "Кто делает",
   "compose.flow": "По какому флоу",
   "compose.folder": "В какой папке",
+  "compose.draftFolder": "Сессия откроется в отдельной драфт-папке.",
   "compose.start": "Начать ↵",
   "compose.modeNew": "Новая",
   "compose.fromSession": "Из сессии",

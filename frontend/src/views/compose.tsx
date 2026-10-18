@@ -260,6 +260,9 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
         </div>
       </Show>
       <Show when={!preview()}>
+        <Show when={!projectID() && !fromSession()}>
+          <p class="compose-location meta" role="status">{t("compose.draftFolder")}</p>
+        </Show>
         <div class="row wrap">
           <div class="compose-mode" role="group">
             <button class={!fromSession() ? "on" : ""} onClick={() => setFromSession(false)}>

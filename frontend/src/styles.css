@@ -700,6 +700,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   overscroll-behavior-y: contain;
 }
 .compose-text:focus { outline: none; }
+.compose-location { margin: 0; padding: 8px 12px; }
 .compose > .row { padding: 8px 12px; border-top: 1px solid var(--line); }
 .compose select { width: auto; }
 /* The conversations to continue take the text's place: a continued task has
