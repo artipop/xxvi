@@ -87,6 +87,7 @@ function Ask(props: { a: Attention }) {
 function standingText(why: string | undefined): string {
   switch (why) {
     case "answer": return "attention.standAnswer";
+    case "ready": return "attention.standReady";
     case "paused": return "attention.standPaused";
     default: return "attention.standStopped";
   }

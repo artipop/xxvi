@@ -362,9 +362,9 @@ func (s *Store) LeaveFlow(cardID string, state model.CardState) error {
 // this card here".
 func (s *Store) AppendFlowEvent(e model.FlowEvent) error {
 	_, err := s.db.Exec(`
-		INSERT INTO flow_event (card_id, flow_id, from_stage, to_stage, on_trigger, detail, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		e.CardID, e.FlowID, e.FromStage, e.ToStage, e.On, storedMsg(e.Detail), millis(time.Now()))
+		INSERT INTO flow_event (card_id, flow_id, from_stage, to_stage, on_trigger, detail, created_at, started)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		e.CardID, e.FlowID, e.FromStage, e.ToStage, e.On, storedMsg(e.Detail), millis(time.Now()), e.Started)
 	return err
 }
 
@@ -379,6 +379,7 @@ func (s *Store) FlowEvents(cardID string) ([]model.FlowEvent, error) {
 		OnTrigger string `db:"on_trigger"`
 		Detail    string `db:"detail"`
 		CreatedAt int64  `db:"created_at"`
+		Started   bool   `db:"started"`
 	}
 	if err := s.db.Select(&rows, `SELECT * FROM flow_event WHERE card_id = ? ORDER BY id`, cardID); err != nil {
 		return nil, err
@@ -387,7 +388,7 @@ func (s *Store) FlowEvents(cardID string) ([]model.FlowEvent, error) {
 	for _, r := range rows {
 		out = append(out, model.FlowEvent{
 			ID: r.ID, CardID: r.CardID, FlowID: r.FlowID, FromStage: r.FromStage,
-			ToStage: r.ToStage, On: r.OnTrigger, Detail: parsedMsg(r.Detail), CreatedAt: fromMillis(r.CreatedAt),
+			Started: r.Started, ToStage: r.ToStage, On: r.OnTrigger, Detail: parsedMsg(r.Detail), CreatedAt: fromMillis(r.CreatedAt),
 		})
 	}
 	return out, nil
@@ -408,6 +409,7 @@ func (s *Store) LastFlowEvent(cardID string) (model.FlowEvent, bool, error) {
 		OnTrigger string `db:"on_trigger"`
 		Detail    string `db:"detail"`
 		CreatedAt int64  `db:"created_at"`
+		Started   bool   `db:"started"`
 	}
 	err := s.db.Get(&r, `SELECT * FROM flow_event WHERE card_id = ? ORDER BY id DESC LIMIT 1`, cardID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -418,7 +420,7 @@ func (s *Store) LastFlowEvent(cardID string) (model.FlowEvent, bool, error) {
 	}
 	return model.FlowEvent{
 		ID: r.ID, CardID: r.CardID, FlowID: r.FlowID, FromStage: r.FromStage,
-		ToStage: r.ToStage, On: r.OnTrigger, Detail: parsedMsg(r.Detail), CreatedAt: fromMillis(r.CreatedAt),
+		Started: r.Started, ToStage: r.ToStage, On: r.OnTrigger, Detail: parsedMsg(r.Detail), CreatedAt: fromMillis(r.CreatedAt),
 	}, true, nil
 }
 
@@ -537,4 +539,9 @@ func writeProps(tx *sqlx.Tx, cardID string, props map[string]string) error {
 		}
 	}
 	return nil
+}
+
+func (s *Store) StartVisit(id int64) error {
+	_, err := s.db.Exec(`UPDATE flow_event SET started = 1 WHERE id = ?`, id)
+	return err
 }

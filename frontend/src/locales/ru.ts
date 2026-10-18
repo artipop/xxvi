@@ -3,6 +3,25 @@ import { msgRu } from "./msg.ru";
 
 // Russian. The keys are en.ts's; whatever is missing here is shown in English.
 export const ru: Dict = {
+  "notify.remindReady": "Шаг на «{stage}» ждёт запуска",
+  "attention.standReady": "Шаг на «{stage}» ждёт запуска",
+  "msg.terminal.conversationMissing": "Id разговора не сохранён. Автоматически выбрать другой разговор нельзя.",
+  "flows.focusOnEntry": "При входе на ноду",
+  "flows.focusFollow": "Показать её на ленте",
+  "flows.focusStay": "Оставить меня на текущем экране",
+  "flows.startOnEntry": "Запуск работы",
+  "flows.startAuto": "Автоматически при входе",
+  "flows.startManual": "По кнопке «Запустить шаг»",
+  "ribbon.startStage": "Запустить шаг",
+  "ribbon.awaitingStart": "Нода открыта. Работа ждёт вашего запуска.",
+  "ribbon.revisit": "Вернуться к этому шагу",
+  "ribbon.revisitNote": "Шаг завершён. Возврат остановит текущую работу и откроет этот разговор без новой реплики.",
+  "msg.stage.notReady": "Этот шаг уже запущен или задача перешла дальше.",
+  "msg.stage.cannotRevisit": "Этот разговор нельзя открыть для работы: проверьте, что нода и её агент ещё доступны.",
+  "msg.stage.revisitBusy": "На этой стадии сейчас нет свободного места.",
+  "msg.journal.startedByHand": "Человек запустил шаг.",
+  "msg.move.revisited": "Человек вернулся к разговору этого шага.",
+  "msg.journal.terminalClosedPaused": "Терминал закрылся. Разговор сохранён; шаг можно продолжить.",
   ...msgRu,
 
   // ---- the closed sets the backend names by their members ----
@@ -411,7 +430,7 @@ export const ru: Dict = {
   "ribbon.silentYet": "Агент ещё ничего не сказал.",
   "ribbon.agentRun": "Работа агента · {agent}",
   "ribbon.agentTerminal": "Агент · {agent}",
-  "ribbon.paused": "Приостановлено: приложение закрылось",
+  "ribbon.paused": "Шаг приостановлен",
   "ribbon.pausedTitle": "Разговор сохранён и продолжится с того же места.",
   "ribbon.continuePlaceholder": "Что сказать агенту (необязательно)",
   "ribbon.continue": "Продолжить",

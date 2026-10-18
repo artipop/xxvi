@@ -404,5 +404,9 @@ ALTER TABLE stage_template DROP COLUMN crew_json;`,
 );
 CREATE UNIQUE INDEX idx_proxy_key ON proxy(name_key);
 ALTER TABLE agent ADD COLUMN proxy_id TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE stage ADD COLUMN manual_start INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE stage ADD COLUMN keep_focus INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE flow_event ADD COLUMN started INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE agent_session ADD COLUMN visit_id INTEGER NOT NULL DEFAULT 0;`,
 	}
 }

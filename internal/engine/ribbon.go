@@ -45,7 +45,8 @@ type ScreenView struct {
 	Report *msg.Msg `json:"report,omitempty"`
 	// Paused is set on the last run of the stage the card stands on when the
 	// application closed on it: the screen offers to continue it (Continue).
-	Paused bool `json:"paused,omitempty"`
+	Paused      bool `json:"paused,omitempty"`
+	Revisitable bool `json:"revisitable,omitempty"`
 }
 
 // Notice is a journal entry the strip shows: why the card stands here, or why
@@ -78,6 +79,7 @@ type Segment struct {
 	Detail    *msg.Msg  `json:"detail,omitempty"`
 	EnteredAt time.Time `json:"enteredAt"`
 	Current   bool      `json:"current"`
+	Startable bool      `json:"startable,omitempty"`
 	// Gone says the stage was removed from the flow while the card was on it.
 	// The segment stays — what happened happened — and says why it is empty.
 	Gone    bool         `json:"gone,omitempty"`
@@ -115,7 +117,8 @@ type RibbonView struct {
 	// FocusID is where the ribbon flies when a step ends, and where it opens:
 	// the latest step of the segment the card stands in, or its first screen
 	// when no step has run there.
-	FocusID string `json:"focusId,omitempty"`
+	FocusID   string `json:"focusId,omitempty"`
+	KeepFocus bool   `json:"keepFocus,omitempty"`
 	// Returnable is a card taken off its flow into the inbox, which can go
 	// back to the stage it left (Engine.Return).
 	Returnable bool `json:"returnable,omitempty"`
@@ -217,6 +220,7 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 			continue
 		}
 		seg.StageName = stage.Name
+		seg.Startable = seg.Current && !ev.Started && model.Runs(stage.Action) && !stage.Final
 		if seg.Current {
 			seg.Marks = flow.MarksFrom(stage.ID)
 		}
@@ -227,7 +231,7 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 		// the CLI the person and the agent talked in, a session shows the
 		// stream, which is all a session ever had. The run says which — not the
 		// stage, which may have been edited since (docs/system.md §12.2).
-		runs := sessionsIn(sessions, stage.ID, ev.CreatedAt, entryAfter(events, i))
+		runs := sessionsIn(sessions, stage.ID, ev.ID, ev.CreatedAt, entryAfter(events, i))
 		for n, s := range runs {
 			visitOf[s.ID] = ev.ID
 			kind := "agent"
@@ -241,6 +245,9 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 				SessionID: s.ID,
 				Report:    lastReport(journal, s.ID),
 				Paused:    seg.Current && n == len(runs)-1 && s.Status == store.StatusPaused,
+				Revisitable: s.Work == model.WorkTerminal && s.Status.Terminal() && s.ACPSessionID != "" &&
+					s.FlowID == flow.ID && card.State != model.StateDropped && stage.Action == model.ActionAgent && stage.Work != model.WorkSession && !stage.Final &&
+					!(seg.Current && n == len(runs)-1 && s.Status == store.StatusPaused),
 			}
 			if n > 0 && resumesTerminal(runs[n-1], s) {
 				// A resumed CLI has a new process, but the person is returning to
@@ -268,7 +275,14 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 	placeProblems(view.Segments, events, journal, sessions, visitOf)
 
 	for _, seg := range view.Segments {
-		if !seg.Current || len(seg.Screens) == 0 {
+		if !seg.Current {
+			continue
+		}
+		if stage, ok := flow.Stage(seg.StageID); ok {
+			view.KeepFocus = stage.KeepFocus
+		}
+		if len(seg.Screens) == 0 {
+			view.FocusID = seg.ID + "|empty"
 			continue
 		}
 		// Runs come first and in order, so the last one with a session is the
@@ -313,10 +327,16 @@ func entryAfter(events []model.FlowEvent, i int) time.Time {
 // sessionsIn is the runs that started during one visit, oldest first.
 // SessionsForCard hands them back newest first, which is right for a card's
 // history and backwards for a strip that reads left to right.
-func sessionsIn(sessions []store.Session, stageID string, from, until time.Time) []store.Session {
+func sessionsIn(sessions []store.Session, stageID string, visit int64, from, until time.Time) []store.Session {
 	var out []store.Session
 	for i := len(sessions) - 1; i >= 0; i-- {
 		s := sessions[i]
+		if s.VisitID != 0 {
+			if s.VisitID == visit {
+				out = append(out, s)
+			}
+			continue
+		}
 		if s.StageID != stageID || s.StartedAt.Before(from) {
 			continue
 		}

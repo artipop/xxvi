@@ -157,7 +157,7 @@ func TestToolNamesTheValuesItWants(t *testing.T) {
 }
 
 // An agent that reports alongside its last command reports before knowing how
-// that command went, and the terminal is closed on it seconds later. Both
+// that command went, while the next step may already be starting. Both
 // places the agent reads before calling say so, the ones with values and
 // without alike.
 func TestFinishIsToldToBeTheLastCall(t *testing.T) {

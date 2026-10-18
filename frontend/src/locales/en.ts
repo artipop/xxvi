@@ -4,6 +4,25 @@ import { msgEn } from "./msg.en";
 // English. The keys are the same in every language; a key missing from one is
 // shown from this one, so this is the dictionary that has to be complete.
 export const en: Dict = {
+  "notify.remindReady": "The step at “{stage}” is waiting to be started",
+  "attention.standReady": "The step at “{stage}” is waiting to be started",
+  "msg.terminal.conversationMissing": "The conversation id was not saved. Another conversation cannot be chosen automatically.",
+  "flows.focusOnEntry": "When entering the node",
+  "flows.focusFollow": "Follow on the strip",
+  "flows.focusStay": "Keep my current screen",
+  "flows.startOnEntry": "Start work",
+  "flows.startAuto": "Automatically on entry",
+  "flows.startManual": "When I press “Start step”",
+  "ribbon.startStage": "Start step",
+  "ribbon.awaitingStart": "The node is open. Work waits for you to start it.",
+  "ribbon.revisit": "Return to this step",
+  "ribbon.revisitNote": "This step has ended. Returning stops the current work and opens this conversation without sending a message.",
+  "msg.stage.notReady": "This step has already started or the task has moved on.",
+  "msg.stage.cannotRevisit": "This conversation cannot be reopened for work. Check that its node and agent are still available.",
+  "msg.stage.revisitBusy": "This stage has no free slot right now.",
+  "msg.journal.startedByHand": "The person started the step.",
+  "msg.move.revisited": "The person returned to this step’s conversation.",
+  "msg.journal.terminalClosedPaused": "The terminal closed. Its conversation is saved and the step can be resumed.",
   ...msgEn,
 
   // ---- the closed sets the backend names by their members ----
@@ -395,7 +414,7 @@ export const en: Dict = {
   "ribbon.silentYet": "The agent has not said anything yet.",
   "ribbon.agentRun": "Agent's work · {agent}",
   "ribbon.agentTerminal": "Agent · {agent}",
-  "ribbon.paused": "Paused: the application closed",
+  "ribbon.paused": "Step paused",
   "ribbon.pausedTitle": "The conversation is saved and continues where it stopped.",
   "ribbon.continuePlaceholder": "What to tell the agent (optional)",
   "ribbon.continue": "Continue",

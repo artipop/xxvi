@@ -239,7 +239,7 @@ func newServer(step Step) *mcp.Server {
 		}); err != nil {
 			return errorResult("%v", err), nil, nil
 		}
-		return textResult("Step recorded. The task has moved on — there will be no further instructions for it."), nil, nil
+		return textResult("Step recorded. Do not run more tools or modify files: the flow may start its next step now. The terminal stays visible for the person."), nil, nil
 	})
 	if step.Describe != nil {
 		mcp.AddTool(srv, &mcp.Tool{
@@ -299,12 +299,9 @@ func whenToFinish(step Step) string {
 		"Failed is the same: say why and ask before reporting it. ", next)
 }
 
-// lastCall is said in both the instructions and the tool, because the call is
-// taken at its word: seconds after it the terminal is closed, so a commit
-// running alongside it is cut off, and a commit that failed alongside it has
-// already been reported as done.
+// The next stage may start immediately, sharing this working directory.
 const lastCall = "Make it your last call, on its own: not alongside other tool calls, and only once the results of every earlier call are in — " +
-	"right after it the session is closed, and anything still running is stopped."
+	"after it, stop working and wait. The flow may start the next step immediately. The terminal stays visible; only the person can return work to this step."
 
 func instructions(step Step) string {
 	var b strings.Builder

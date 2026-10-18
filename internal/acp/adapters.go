@@ -67,10 +67,6 @@ type adapter struct {
 	// «the last one in this folder»: the folder is shared by every stage of
 	// the card, and a person may have opened a CLI in it too.
 	cliResumeID func(id string) []string
-	// cliResumeArgs continue the last conversation in the folder. Only for a
-	// stage whose earlier runs left no id — recorded before ids were, or by a
-	// CLI whose hooks never spoke — where it is the only thread left to pull.
-	cliResumeArgs []string
 	// cliHooks registers our hook command with the CLI (hooks.go): how it
 	// says which conversation it holds and whether it is waiting for a person.
 	// Nil for a CLI without hooks, which is then watched by its silence.
@@ -91,8 +87,7 @@ type adapter struct {
 	// argument, and everything before it on that line is flags.
 	//
 	// A conversation resumed by id takes it the same way — both CLIs accept a
-	// first message after `--resume <id>` / `resume <id>`. Only the folder
-	// fallback still has it typed in.
+	// first message after `--resume <id>` / `resume <id>`.
 	cliPromptArgs func(prompt string) []string
 }
 
@@ -178,7 +173,6 @@ var adapters = map[string]adapter{
 		cliBin:        "claude",
 		cliNewSession: func(id string) []string { return []string{"--session-id", id} },
 		cliResumeID:   func(id string) []string { return []string{"--resume", id} },
-		cliResumeArgs: []string{"--continue"},
 		cliHooks:      claudeHooks,
 		cliTools:      claudeTools,
 		// `claude -- «…»` opens the TUI with that as the first message, which is
@@ -204,11 +198,10 @@ var adapters = map[string]adapter{
 		// and Enter — the key that sends a message — picks «Update now».
 		// Per-step MCP and hook overrides already require embedded mode;
 		// selecting it explicitly avoids the daemon fallback warning.
-		cliArgs:       []string{"--no-daemon", "-c", "check_for_update_on_startup=false"},
-		cliResumeID:   func(id string) []string { return []string{"resume", id} },
-		cliResumeArgs: []string{"resume", "--last"},
-		cliHooks:      codexHooks,
-		cliTools:      codexTools,
+		cliArgs:     []string{"--no-daemon", "-c", "check_for_update_on_startup=false"},
+		cliResumeID: func(id string) []string { return []string{"resume", id} },
+		cliHooks:    codexHooks,
+		cliTools:    codexTools,
 		// The separator for the same reason as claude's: a brief that starts
 		// with a dash must not be read as a flag.
 		cliPromptArgs: func(prompt string) []string { return []string{"--", prompt} },

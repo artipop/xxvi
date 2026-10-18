@@ -176,6 +176,7 @@ export interface NotificationWords {
     "remindAnswer": string;
     "remindStopped": string;
     "remindPaused": string;
+    "remindReady": string;
     "remindAgent": string;
     "remindMany": string;
 }

@@ -293,7 +293,9 @@ type Stage struct {
 	// BuiltinTemplateOf and settled on save.
 	Template string `json:"template,omitempty"`
 
-	Action string `json:"action"`
+	Action      string `json:"action"`
+	ManualStart bool   `json:"manualStart,omitempty"`
+	KeepFocus   bool   `json:"keepFocus,omitempty"`
 	// Work says where an agent stage runs: in the card's terminal, where a
 	// person is sitting, or as an ACP session nobody watches (§4.1.1). Empty
 	// means WorkTerminal — a stage that did not say is a stage somebody meant

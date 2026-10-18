@@ -59,6 +59,7 @@ type NotificationWords struct {
 	RemindAnswer  string `json:"remindAnswer"`
 	RemindStopped string `json:"remindStopped"`
 	RemindPaused  string `json:"remindPaused"`
+	RemindReady   string `json:"remindReady"`
 	RemindAgent   string `json:"remindAgent"`
 	RemindMany    string `json:"remindMany"`
 }
@@ -276,6 +277,8 @@ func (w NotificationWords) reminder(row acp.Attention) string {
 		return strings.ReplaceAll(w.RemindAnswer, "{stage}", row.Stage)
 	case engine.StandStopped:
 		return strings.ReplaceAll(w.RemindStopped, "{stage}", row.Stage)
+	case engine.StandReady:
+		return strings.ReplaceAll(w.RemindReady, "{stage}", row.Stage)
 	case engine.StandPaused:
 		return strings.ReplaceAll(w.RemindPaused, "{stage}", row.Stage)
 	}

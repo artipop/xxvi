@@ -6,8 +6,8 @@
 // machinery. A screen's terminal belongs to the pane somebody is looking at,
 // runs a shell, and outlives every turn an agent takes. A stage's terminal
 // belongs to the run inside it: it is the agent's own CLI (docs/system.md
-// §4.1.1), it is opened by internal/acp with an argv of its own, and it dies
-// when the step does.
+// §4.1.1), opened by internal/acp with an argv of its own. After its report
+// it stays visible with input disabled until return or application exit.
 //
 // The pty, the scrollback, the socket and the resize are the same for both,
 // which is why one package holds them. What differs is who starts it and who
@@ -48,7 +48,8 @@ type Session struct {
 
 	eng engine
 
-	mu sync.Mutex
+	mu       sync.Mutex
+	readOnly bool
 	// screen is what a window opened now has to show. Once the process has
 	// ended it is read one last time into final and freed: it is memory
 	// outside Go's reach, and nothing will draw on it again.
@@ -837,6 +838,12 @@ func (s *Session) snapshot() []byte {
 
 // Write is a keystroke on its way to the process.
 func (s *Session) Write(data []byte) error {
+	s.mu.Lock()
+	readOnly := s.readOnly
+	s.mu.Unlock()
+	if readOnly {
+		return nil
+	}
 	// A key on its own, not the start of an escape sequence: an arrow is
 	// ESC [ A, and arrives in one piece.
 	if len(data) == 1 && (data[0] == 0x1b || data[0] == 0x03) {
@@ -1038,4 +1045,12 @@ func (s *Session) waitBrief() {
 	case <-s.forgotten:
 	case <-time.After(2 * time.Second):
 	}
+}
+
+// SetReadOnly keeps a finished step visible without letting it edit the shared
+// working directory while the next step is running.
+func (s *Session) SetReadOnly() {
+	s.mu.Lock()
+	s.readOnly = true
+	s.mu.Unlock()
 }

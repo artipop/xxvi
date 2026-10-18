@@ -191,6 +191,7 @@ export default function Ribbon(): JSX.Element {
         // band is scrolled — scrollIntoView would move the stack to this strip
         // too.
         if (first) {
+          setFocusAt((f) => ({ ...f, [id]: target }));
           queueMicrotask(() => centerInBand(paneEl(target)));
           continue;
         }
@@ -198,7 +199,7 @@ export default function Ribbon(): JSX.Element {
           setMoved((m) => ({ ...m, [id]: true }));
           continue;
         }
-        if (pinned()) continue;
+        if (pinned() || ribbons.find((r) => r.id === id)?.keepFocus) continue;
         queueMicrotask(() => flyTo(target));
       }
     },
@@ -434,7 +435,7 @@ export default function Ribbon(): JSX.Element {
   // asked to stay. Offered, not taken.
   const behind = () => {
     const view = current();
-    return pinned() && !!view?.focusId && focus() !== view.focusId;
+    return !!view?.focusId && focus() !== view.focusId;
   };
 
   return (
@@ -530,6 +531,7 @@ export default function Ribbon(): JSX.Element {
                             focused={focus() === emptyID(segment)}
                             captured={false}
                             onFocus={() => { setPinned(true); setFocus(emptyID(segment)); }}
+                            onFollow={() => { setPinned(false); queueMicrotask(() => flyTo(current()?.focusId ?? "")); }}
                             back={backFor(emptyID(segment))}
                             onCancelBack={() => setBack(null)}
                           />
@@ -546,6 +548,7 @@ export default function Ribbon(): JSX.Element {
                               focused={focus() === screen.id}
                               captured={captured() === screen.id}
                               onFocus={() => { setPinned(true); setFocus(screen.id); }}
+                              onFollow={() => { setPinned(false); queueMicrotask(() => flyTo(current()?.focusId ?? "")); }}
                               back={backFor(screen.id)}
                               onCancelBack={() => setBack(null)}
                             />
@@ -694,6 +697,7 @@ function Pane(props: {
   focused: boolean;
   captured: boolean;
   onFocus: () => void;
+  onFollow: () => void;
   back: Mark | null;
   onCancelBack: () => void;
 }): JSX.Element {
@@ -770,6 +774,15 @@ function Pane(props: {
         </Switch>
       </div>
 
+      <Show when={props.first && props.segment.startable}>
+        <StageAction label={t("ribbon.startStage")} note={t("ribbon.awaitingStart")}
+          after={props.onFollow} run={() => API.StartStage(props.cardId ?? "", props.segment.eventId)} />
+      </Show>
+      <Show when={props.screen?.revisitable}>
+        <StageAction label={t("ribbon.revisit")} note={t("ribbon.revisitNote")}
+          after={props.onFollow} run={() => API.RevisitStage(props.cardId ?? "", props.screen!.sessionId!)} />
+      </Show>
+
       <Show when={props.screen?.report}>
         <Report report={props.screen!.report!} />
       </Show>
@@ -778,6 +791,19 @@ function Pane(props: {
       </Show>
     </section>
   );
+}
+
+function StageAction(props: { label: string; note: string; run: () => Promise<unknown>; after: () => void }): JSX.Element {
+  const [busy, setBusy] = createSignal(false);
+  const run = async () => {
+    if (busy()) return;
+    setBusy(true);
+    try { const done = await guard(props.run); await loadRibbons(); if (done) props.after(); } finally { setBusy(false); }
+  };
+  return <div class="screen-continue">
+    <span class="meta">{props.note}</span>
+    <button class="btn tiny" disabled={busy()} onClick={() => void run()}>{props.label}</button>
+  </div>;
 }
 
 // A stage the application closed on waits here for a person: it goes on only

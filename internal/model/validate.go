@@ -72,6 +72,9 @@ func ValidateFlow(f Flow) (Flow, error) {
 			return Flow{}, msg.Err("stage.unknownWork",
 				"work", s.Work, "stage", s.Name, "allowed", strings.Join(Works, ", "))
 		}
+		if !Runs(s.Action) || s.Final {
+			s.ManualStart = false
+		}
 		if s.MaxRunning < 0 {
 			return Flow{}, msg.Err("stage.negativeLimit", "stage", s.Name)
 		}

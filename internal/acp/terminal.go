@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -82,12 +83,6 @@ func resumeFailed(resumed bool, err error, open time.Duration) bool {
 	return resumed && errors.Is(err, errClosedWithoutReport) && open < terminalStartWindow
 }
 
-// terminalGrace is how long the CLI is left alone after it reports. The report
-// is a tool call, and killing the process that made it before its result has
-// been delivered is how an agent ends its turn on a broken pipe — with the step
-// already counted as finished, so nobody would ever see why.
-const terminalGrace = 3 * time.Second
-
 // terminalDeps are what a terminal stage needs and a session does not: a place
 // to open ptys and a door for the agent to report through. Set once at startup;
 // without them a terminal stage refuses to start and says why, which is better
@@ -113,13 +108,22 @@ func (m *Manager) terminals() (*term.Manager, *stagemcp.Server) {
 // here.
 func (m *Manager) runTerminal(s *session) {
 	defer m.wg.Done()
-	defer m.release(s)
+	released := false
+	defer func() {
+		if !released {
+			m.release(s)
+		}
+	}()
 
 	if m.rootCtx.Err() != nil {
 		m.finish(s, store.StatusCancelled, msg.New("session.appQuitting"))
 		return
 	}
 
+	if s.wasCancelled() {
+		m.finish(s, store.StatusCancelled, msg.New("session.stepCancelled"))
+		return
+	}
 	terms, tools := m.terminals()
 	cli, ok := cliFor(s.agent.Kind)
 	switch {
@@ -134,6 +138,7 @@ func (m *Manager) runTerminal(s *session) {
 	// The report and the door it arrives through. Both die with the step: a
 	// grant outliving its run is a door onto a card nobody is working.
 	reported := make(chan stagemcp.Report, 1)
+	var accepted atomic.Bool
 	// Buffered generously and never blocked on: a hook holds the CLI's turn
 	// until it is answered, and the watcher is the only reader.
 	hooked := make(chan stagemcp.HookEvent, 64)
@@ -148,12 +153,11 @@ func (m *Manager) runTerminal(s *session) {
 			if missing := missingWrites(s.stage.Writes, r); missing != "" {
 				return fmt.Errorf("the step is not finished: %s missing. Add the value and call again", missing)
 			}
-			select {
-			case reported <- r:
-				return nil
-			default:
+			if !accepted.CompareAndSwap(false, true) {
 				return errors.New("this step is already finished")
 			}
+			reported <- r
+			return nil
 		},
 		Describe: func(d stagemcp.Description) error {
 			if !s.isLeaving() {
@@ -199,8 +203,13 @@ func (m *Manager) runTerminal(s *session) {
 	}()
 
 	open := m.opening(s, cli)
+	if open.missing {
+		m.failTerminal(s, msg.New("terminal.conversationMissing"))
+		return
+	}
 	resumed := open.id != "" && !open.chosen
 	if resumed {
+		m.closeConversation(s, open.id, terms)
 		m.noteConversation(s, open.id)
 	}
 	bin, err := terminalBin(cli)
@@ -240,14 +249,9 @@ func (m *Manager) runTerminal(s *session) {
 		m.noteConversation(s, open.id)
 	}
 
-	// The CLI ends with the step: this terminal belongs to the run, not to the
-	// person, and one left open on a card that has moved on is a conversation
-	// about work that is no longer here. What was drawn in it is kept, so the
-	// segment still shows what happened (internal/term).
-	if err == nil {
-		time.Sleep(terminalGrace)
+	if err != nil || m.rootCtx.Err() != nil || s.wasCancelled() {
+		sess.Close()
 	}
-	sess.Close()
 
 	switch {
 	case m.rootCtx.Err() != nil && s.conversationID() != "":
@@ -265,14 +269,9 @@ func (m *Manager) runTerminal(s *session) {
 		why := msg.Err("terminal.resumeFailed", "id", open.id)
 		m.finish(s, store.StatusFailed, failure(s.agent, why))
 		m.record(s, model.EntryProblem, msg.New("journal.terminalFailed").Because(why))
-	case closedByPerson(err, time.Since(opened)):
-		// Somebody ended the conversation. That is not an outcome the flow
-		// could move on, and the stage has nothing left to wait for: the step
-		// can only be resumed from the CLI's own conversation, which a new
-		// card started «from a session» does. So the card goes.
-		s.markAbandoned()
-		m.finish(s, store.StatusCancelled, msg.New("terminal.closedWithoutReport"))
-		m.record(s, model.EntryProblem, msg.New("journal.terminalClosedByPerson"))
+	case closedByPerson(err, time.Since(opened)) && s.conversationID() != "":
+		m.finish(s, store.StatusPaused, msg.New("session.paused"))
+		m.record(s, model.EntryProblem, msg.New("journal.terminalClosedPaused"))
 	case err != nil:
 		m.finish(s, store.StatusFailed, failure(s.agent, err))
 		m.record(s, model.EntryProblem, msg.New("journal.terminalFailed").Because(clipped(s.agent, err)))
@@ -288,6 +287,18 @@ func (m *Manager) runTerminal(s *session) {
 		}
 		m.finish(s, status, msg.Msg{})
 		m.record(s, model.EntryReport, terminalReport(report))
+
+		// A completed visit loses input and reporting rights before the next
+		// one starts. Its CLI stays on screen until return or application exit.
+		sess.SetReadOnly()
+		tools.Revoke(token)
+		released = true
+		m.release(s)
+		select {
+		case <-m.rootCtx.Done():
+		case <-sess.Done():
+		}
+		sess.Close()
 	}
 }
 
@@ -416,11 +427,9 @@ type opening struct {
 	// id is the conversation the run will hold, when that is known before
 	// the CLI starts. chosen marks one we made up for a new conversation:
 	// it is not a conversation until the CLI has kept one under it.
-	id     string
-	chosen bool
-	// byFolder is the fallback that names no conversation, and the one case
-	// where the brief cannot go on the command line.
-	byFolder bool
+	id      string
+	chosen  bool
+	missing bool
 }
 
 // opening decides where a run's conversation comes from. A second visit to a
@@ -428,14 +437,17 @@ type opening struct {
 // the same questions twice; a card started from a conversation continues that
 // one on its stage; anything else begins anew.
 func (m *Manager) opening(s *session, cli adapter) opening {
+	if s.job.ResumeID != "" && cli.cliResumeID != nil {
+		return opening{args: cli.cliResumeID(s.job.ResumeID), id: s.job.ResumeID}
+	}
 	past, worked := m.pastConversation(s)
 	switch {
 	case past != "" && cli.cliResumeID != nil:
 		return opening{args: cli.cliResumeID(past), id: past}
 	case m.continuesCardSession(s) && cli.cliResumeID != nil:
 		return opening{args: cli.cliResumeID(s.card.Session), id: s.card.Session}
-	case worked && len(cli.cliResumeArgs) > 0:
-		return opening{args: cli.cliResumeArgs, byFolder: true}
+	case worked:
+		return opening{missing: true}
 	case cli.cliNewSession != nil:
 		id := uuid.NewString()
 		return opening{args: cli.cliNewSession(id), id: id, chosen: true}
@@ -457,6 +469,11 @@ func (m *Manager) pastConversation(s *session) (id string, worked bool) {
 		}
 		if past.ACPSessionID != "" {
 			return past.ACPSessionID, true
+		}
+		// A failed launch has no conversation to resume; fixing the CLI must
+		// still allow a first conversation to be created.
+		if past.Status == store.StatusFailed && !past.FinishedAt.IsZero() && past.FinishedAt.Sub(past.StartedAt) < terminalStartWindow {
+			continue
 		}
 		worked = true
 	}
@@ -514,7 +531,7 @@ func terminalArgv(cli adapter, bin string, open opening, toolArgs []string, prom
 	argv = append(argv, open.args...)
 	// «The last conversation here» has no documented way to take a task on
 	// its command line, so that one is typed in, once the CLI has settled.
-	if prompt != "" && !open.byFolder && cli.cliPromptArgs != nil {
+	if prompt != "" && cli.cliPromptArgs != nil {
 		return append(argv, cli.cliPromptArgs(prompt)...), true
 	}
 	return argv, false
@@ -749,5 +766,20 @@ func terminalReport(r stagemcp.Report) msg.Msg {
 		return msg.New("report.failedSilent")
 	default:
 		return msg.New("report.failed", "text", summary)
+	}
+}
+
+func (m *Manager) closeConversation(s *session, id string, terms *term.Manager) {
+	past, err := m.store.SessionsForCard(s.card.ID)
+	if err != nil {
+		return
+	}
+	for _, run := range past {
+		if run.ID == s.id || run.AgentKind != s.agent.Kind || run.ACPSessionID != id {
+			continue
+		}
+		if terminal := terms.Get(run.ID); terminal != nil {
+			terminal.Close()
+		}
 	}
 }

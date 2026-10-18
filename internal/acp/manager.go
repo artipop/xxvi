@@ -69,10 +69,7 @@ func (o Options) withDefaults() Options {
 // Reporter is who a finished session tells. The engine implements it; a test
 // records the calls.
 type Reporter interface {
-	Finished(cardID, outcome string, detail msg.Msg, agentText string)
-	// Abandoned is a step a person walked out of: the terminal was closed
-	// before it reported. Nothing on the stage can pick it up again.
-	Abandoned(cardID string)
+	FinishedVisit(job engine.Job, outcome string, detail msg.Msg, agentText string)
 	// Described is the task as the agent of a card leaving its flow put it
 	// (Manager.Leave). Both empty: the run ended and nothing came.
 	Described(cardID, title, text string)
@@ -170,7 +167,7 @@ func (m *Manager) Start(job engine.Job) error {
 	}
 
 	s := &session{
-		id: uuid.NewString(), card: job.Card, flow: job.Flow, stage: job.Stage,
+		job: job, done: make(chan struct{}), id: uuid.NewString(), card: job.Card, flow: job.Flow, stage: job.Stage,
 		agent: job.Agent, prompt: job.Prompt, brief: job.Brief, cwd: cwd, launch: launch,
 		policy: policyFor(job.Agent, m.opts.Policy), status: store.StatusQueued,
 		work: workOf(job.Stage),
@@ -179,7 +176,7 @@ func (m *Manager) Start(job engine.Job) error {
 		s.revive = m.pausedConversation(s)
 	}
 	if err := m.store.InsertSession(store.Session{
-		ID: s.id, CardID: s.card.ID, FlowID: s.flow.ID, StageID: s.stage.ID,
+		VisitID: job.Visit, ID: s.id, CardID: s.card.ID, FlowID: s.flow.ID, StageID: s.stage.ID,
 		AgentName: s.agent.Name, AgentKind: s.agent.Kind, Work: s.work,
 		Status: store.StatusQueued, Cwd: cwd, StartedAt: time.Now().UTC(),
 	}); err != nil {
@@ -190,7 +187,8 @@ func (m *Manager) Start(job engine.Job) error {
 	// A card put back in work while its last conversation is still writing
 	// its description: two CLIs in one conversation would write over each
 	// other.
-	if old := m.byCard[s.card.ID]; old != nil {
+	old := m.byCard[s.card.ID]
+	if old != nil {
 		old.cancel()
 	}
 	m.active[s.id] = s
@@ -199,11 +197,16 @@ func (m *Manager) Start(job engine.Job) error {
 	m.emitSession(s)
 
 	m.wg.Add(1)
-	if s.work == model.WorkTerminal {
-		go m.runTerminal(s)
-	} else {
-		go m.run(s)
-	}
+	go func() {
+		if old != nil {
+			<-old.done
+		}
+		if s.work == model.WorkTerminal {
+			m.runTerminal(s)
+		} else {
+			m.run(s)
+		}
+	}()
 	return nil
 }
 
@@ -283,6 +286,10 @@ func (m *Manager) run(s *session) {
 		m.finish(s, store.StatusCancelled, msg.New("session.appQuitting"))
 		return
 	}
+	if s.wasCancelled() {
+		m.finish(s, store.StatusCancelled, msg.New("session.cancelled"))
+		return
+	}
 	m.record(s, model.EntryMove, msg.New("journal.sessionStarted", "agent", s.agent.Name, "dir", s.cwd))
 
 	conn, acpSessionID, cleanup, err := m.connect(s)
@@ -327,6 +334,9 @@ func (m *Manager) release(s *session) {
 	}
 	m.mu.Unlock()
 	m.emitSession(s)
+	if s.done != nil {
+		close(s.done)
+	}
 
 	if m.to == nil {
 		return
@@ -337,15 +347,11 @@ func (m *Manager) release(s *session) {
 	if s.isLeaving() {
 		m.to.Described(s.card.ID, "", "")
 	}
-	if s.wasAbandoned() {
-		m.to.Abandoned(s.card.ID)
+	outcome, detail := s.outcome()
+	if outcome == "" && m.rootCtx.Err() != nil {
 		return
 	}
-	outcome, detail := s.outcome()
-	if outcome == "" {
-		return // cancelled: a person is deciding what happens next
-	}
-	m.to.Finished(s.card.ID, outcome, detail, s.finalText())
+	m.to.FinishedVisit(s.job, outcome, detail, s.finalText())
 }
 
 // connect builds the ACP stack for a session and negotiates the agent session.
@@ -798,6 +804,8 @@ func truncate(s string, n int) string {
 
 // session is one run of an agent against one card on one stage.
 type session struct {
+	done   chan struct{}
+	job    engine.Job
 	id     string
 	card   model.Card
 	flow   model.Flow
@@ -828,7 +836,6 @@ type session struct {
 	// cancelPending records a cancel that arrived before a turn existed.
 	cancelPending bool
 	cancelled     bool
-	abandoned     bool
 	allowTools    map[string]bool
 	final         strings.Builder
 	// conversation is the vendor's id of the conversation a terminal run is
@@ -892,20 +899,6 @@ func (s *session) markCancelSent() bool {
 	already := s.cancelSent
 	s.cancelSent = true
 	return !already
-}
-
-// markAbandoned is a cancel nobody will follow up on: see Reporter.Abandoned.
-func (s *session) markAbandoned() {
-	s.mu.Lock()
-	s.cancelled = true
-	s.abandoned = true
-	s.mu.Unlock()
-}
-
-func (s *session) wasAbandoned() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.abandoned
 }
 
 func (s *session) leaveSignal() <-chan struct{} {

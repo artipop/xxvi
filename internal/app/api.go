@@ -223,6 +223,20 @@ func (s *API) ReopenStage(cardID string) (CardView, error) {
 	return s.Card(cardID)
 }
 
+func (s *API) StartStage(cardID string, visit int64) (CardView, error) {
+	if err := s.app.Engine.StartStage(cardID, visit); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(cardID)
+}
+
+func (s *API) RevisitStage(cardID, sessionID string) (CardView, error) {
+	if err := s.app.Engine.Revisit(cardID, sessionID); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(cardID)
+}
+
 // MoveTo puts a card on a stage by hand. A person is always above the graph.
 func (s *API) MoveTo(cardID, stageID string) (CardView, error) {
 	if err := s.app.Engine.MoveTo(cardID, stageID); err != nil {

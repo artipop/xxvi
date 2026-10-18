@@ -285,6 +285,7 @@ export interface Flow {
  * FlowEvent is one recorded transition — the answer to "why is this card here".
  */
 export interface FlowEvent {
+    "started": boolean;
     "id": number;
     "cardId": string;
     "flowId": string;
@@ -639,6 +640,8 @@ export interface Stage {
      */
     "template"?: string;
     "action": string;
+    "manualStart"?: boolean;
+    "keepFocus"?: boolean;
 
     /**
      * Work says where an agent stage runs: in the card's terminal, where a

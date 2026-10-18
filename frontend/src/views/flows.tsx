@@ -621,6 +621,27 @@ function StagePanel(props: {
           </label>
         </Show>
 
+        <Show when={!stage().final}>
+          <label class="field">
+            <span>{t("flows.focusOnEntry")}</span>
+            <select value={stage().keepFocus ? "stay" : "follow"}
+                    onChange={(e) => set({ keepFocus: e.currentTarget.value === "stay" })}>
+              <option value="follow">{t("flows.focusFollow")}</option>
+              <option value="stay">{t("flows.focusStay")}</option>
+            </select>
+          </label>
+          <Show when={stage().action !== "none"}>
+            <label class="field">
+              <span>{t("flows.startOnEntry")}</span>
+              <select value={stage().manualStart ? "manual" : "auto"}
+                      onChange={(e) => set({ manualStart: e.currentTarget.value === "manual" })}>
+                <option value="auto">{t("flows.startAuto")}</option>
+                <option value="manual">{t("flows.startManual")}</option>
+              </select>
+            </label>
+          </Show>
+        </Show>
+
         <Show when={shape() === "agent"}>
           {/* Where the work happens: a terminal is where a person sits beside the
               agent and answers it in its own interface, a session is a step

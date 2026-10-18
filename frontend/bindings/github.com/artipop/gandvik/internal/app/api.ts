@@ -553,6 +553,10 @@ export function ReturnToFlow(cardID: string): $CancellablePromise<$models.CardVi
     return $Call.ByID(1271918505, cardID);
 }
 
+export function RevisitStage(cardID: string, sessionID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(314705568, cardID, sessionID);
+}
+
 /**
  * Ribbon is one card's strip of screens.
  */
@@ -815,6 +819,10 @@ export function StageTemplates(): $CancellablePromise<model$0.StageTemplate[] | 
  */
 export function StartLaunch(cardID: string, screenID: string, p: launch$0.Profile): $CancellablePromise<$models.LaunchRun> {
     return $Call.ByID(4131348001, cardID, screenID, p);
+}
+
+export function StartStage(cardID: string, visit: number): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(3412296176, cardID, visit);
 }
 
 /**
