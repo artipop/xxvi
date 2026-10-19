@@ -92,7 +92,7 @@ type adapter struct {
 }
 
 // registry is where an adapter package is published: how we install it into a
-// folder of our own, and how a person installs it themselves.
+// folder of our own.
 type registry struct {
 	// tool is the program that installs from the registry.
 	tool string
@@ -104,8 +104,6 @@ type registry struct {
 	// versionIn reads the installed version of pkg from dir, empty when it
 	// cannot tell.
 	versionIn func(dir, pkg string) string
-	// install is the command a person runs to install it for good.
-	install func(pkg string) string
 	// needs is what provides tool, for a machine that has neither.
 	needs string
 }
@@ -118,7 +116,6 @@ var (
 		},
 		binIn:     func(dir, bin string) string { return filepath.Join(dir, "node_modules", ".bin", bin) },
 		versionIn: npmVersion,
-		install:   func(pkg string) string { return "npm install -g " + pkg },
 		needs:     "Node.js",
 	}
 	pypi = registry{
@@ -131,7 +128,6 @@ var (
 		},
 		binIn:     func(dir, bin string) string { return filepath.Join(dir, "bin", bin) },
 		versionIn: pypiVersion,
-		install:   func(pkg string) string { return "uv tool install " + pkg },
 		needs:     "uv",
 	}
 )
@@ -326,7 +322,7 @@ func adapterStatus(kind string) AdapterStatus {
 		// Nothing to offer: installing Node.js or uv is not something to do
 		// behind a person's back.
 		st.Detail = detail("adapter.noTool", "bin", def.bin, "tool", def.from.tool,
-			"needs", def.from.needs, "install", def.from.install(def.pkg))
+			"needs", def.from.needs)
 	}
 	return st
 }
@@ -420,7 +416,11 @@ func adapterArgv(kind, override string) ([]string, error) {
 	if def.pkg == "" {
 		return nil, msg.Err("adapter.missing", "bin", def.bin)
 	}
-	return nil, msg.Err("adapter.install", "bin", def.bin, "install", def.from.install(def.pkg))
+	if _, err := lookupBin(def.from.tool); err != nil {
+		return nil, msg.Err("adapter.noTool", "bin", def.bin, "tool", def.from.tool,
+			"needs", def.from.needs)
+	}
+	return nil, msg.Err("adapter.install", "bin", def.bin)
 }
 
 // lookupBin finds an executable. PATH first, then the usual install locations,

@@ -4,6 +4,7 @@ import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api
 import type { PastSession } from "../../bindings/github.com/artipop/gandvik/internal/acp/models";
 import { agents, applyCard, flows, folderName, guard, list, projectFolders, projects, showRibbon, taskFolder, workModes, workspace } from "../state";
 import { errorText, t, when } from "../i18n";
+import { InstallButton } from "./adapter-install";
 import { SessionPreview } from "./session-preview";
 
 // A task typed where the work is watched, not filed first and fetched back from
@@ -40,6 +41,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   const fromSession = () => step() === "existing";
   const [sessions, setSessions] = createSignal<SessionChoice[] | undefined>();
   const [sessionsError, setSessionsError] = createSignal("");
+  const [missingAdapter, setMissingAdapter] = createSignal(false);
   const [session, setSession] = createSignal<SessionChoice | undefined>();
   const [confirming, setConfirming] = createSignal("");
   const [deleting, setDeleting] = createSignal("");
@@ -65,6 +67,12 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     !fromSession() && isRepo() && workModes().some((m) => m.value === workMode()) ? workMode() : "";
   const agentName = () =>
     list(agents().agents).find((a) => a.name === agent())?.name ?? list(agents().agents)[0]?.name ?? "";
+  const installableAdapter = () => {
+    if (!missingAdapter()) return undefined;
+    const kind = list(agents().agents).find((a) => a.name === agentName())?.kind;
+    const adapter = list(agents().adapters).find((a) => a.kind === kind);
+    return adapter?.installable ? adapter : undefined;
+  };
   const canManage = () => ["claude", "codex"].includes(list(agents().agents).find((a) => a.name === agentName())?.kind ?? "");
   const flowID = () => flows().find((f) => f.id === flow())?.id ?? flows()[0]?.id ?? "";
 
@@ -78,6 +86,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     setSession(undefined);
     setSessions(undefined);
     setSessionsError("");
+    setMissingAdapter(false);
     setConfirming("");
     setDeleting("");
     setPreview(undefined);
@@ -93,12 +102,17 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
       if (n !== asked) return;
       const found: SessionChoice[] = [];
       const errors: string[] = [];
+      let missing = false;
       results.forEach((result, i) => {
         if (result.status === "fulfilled") found.push(...result.value);
-        else errors.push((dirs.length > 1 ? folderName(dirs[i]) + ": " : "") + errorText(result.reason));
+        else {
+          errors.push((dirs.length > 1 ? folderName(dirs[i]) + ": " : "") + errorText(result.reason));
+          if ((result.reason as { cause?: { code?: string } } | null)?.cause?.code === "adapter.install") missing = true;
+        }
       });
       setSessions(found.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")));
       setSessionsError(errors.join("\n"));
+      setMissingAdapter(missing);
     });
   });
 
@@ -272,7 +286,12 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
                 <p class="empty">{t("compose.noAgents")}</p>
               </Show>
               <Show when={sessionsError()}>
-                <div class="screen-error">{sessionsError()}</div>
+                <div class="screen-error row wrap">
+                  <span>{sessionsError()}</span>
+                  <Show when={installableAdapter()}>
+                    {(adapter) => <InstallButton adapter={adapter()} />}
+                  </Show>
+                </div>
               </Show>
               <Show when={agentName() && !sessionsError() && !sessions()}>
                 <p class="empty loading"><span class="spinner" />{t("compose.sessionsLoading")}</p>

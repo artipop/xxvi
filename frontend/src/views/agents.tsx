@@ -2,9 +2,10 @@ import { createSignal, For, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
 import type { Agent, Proxy } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
-import type { AdapterStatus, AgentCheck } from "../../bindings/github.com/artipop/gandvik/internal/acp/models";
+import type { AgentCheck } from "../../bindings/github.com/artipop/gandvik/internal/acp/models";
 import { agents, guard, loadAgents, vocabulary } from "../state";
 import { say, t } from "../i18n";
+import { InstallButton } from "./adapter-install";
 import { formKeys } from "./formKeys";
 
 // The agent registry, with the adapter check beside it — "can this agent
@@ -42,7 +43,7 @@ export default function AgentsView() {
               {/* Only our own install is ours to update: one the person put on
                   the machine themselves is updated the way they installed it. */}
               <Show when={a.installable && (a.installed || !a.ready)}>
-                <InstallButton adapter={a} />
+                <InstallButton adapter={a} onInstalled={(said) => setInstalled({ ...installed(), [a.kind]: said })} />
               </Show>
             </div>
             <Show when={a.detail}><div class="body">{say(a.detail)}</div></Show>
@@ -226,28 +227,6 @@ const forgetCheck = (name: string) => {
 // What the last install of each kind changed, said under its row until the
 // screen is left.
 const [installed, setInstalled] = createSignal<Record<string, string>>({});
-
-function InstallButton(props: { adapter: AdapterStatus }): JSX.Element {
-  const [busy, setBusy] = createSignal(false);
-  const install = async () => {
-    setBusy(true);
-    const got = await guard(() => API.InstallAdapter(props.adapter.kind));
-    setBusy(false);
-    if (!got) return;
-    const now = got.status.version ?? "";
-    const said = !got.was ? t("agents.installedNow", { version: now })
-      : got.was === now ? t("agents.upToDate", { version: now })
-      : t("agents.updated", { was: got.was, version: now });
-    setInstalled({ ...installed(), [props.adapter.kind]: said });
-    await loadAgents();
-  };
-  return (
-    <button class="btn quiet" disabled={busy()} onClick={() => void install()}
-            title={t("agents.installTitle", { pkg: props.adapter.package ?? "" })}>
-      {busy() ? t("agents.installing") : props.adapter.installed ? t("agents.update") : t("agents.install")}
-    </button>
-  );
-}
 
 function CheckButton(props: { name: string }): JSX.Element {
   const [busy, setBusy] = createSignal(false);
