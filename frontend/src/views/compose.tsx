@@ -169,10 +169,14 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
       class="compose"
       onKeyDown={(e) => {
         // The ribbon listens on the window, and a key meant for this form stays here.
+        if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
         if (e.key === "Escape") {
-          if (preview()) { e.preventDefault(); e.stopPropagation(); setPreview(undefined); }
-          else if (step() && !sessionBusy()) { e.preventDefault(); e.stopPropagation(); setStep(null); }
-          else if (props.onCancel && !sessionBusy()) { e.stopPropagation(); props.onCancel(); }
+          e.preventDefault(); e.stopPropagation();
+          if (e.repeat || sessionBusy()) return;
+          if (preview()) setPreview(undefined);
+          else if (confirming()) setConfirming("");
+          else if (step()) setStep(null);
+          else props.onCancel?.();
         }
       }}
     >
@@ -251,7 +255,10 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
               onInput={(e) => setText(e.currentTarget.value)}
               onKeyDown={(e) => {
                 // Enter sends, as in a chat; a new line is Shift+Enter.
-                if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); void start(); }
+                if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+                  e.preventDefault(); e.stopPropagation();
+                  if (!e.repeat) void start();
+                }
               }}
             />
           }
@@ -281,9 +288,9 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
                     <Show when={editing() !== s.id} fallback={
                       <form class="compose-session-rename" onSubmit={(e) => { e.preventDefault(); void renameSession(s); }}
                         onKeyDown={(e) => {
-                          if (e.key === "Escape") {
+                          if (e.key === "Escape" && !e.isComposing && e.keyCode !== 229) {
                             e.preventDefault(); e.stopPropagation();
-                            if (!savingTitle()) setEditing("");
+                            if (!e.repeat && !savingTitle()) setEditing("");
                           }
                         }}>
                         <input value={sessionTitle()} aria-label={t("compose.sessionName")} disabled={sessionBusy()}

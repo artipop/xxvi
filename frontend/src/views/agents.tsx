@@ -5,6 +5,7 @@ import type { Agent, Proxy } from "../../bindings/github.com/artipop/gandvik/int
 import type { AdapterStatus, AgentCheck } from "../../bindings/github.com/artipop/gandvik/internal/acp/models";
 import { agents, guard, loadAgents, vocabulary } from "../state";
 import { say, t } from "../i18n";
+import { formKeys } from "./formKeys";
 
 // The agent registry, with the adapter check beside it — "can this agent
 // actually run here" is the question this screen is opened with, and a missing
@@ -155,13 +156,18 @@ function ProxiesSection(): JSX.Element {
 
 function ProxyForm(props: { proxy: Proxy; onDone: () => void }): JSX.Element {
   const [p, setP] = createSignal<Proxy>(props.proxy);
+  const [saving, setSaving] = createSignal(false);
   const patch = (x: Partial<Proxy>) => setP({ ...p(), ...x });
   const save = async () => {
-    const saved = await guard(() => API.SaveProxy(p()));
-    if (saved) { await loadAgents(); props.onDone(); }
+    if (saving()) return;
+    setSaving(true);
+    try {
+      const saved = await guard(() => API.SaveProxy(p()));
+      if (saved) { await loadAgents(); props.onDone(); }
+    } finally { setSaving(false); }
   };
   return (
-    <div class="card">
+    <div class="card" onKeyDown={formKeys({ submit: save, cancel: props.onDone, busy: saving })}>
       <h3>{t("proxies.proxy")}</h3>
       <div class="grid2">
         <label class="field">
@@ -198,8 +204,8 @@ function ProxyForm(props: { proxy: Proxy; onDone: () => void }): JSX.Element {
       </label>
       <div class="row actions">
         <div class="spacer" />
-        <button class="btn quiet" onClick={props.onDone}>{t("common.cancel")}</button>
-        <button class="btn primary" onClick={save}>{t("common.save")}</button>
+        <button class="btn quiet" disabled={saving()} onClick={props.onDone}>{t("common.cancel")}</button>
+        <button class="btn primary" disabled={saving()} onClick={save}>{t("common.save")}</button>
       </div>
     </div>
   );
@@ -279,16 +285,20 @@ function CheckResult(props: { check: AgentCheck }): JSX.Element {
 
 function AgentForm(props: { agent: Agent; onDone: () => void }) {
   const [a, setA] = createSignal<Agent>(props.agent);
+  const [saving, setSaving] = createSignal(false);
   const patch = (p: Partial<Agent>) => setA({ ...a(), ...p });
 
   const save = async () => {
-    const saved = await guard(() => API.SaveAgent(a()));
-    if (saved) {
-      forgetCheck(a().name); await loadAgents(); props.onDone(); }
+    if (saving()) return;
+    setSaving(true);
+    try {
+      const saved = await guard(() => API.SaveAgent(a()));
+      if (saved) { forgetCheck(a().name); await loadAgents(); props.onDone(); }
+    } finally { setSaving(false); }
   };
 
   return (
-    <div class="card">
+    <div class="card" onKeyDown={formKeys({ submit: save, cancel: props.onDone, busy: saving })}>
       <h3>{t("agents.agent")}</h3>
       <div class="grid2">
         <label class="field">
@@ -337,8 +347,8 @@ function AgentForm(props: { agent: Agent; onDone: () => void }) {
 
       <div class="row actions">
         <div class="spacer" />
-        <button class="btn quiet" onClick={props.onDone}>{t("common.cancel")}</button>
-        <button class="btn primary" onClick={save}>{t("common.save")}</button>
+        <button class="btn quiet" disabled={saving()} onClick={props.onDone}>{t("common.cancel")}</button>
+        <button class="btn primary" disabled={saving()} onClick={save}>{t("common.save")}</button>
       </div>
     </div>
   );

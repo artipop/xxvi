@@ -4,6 +4,7 @@ import type { Attention } from "../../bindings/github.com/artipop/gandvik/intern
 import type { CardView } from "../../bindings/github.com/artipop/gandvik/internal/app/models";
 import { attention, guard, loadAttention, openCardByID, showRibbon } from "../state";
 import { questionText, say, t } from "../i18n";
+import { formKeys } from "./formKeys";
 
 // Everything waiting for a person, oldest first, and it is two things.
 //
@@ -142,6 +143,7 @@ export function QuestionForm(props: {
   const [busy, setBusy] = createSignal(false);
 
   const answer = async (optionId?: string) => {
+    if (busy() || (!optionId && !text().trim())) return;
     setBusy(true);
     await guard(() => API.Answer(props.questionId, {
       optionId: optionId ?? "",
@@ -177,7 +179,7 @@ export function QuestionForm(props: {
         <div class="row">
           <input type="text" placeholder={t("notify.replyPlaceholder")} value={text()}
                  onInput={(e) => setText(e.currentTarget.value)}
-                 onKeyDown={(e) => { if (e.key === "Enter" && text().trim()) void answer(); }} />
+                 onKeyDown={formKeys({ submit: () => answer(), busy })} />
           <button class="btn primary" disabled={busy() || !text().trim()} onClick={() => answer()}>
             {t("notify.reply")}
           </button>

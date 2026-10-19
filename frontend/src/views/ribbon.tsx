@@ -23,6 +23,7 @@ import { Icon } from "../icons";
 import { popup, type PopupItem } from "./popup";
 import type { Msg } from "../../bindings/github.com/artipop/gandvik/internal/msg/models";
 import type { Mark } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
+import { formKeys } from "./formKeys";
 
 // The emulator is a large chunk and most screens are not terminals, so it
 // arrives only when one is opened.
@@ -374,6 +375,7 @@ export default function Ribbon(): JSX.Element {
   // outside it can take one back. That is why the pane says when it has the
   // keyboard: the button in the application title bar hands it back.
   const onKeyDown = (e: KeyboardEvent) => {
+    if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
     const target = e.target as HTMLElement | null;
     const typing = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
     const mod = e.metaKey || e.ctrlKey;
@@ -832,6 +834,7 @@ function ContinueBar(props: { cardId: string; canReopen: boolean }): JSX.Element
   const [text, setText] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const go = async () => {
+    if (busy()) return;
     setBusy(true);
     const done = await guard(() => API.ContinueStage(props.cardId, text()));
     setBusy(false);
@@ -841,6 +844,7 @@ function ContinueBar(props: { cardId: string; canReopen: boolean }): JSX.Element
     }
   };
   const reopen = async () => {
+    if (busy()) return;
     setBusy(true);
     const done = await guard(() => API.ReopenStage(props.cardId));
     setBusy(false);
@@ -855,7 +859,7 @@ function ContinueBar(props: { cardId: string; canReopen: boolean }): JSX.Element
           placeholder={t("ribbon.continuePlaceholder")}
           value={text()}
           onInput={(e) => setText(e.currentTarget.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void go(); }}
+          onKeyDown={formKeys({ submit: go, busy })}
         />
         <Show when={props.canReopen}>
           <button class="btn tiny" disabled={busy()} onClick={() => void reopen()} title={t("ribbon.reopenTitle")}>

@@ -5,6 +5,7 @@ import { applyCard, flows, folderName, guard, inbox, workspace, list, loadInbox,
 import { propName, propValue, t } from "../i18n";
 import Markdown from "./markdown";
 import { Describing } from "./card";
+import { formKeys } from "./formKeys";
 
 // The inbox: what the sources brought, grouped by what brought it. A card here
 // does nothing until somebody takes it into work — that decision is the whole
@@ -75,17 +76,21 @@ function Group(props: { group: InboxGroup }) {
 function AddOwn(props: { onDone: () => void }) {
   const [title, setTitle] = createSignal("");
   const [body, setBody] = createSignal("");
+  const [saving, setSaving] = createSignal(false);
 
   const submit = async () => {
-    if (!title().trim()) return;
-    const card = await guard(() => API.AddCard("", title(), body()));
-    if (!card) return;
-    await loadInbox();
-    props.onDone();
+    if (saving() || !title().trim()) return;
+    setSaving(true);
+    try {
+      const card = await guard(() => API.AddCard("", title(), body()));
+      if (!card) return;
+      await loadInbox();
+      props.onDone();
+    } finally { setSaving(false); }
   };
 
   return (
-    <div class="card">
+    <div class="card" onKeyDown={formKeys({ submit, cancel: props.onDone, busy: saving })}>
       <label class="field">
         <span>{t("inbox.whatToDo")}</span>
         <input type="text" value={title()} onInput={(e) => setTitle(e.currentTarget.value)} />
@@ -96,7 +101,7 @@ function AddOwn(props: { onDone: () => void }) {
       </label>
       <div class="row">
         <div class="spacer" />
-        <button class="btn primary" onClick={submit}>{t("inbox.create")}</button>
+        <button class="btn primary" disabled={saving() || !title().trim()} onClick={submit}>{t("inbox.create")}</button>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import type { Project } from "../../bindings/github.com/artipop/gandvik/internal
 import type { RemoteOption } from "../../bindings/github.com/artipop/gandvik/internal/hosting/models";
 import { folderName, guard, list, loadProjects, projects, vocabulary, openOutside } from "../state";
 import { errorText, label, t } from "../i18n";
+import { formKeys } from "./formKeys";
 
 // Where work happens. The task says what, the flow says how it travels, this
 // says in which folder it all takes place — and a task names one by id, so a
@@ -140,7 +141,10 @@ export function ProjectForm(props: {
   };
 
   return (
-    <div class="panel">
+    <div class="panel" onKeyDown={formKeys({ submit: save, busy: saving, cancel: () => {
+      if (confirming()) setConfirming(false);
+      else props.onDone();
+    } })}>
       <div class="grid2">
         <label class="field">
           <span>{t("projects.name")}</span>
@@ -314,9 +318,12 @@ function ConnectForm(props: {
 
   const connected = () => Boolean(props.project.account) && server() === props.project.server;
   const ready = () => remote() && server().trim() && (token().trim() || connected());
+  const connect = () => {
+    if (!props.busy && ready()) props.onConnect(remote(), server(), token());
+  };
 
   return (
-    <div class="hosting">
+    <div class="hosting" onKeyDown={formKeys({ submit: connect, cancel: props.onCancel, busy: () => props.busy })}>
       <Show when={remotes() !== null && remotes()!.length === 0}>
         <span class="meta">{t("projects.noRemotes")}</span>
       </Show>
@@ -339,8 +346,7 @@ function ConnectForm(props: {
         <div class="row">
           <input type="password" class="grow" value={token()}
                  placeholder={connected() ? t("projects.tokenKept") : t("projects.tokenPlaceholder")}
-                 onInput={(e) => setToken(e.currentTarget.value)}
-                 onKeyDown={(e) => { if (e.key === "Enter" && ready()) props.onConnect(remote(), server(), token()); }} />
+                 onInput={(e) => setToken(e.currentTarget.value)} />
           <Show when={tokenURL()}>
             <a class="btn quiet" href={tokenURL()} onClick={(e) => openOutside(e, tokenURL())}>{t("projects.makeToken")}</a>
           </Show>
@@ -349,9 +355,9 @@ function ConnectForm(props: {
       <span class="meta">{t("projects.tokenNote")}</span>
       <div class="row">
         <div class="spacer" />
-        <button class="btn quiet" onClick={props.onCancel}>{t("common.cancel")}</button>
+        <button class="btn quiet" disabled={props.busy} onClick={props.onCancel}>{t("common.cancel")}</button>
         <button class="btn primary" disabled={props.busy || !ready()}
-                onClick={() => props.onConnect(remote(), server(), token())}>
+                onClick={connect}>
           {t("projects.connect")}
         </button>
       </div>

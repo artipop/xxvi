@@ -6,6 +6,7 @@ import { QuestionForm, WorktreeForm } from "./attention";
 import { JournalList } from "./journal";
 import { Marks } from "./marks";
 import Markdown from "./markdown";
+import { formKeys } from "./formKeys";
 
 // One card, in full: where it stands, what it is waiting for, and who works it.
 // What happened to it along the way is the ribbon's to show; the journal is the
@@ -120,13 +121,17 @@ function Props() {
   const view = () => openCard()!;
   const [name, setName] = createSignal("");
   const [value, setValue] = createSignal("");
+  const [saving, setSaving] = createSignal(false);
 
   const set = async (n: string, v: string) => applyCard(await guard(() => API.SetProp(view().card.id, n, v)));
 
   const add = async () => {
-    if (!name().trim()) return;
-    await set(name(), value());
-    setName(""); setValue("");
+    if (saving() || !name().trim()) return;
+    setSaving(true);
+    try {
+      await set(name(), value());
+      setName(""); setValue("");
+    } finally { setSaving(false); }
   };
 
   // The values the current stage is waiting for, offered as buttons: a person
@@ -166,7 +171,11 @@ function Props() {
                   identifier: offered as its two values, in the person's words,
                   rather than as an identifier to retype. */}
               <Show when={sameName(n, vocabulary().outcomeProperty)} fallback={
-                <input type="text" value={v} onChange={(e) => set(n, e.currentTarget.value)} />
+                <input type="text" value={v} onChange={(e) => { if (e.currentTarget.value !== v) void set(n, e.currentTarget.value); }}
+                       onKeyDown={(e) => formKeys({
+                         submit: () => e.currentTarget.blur(),
+                         cancel: () => { e.currentTarget.value = v ?? ""; e.currentTarget.blur(); },
+                       })(e)} />
               }>
                 <select value={v} onChange={(e) => set(n, e.currentTarget.value)}>
                   <For each={list(vocabulary().outcomeValues)}>
@@ -180,10 +189,10 @@ function Props() {
         </For>
       </div>
 
-      <div class="row actions">
+      <div class="row actions" onKeyDown={formKeys({ submit: add, busy: saving, cancel: () => { setName(""); setValue(""); } })}>
         <input type="text" placeholder={t("card.propName")} value={name()} onInput={(e) => setName(e.currentTarget.value)} />
         <input type="text" placeholder={t("card.propValue")} value={value()} onInput={(e) => setValue(e.currentTarget.value)} />
-        <button class="btn" onClick={add}>{t("card.setProp")}</button>
+        <button class="btn" disabled={saving() || !name().trim()} onClick={add}>{t("card.setProp")}</button>
       </div>
     </div>
   );
@@ -268,6 +277,7 @@ function Assignee() {
   const view = () => openCard()!;
   const set = async (who: string) =>
     applyCard(await guard(() => API.SetAssignee(view().card.id, who)));
+  const person = () => isAgent(view().card.assignee ?? "") ? "" : (view().card.assignee ?? "");
 
   return (
     <div class="panel">
@@ -278,8 +288,12 @@ function Assignee() {
           <For each={agents().agents}>{(a) => <option value={a.name}>{a.name}</option>}</For>
         </select>
         <input type="text" placeholder={t("card.orPerson")}
-               value={isAgent(view().card.assignee ?? "") ? "" : (view().card.assignee ?? "")}
-               onChange={(e) => set(e.currentTarget.value)} />
+               value={person()}
+               onChange={(e) => { if (e.currentTarget.value !== person()) void set(e.currentTarget.value); }}
+               onKeyDown={(e) => formKeys({
+                 submit: () => e.currentTarget.blur(),
+                 cancel: () => { e.currentTarget.value = person(); e.currentTarget.blur(); },
+               })(e)} />
       </div>
       <div class="meta note">
         {t("card.assigneeNote")}
