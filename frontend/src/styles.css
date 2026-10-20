@@ -351,6 +351,10 @@ label.field.refused > span { color: var(--bad); }
 .grow-2 { flex: 2; min-width: 0; }
 .folders { display: grid; gap: 6px; margin-bottom: 10px; }
 .folders > .field-label { margin-bottom: -3px; }
+.folder-row { align-items: center; min-height: 32px; }
+.folder-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A folder being made is a small form of its own inside the project's. */
+.new-folder { padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-surface); background: var(--bg); margin: 0; }
 /* In the list it stands where its card was, at the cards' own spacing. */
 .project-form { margin-bottom: 8px; }
 .project-origin { margin-bottom: 10px; }

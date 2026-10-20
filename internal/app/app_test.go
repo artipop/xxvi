@@ -350,6 +350,39 @@ func TestANewProjectMakesItsFolder(t *testing.T) {
 	}
 }
 
+// Opening a folder is the whole of adding it: named after the folder, a
+// second name when that one is taken, and the same project when the folder is
+// already one.
+func TestOpeningAFolderMakesItAProject(t *testing.T) {
+	api := NewAPI(open(t))
+	dir := filepath.Join(t.TempDir(), "blog")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	first, err := api.OpenProjectFolder(dir)
+	if err != nil || first.Name != "blog" || first.Path != dir {
+		t.Fatalf("проект: %+v, %v", first, err)
+	}
+	again, err := api.OpenProjectFolder(dir + "/")
+	if err != nil || again.ID != first.ID {
+		t.Fatalf("та же папка — тот же проект: %+v, %v", again, err)
+	}
+	other := filepath.Join(t.TempDir(), "blog")
+	if err := os.Mkdir(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if second, err := api.OpenProjectFolder(other); err != nil || second.Name != "blog 2" {
+		t.Fatalf("второе имя: %+v, %v", second, err)
+	}
+	made, err := api.CreateFolder(filepath.Dir(dir), "api", true)
+	if err != nil || made != filepath.Join(filepath.Dir(dir), "api") {
+		t.Fatalf("новая папка: %q, %v", made, err)
+	}
+	if _, err := api.CreateFolder(filepath.Dir(dir), "api", false); err == nil {
+		t.Fatal("существующую папку не создают заново")
+	}
+}
+
 // Deleting a project a card still names is refused: the card would start its
 // next step somewhere else entirely.
 func TestAProjectInUseIsNotDeleted(t *testing.T) {

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -881,38 +882,52 @@ func (s *API) SaveProject(p model.Project) (model.Project, error) {
 	return saved, nil
 }
 
+// OpenProjectFolder makes a project of a folder somebody already works in, the
+// way an IDE opens one: named after the folder, nothing else asked. A folder a
+// project already has opens that project rather than a second one.
+func (s *API) OpenProjectFolder(path string) (model.Project, error) {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if info, err := os.Stat(path); err != nil || !info.IsDir() || !filepath.IsAbs(path) {
+		return model.Project{}, msg.Err("project.folderNotFound", "path", path)
+	}
+	all, err := s.Projects()
+	if err != nil {
+		return model.Project{}, err
+	}
+	taken := map[string]bool{}
+	for _, p := range all {
+		taken[strings.ToLower(p.Name)] = true
+		for _, f := range p.Folders {
+			if filepath.Clean(f.Path) == path {
+				return p, nil
+			}
+		}
+	}
+	name := filepath.Base(path)
+	for n := 2; taken[strings.ToLower(name)]; n++ {
+		name = fmt.Sprintf("%s %d", filepath.Base(path), n)
+	}
+	return s.SaveProject(model.Project{Name: name, Folders: []model.Folder{{Path: path}}})
+}
+
 // CreateProject makes a new project's folder on disk and registers it: work that
 // starts from nothing rather than in a folder that already exists. One call,
 // so that a project refused on save leaves no empty folder behind.
 func (s *API) CreateProject(p model.Project, parent, folder string, initRepo bool) (model.Project, error) {
-	parent, folder = strings.TrimSpace(parent), strings.TrimSpace(folder)
-	if folder == "" {
-		folder = strings.TrimSpace(p.Name)
+	if strings.TrimSpace(folder) == "" {
+		folder = p.Name
 	}
-	if folder == "" || folder == "." || folder == ".." || strings.ContainsAny(folder, `/\:`) {
-		return model.Project{}, msg.Err("project.badFolderName", "name", folder)
-	}
-	if info, err := os.Stat(parent); err != nil || !info.IsDir() || !filepath.IsAbs(parent) {
-		return model.Project{}, msg.Err("project.folderNotFound", "path", parent)
-	}
-	path := filepath.Join(parent, folder)
-	// An existing folder is somebody's work: it is opened, never taken over.
-	if _, err := os.Lstat(path); err == nil {
-		return model.Project{}, msg.Err("project.folderExists", "path", path)
+	path, err := newFolderPath(parent, folder)
+	if err != nil {
+		return model.Project{}, err
 	}
 	p.ID, p.Path = "", path
 	p.Folders = []model.Folder{{Path: path}}
 	if _, err := model.ValidateProject(p); err != nil {
 		return model.Project{}, err
 	}
-	if err := os.Mkdir(path, 0o755); err != nil {
-		return model.Project{}, msg.Wrap(err, "project.folderNotCreated", "path", path)
-	}
-	if initRepo {
-		if err := acp.InitRepo(path); err != nil {
-			_ = os.RemoveAll(path)
-			return model.Project{}, msg.Wrap(err, "project.repoNotCreated", "path", path)
-		}
+	if err := makeFolder(path, initRepo); err != nil {
+		return model.Project{}, err
 	}
 	saved, err := s.SaveProject(p)
 	if err != nil {
@@ -920,6 +935,49 @@ func (s *API) CreateProject(p model.Project, parent, folder string, initRepo boo
 		return model.Project{}, err
 	}
 	return saved, nil
+}
+
+// CreateFolder makes a folder for a project being edited, which then adds it
+// like any other: the folder exists from the moment it is asked for.
+func (s *API) CreateFolder(parent, name string, initRepo bool) (string, error) {
+	path, err := newFolderPath(parent, name)
+	if err != nil {
+		return "", err
+	}
+	if err := makeFolder(path, initRepo); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// newFolderPath is where a new folder goes. An existing folder is somebody's
+// work: it is opened, never taken over.
+func newFolderPath(parent, name string) (string, error) {
+	parent, name = strings.TrimSpace(parent), strings.TrimSpace(name)
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\:`) {
+		return "", msg.Err("project.badFolderName", "name", name)
+	}
+	if info, err := os.Stat(parent); err != nil || !info.IsDir() || !filepath.IsAbs(parent) {
+		return "", msg.Err("project.folderNotFound", "path", parent)
+	}
+	path := filepath.Join(parent, name)
+	if _, err := os.Lstat(path); err == nil {
+		return "", msg.Err("project.folderExists", "path", path)
+	}
+	return path, nil
+}
+
+func makeFolder(path string, initRepo bool) error {
+	if err := os.Mkdir(path, 0o755); err != nil {
+		return msg.Wrap(err, "project.folderNotCreated", "path", path)
+	}
+	if initRepo {
+		if err := acp.InitRepo(path); err != nil {
+			_ = os.RemoveAll(path)
+			return msg.Wrap(err, "project.repoNotCreated", "path", path)
+		}
+	}
+	return nil
 }
 
 // HomeDir is where a new project's folder is suggested, before one was chosen.

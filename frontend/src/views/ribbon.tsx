@@ -7,14 +7,14 @@ import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api
 import type { RibbonView, ScreenView, Segment } from "../../bindings/github.com/artipop/gandvik/internal/engine/models";
 import type { SessionEvent } from "../../bindings/github.com/artipop/gandvik/internal/store/models";
 import {
-  attention, closedRibbon, done, guard, inWork, inWorkspace, leaveRibbons, list, loadAttention, loadProjects, loadRibbons, openRibbon, projects, report,
+  attention, closedRibbon, done, guard, inWork, inWorkspace, leaveRibbons, list, loadAttention, loadRibbons, openRibbon, projects, report,
   ribbons, setOpenRibbon, setTab, setWorkspace, showRibbon, workRibbons, workspace, openOutside,
 } from "../state";
 import { QuestionForm } from "./attention";
 import { JournalOf } from "./journal";
 import { Notes } from "./notes";
 import { Compose } from "./compose";
-import { blankProject, ProjectForm } from "./projects";
+import { NewProjectForm, openFolder } from "./projects";
 import { alignRibbon, centerInBand, followRibbonSize } from "./ribbon-layout";
 import Markdown from "./markdown";
 import { entryText, label, propName, questionText, say, t } from "../i18n";
@@ -452,7 +452,8 @@ export default function Ribbon(): JSX.Element {
       {/* The only chrome: room for the window's own buttons, the name of the
           job in front of you, and the one offer the ribbon ever makes. */}
       <header class="ribbon-bar">
-        <Workspaces onSelect={switchWorkspace} onCreate={() => setCreatingProject(true)} />
+        <Workspaces onSelect={switchWorkspace} onCreate={() => setCreatingProject(true)}
+          onOpen={async () => { const p = await openFolder(); if (p) switchWorkspace(p.id); }} />
         <Show when={current() ? !current()!.project : !projects().some((p) => p.id === workspace())}>
           <span class="draft-label" title={t("ribbon.draftHint")}>{t("ribbon.draft")}</span>
         </Show>
@@ -524,11 +525,9 @@ export default function Ribbon(): JSX.Element {
         <Show when={creatingProject()}>
           <aside class="ribbon-project" aria-label={t("projects.newTitle")}>
             <h3>{t("projects.newTitle")}</h3>
-            <ProjectForm project={blankProject()}
+            <NewProjectForm
               onDone={() => setCreatingProject(false)}
-              onChanged={() => { void loadProjects(); }}
-              onSaved={async (project) => {
-                await loadProjects();
+              onCreated={(project) => {
                 switchWorkspace(project.id);
                 setCreatingProject(false);
               }} />
@@ -647,7 +646,7 @@ function Folded(props: { label: JSX.Element; title?: string; class?: string; ite
   );
 }
 
-function Workspaces(props: { onSelect: (id: string) => void; onCreate: () => void }): JSX.Element {
+function Workspaces(props: { onSelect: (id: string) => void; onCreate: () => void; onOpen: () => void }): JSX.Element {
   const count = (id: string) => workRibbons().filter((r) => (r.project ?? "") === id).length;
   const name = (id: string) => projects().find((p) => p.id === id)?.name ?? t("ribbon.noProject");
   return (
@@ -658,7 +657,8 @@ function Workspaces(props: { onSelect: (id: string) => void; onCreate: () => voi
           checked: id === workspace(), action: () => props.onSelect(id),
         })),
         { label: "", separator: true },
-        { label: t("projects.new"), action: props.onCreate },
+        { label: t("projects.newProject"), action: props.onCreate },
+        { label: t("projects.openFolder"), action: props.onOpen },
       ]} />
   );
 }

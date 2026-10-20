@@ -170,6 +170,14 @@ export function ContinueStage(cardID: string, text: string): $CancellablePromise
 }
 
 /**
+ * CreateFolder makes a folder for a project being edited, which then adds it
+ * like any other: the folder exists from the moment it is asked for.
+ */
+export function CreateFolder(parent: string, name: string, initRepo: boolean): $CancellablePromise<string> {
+    return $Call.ByID(397910042, parent, name, initRepo);
+}
+
+/**
  * CreateProject makes a new project's folder on disk and registers it: work that
  * starts from nothing rather than in a folder that already exists. One call,
  * so that a project refused on save leaves no empty folder behind.
@@ -437,6 +445,15 @@ export function NativeTerminals(): $CancellablePromise<boolean> {
  */
 export function OpenClient(name: string): $CancellablePromise<void> {
     return $Call.ByID(3699702245, name);
+}
+
+/**
+ * OpenProjectFolder makes a project of a folder somebody already works in, the
+ * way an IDE opens one: named after the folder, nothing else asked. A folder a
+ * project already has opens that project rather than a second one.
+ */
+export function OpenProjectFolder(path: string): $CancellablePromise<model$0.Project> {
+    return $Call.ByID(4132484019, path);
 }
 
 /**
