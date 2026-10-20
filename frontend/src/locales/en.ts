@@ -352,8 +352,8 @@ export const en: Dict = {
   // ---- a task typed into the ribbon ----
   "compose.untitled": "Untitled task",
   "compose.who": "Agent",
-  "compose.flow": "Which flow",
-  "compose.folder": "Which folder",
+  "compose.flow": "Flow",
+  "compose.folder": "Folder",
   "compose.draftFolder": "The session will open in the shared drafts folder, default_project.",
   "compose.startDraft": "Open draft",
   "compose.start": "Start",

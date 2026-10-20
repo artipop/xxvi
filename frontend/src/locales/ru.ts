@@ -364,8 +364,8 @@ export const ru: Dict = {
   // ---- a task typed into the ribbon ----
   "compose.untitled": "Задача без описания",
   "compose.who": "Агент",
-  "compose.flow": "По какому флоу",
-  "compose.folder": "В какой папке",
+  "compose.flow": "Флоу",
+  "compose.folder": "Папка",
   "compose.draftFolder": "Сессия откроется в общей папке черновиков default_project.",
   "compose.startDraft": "Открыть черновик",
   "compose.start": "Начать",
