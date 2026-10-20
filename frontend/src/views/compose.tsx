@@ -81,7 +81,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
   // the list for an agent that is no longer chosen.
   let asked = 0;
   onCleanup(() => { ++asked; });
-  createEffect(() => [fromSession(), agentName(), projectID(), projectFolders(projectID()).map((f) => f.id).join("|")] as const, ([on, who, where]) => {
+  createEffect(() => [fromSession(), agentName(), projectID(), folderID()] as const, ([on, who, where, dir]) => {
     const n = ++asked;
     setSession(undefined);
     setSessions(undefined);
@@ -94,26 +94,14 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     setSessionTitle("");
     setSavingTitle("");
     if (!on || !who) return;
-    const dirs = projectFolders(where);
-    const ids = dirs.length > 0 ? dirs.map((f) => f.id) : [""];
-    void Promise.allSettled(ids.map(async (id) =>
-      (await API.PastSessions(who, where, id) ?? []).map((past) => ({ ...past, folderID: id }))
-    )).then((results) => {
-      if (n !== asked) return;
-      const found: SessionChoice[] = [];
-      const errors: string[] = [];
-      let missing = false;
-      results.forEach((result, i) => {
-        if (result.status === "fulfilled") found.push(...result.value);
-        else {
-          errors.push((dirs.length > 1 ? folderName(dirs[i]) + ": " : "") + errorText(result.reason));
-          if ((result.reason as { cause?: { code?: string } } | null)?.cause?.code === "adapter.install") missing = true;
-        }
-      });
-      setSessions(found.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")));
-      setSessionsError(errors.join("\n"));
-      setMissingAdapter(missing);
-    });
+    API.PastSessions(who, where, dir).then(
+      (got) => { if (n === asked) setSessions((got ?? []).map((past) => ({ ...past, folderID: dir }))); },
+      (err) => {
+        if (n !== asked) return;
+        setSessionsError(errorText(err));
+        setMissingAdapter((err as { cause?: { code?: string } } | null)?.cause?.code === "adapter.install");
+      },
+    );
   });
 
   const sessionBusy = () => busy() || !!deleting() || !!savingTitle();
@@ -231,7 +219,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
         </header>
         <Show when={!preview()}>
           <div class="compose-settings row wrap">
-            <Show when={!fromSession() && projectFolders(projectID()).length > 1}>
+            <Show when={projectFolders(projectID()).length > 1}>
               <label class="field">
                 <span>{t("compose.folder")}</span>
                 <select aria-label={t("compose.folder")} value={folderID()} disabled={sessionBusy()}
@@ -369,6 +357,9 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
               </For>
             </Show>
           </div>
+        </Show>
+        <Show when={fromSession() && !preview()}>
+          <p class="meta compose-sessions-source">{t("compose.sessionsSource", { folder: folder() ? folderName(folder()!) : "default_project" })}</p>
         </Show>
         <Show when={!preview()}>
           <footer class="compose-actions row">

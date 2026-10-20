@@ -733,6 +733,8 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .compose-settings .field { min-width: 140px; max-width: 260px; margin: 0; }
 .compose-settings select { width: 100%; }
 .compose-actions { flex: none; padding: 10px 18px; border-top: 1px solid var(--line); }
+/* The end of the list rather than a row of its own: it says where the list came from. */
+.compose-sessions-source { flex: none; margin: 0; padding: 8px 18px 10px; background: var(--bg); }
 .compose-selected { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .compose-text {
   flex: 1; min-height: 0; resize: none;
