@@ -254,7 +254,6 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
                   </label>
                 </div>
               </Show>
-              <p class="meta">{t("compose.newTerminal")}</p>
             </Show>
             <Show when={fromSession()}>
               <div class="compose-sessions">

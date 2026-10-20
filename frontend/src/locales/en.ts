@@ -357,7 +357,6 @@ export const en: Dict = {
   "compose.draftFolder": "The session will open in the shared drafts folder, default_project.",
   "compose.startDraft": "Open draft",
   "compose.start": "Start",
-  "compose.newTerminal": "The terminal opens right away: tell the agent the task there.",
   "compose.modeNew": "New session",
   "compose.fromSession": "Existing session",
   "compose.fromSessionWhy": "Continue a Claude Code or Codex conversation started in another terminal in the project folder",

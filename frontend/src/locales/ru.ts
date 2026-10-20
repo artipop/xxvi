@@ -369,7 +369,6 @@ export const ru: Dict = {
   "compose.draftFolder": "Сессия откроется в общей папке черновиков default_project.",
   "compose.startDraft": "Открыть черновик",
   "compose.start": "Начать",
-  "compose.newTerminal": "Терминал откроется сразу: задачу скажете агенту в нём.",
   "compose.modeNew": "Новая сессия",
   "compose.fromSession": "Существующая сессия",
   "compose.fromSessionWhy": "Продолжить разговор Claude Code или Codex, начатый в другом терминале в папке проекта",
