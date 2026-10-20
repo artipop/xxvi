@@ -881,6 +881,53 @@ func (s *API) SaveProject(p model.Project) (model.Project, error) {
 	return saved, nil
 }
 
+// CreateProject makes a new project's folder on disk and registers it: work that
+// starts from nothing rather than in a folder that already exists. One call,
+// so that a project refused on save leaves no empty folder behind.
+func (s *API) CreateProject(p model.Project, parent, folder string, initRepo bool) (model.Project, error) {
+	parent, folder = strings.TrimSpace(parent), strings.TrimSpace(folder)
+	if folder == "" {
+		folder = strings.TrimSpace(p.Name)
+	}
+	if folder == "" || folder == "." || folder == ".." || strings.ContainsAny(folder, `/\:`) {
+		return model.Project{}, msg.Err("project.badFolderName", "name", folder)
+	}
+	if info, err := os.Stat(parent); err != nil || !info.IsDir() || !filepath.IsAbs(parent) {
+		return model.Project{}, msg.Err("project.folderNotFound", "path", parent)
+	}
+	path := filepath.Join(parent, folder)
+	// An existing folder is somebody's work: it is opened, never taken over.
+	if _, err := os.Lstat(path); err == nil {
+		return model.Project{}, msg.Err("project.folderExists", "path", path)
+	}
+	p.ID, p.Path = "", path
+	p.Folders = []model.Folder{{Path: path}}
+	if _, err := model.ValidateProject(p); err != nil {
+		return model.Project{}, err
+	}
+	if err := os.Mkdir(path, 0o755); err != nil {
+		return model.Project{}, msg.Wrap(err, "project.folderNotCreated", "path", path)
+	}
+	if initRepo {
+		if err := acp.InitRepo(path); err != nil {
+			_ = os.RemoveAll(path)
+			return model.Project{}, msg.Wrap(err, "project.repoNotCreated", "path", path)
+		}
+	}
+	saved, err := s.SaveProject(p)
+	if err != nil {
+		_ = os.RemoveAll(path)
+		return model.Project{}, err
+	}
+	return saved, nil
+}
+
+// HomeDir is where a new project's folder is suggested, before one was chosen.
+func (s *API) HomeDir() string {
+	home, _ := os.UserHomeDir()
+	return home
+}
+
 // HostingRemotes is what connecting a project offers: its repository's
 // remotes, each with the server and repository its address suggests.
 func (s *API) HostingRemotes(projectID string) ([]hosting.RemoteOption, error) {

@@ -77,6 +77,12 @@ export default function ProjectsView() {
   );
 }
 
+const PARENT_KEY = "gandvik.projectsParent";
+
+function rememberedParent(): string {
+  try { return localStorage.getItem(PARENT_KEY) ?? ""; } catch { return ""; }
+}
+
 // A project picked and not named yet is named after its folder — which is what
 // it is called anyway, and one field fewer to fill in.
 function basename(path: string): string {
@@ -94,13 +100,34 @@ export function ProjectForm(props: {
   const [error, setError] = createSignal<unknown>(null);
   const [confirming, setConfirming] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
+  // A new project either opens a folder somebody already works in, or starts
+  // from nothing in a folder made for it.
+  const isNew = () => !draft.id;
+  const [origin, setOrigin] = createSignal<"existing" | "create">("existing");
+  const [parent, setParent] = createSignal(rememberedParent());
+  const [folder, setFolder] = createSignal("");
+  const [initRepo, setInitRepo] = createSignal(true);
+  if (isNew() && !parent()) void API.HomeDir().then((home) => { if (!parent()) setParent(home); });
+  const folderNamed = () => folder().trim() || draft.name.trim();
+  const createdPath = () => parent() && folderNamed() ? `${parent().replace(/[\\/]+$/, "")}/${folderNamed()}` : "";
+  const creating = () => isNew() && origin() === "create";
+
+  const pickParent = async () => {
+    const chosen = await guard(() => API.PickFolder(t("projects.pickParentTitle"), parent()));
+    if (chosen) { setParent(chosen); setError(null); }
+  };
 
   const save = async () => {
     if (saving()) return;
     setSaving(true);
     setError(null);
     try {
-      const saved = await API.SaveProject({ ...draft });
+      const saved = creating()
+        ? await API.CreateProject({ ...draft }, parent(), folder(), initRepo())
+        : await API.SaveProject({ ...draft });
+      if (creating()) {
+        try { localStorage.setItem(PARENT_KEY, parent()); } catch { /* a convenience */ }
+      }
       if (props.onSaved) {
         await props.onSaved(saved);
         return;
@@ -160,6 +187,43 @@ export function ProjectForm(props: {
           </select>
         </label>
       </div>
+      <Show when={isNew()}>
+        <div class="project-origin">
+          <div class="segmented">
+            <button class={origin() === "existing" ? "on" : ""} onClick={() => { setOrigin("existing"); setError(null); }}>
+              {t("projects.originExisting")}
+            </button>
+            <button class={origin() === "create" ? "on" : ""} onClick={() => { setOrigin("create"); setError(null); }}>
+              {t("projects.originCreate")}
+            </button>
+          </div>
+        </div>
+      </Show>
+      <Show when={creating()}>
+        <div class="project-create">
+          <div class="field">
+            <span class="field-label">{t("projects.parent")}</span>
+            <div class="row">
+              <input type="text" class="grow" placeholder={t("projects.pathPlaceholder")} value={parent()}
+                     onInput={(e) => setParent(e.currentTarget.value)} />
+              <button class="btn" onClick={() => void pickParent()}>{t("projects.pick")}</button>
+            </div>
+          </div>
+          <label class="field">
+            <span>{t("projects.folderToCreate")}</span>
+            <input type="text" placeholder={draft.name.trim() || t("projects.folderToCreatePlaceholder")} value={folder()}
+                   onInput={(e) => setFolder(e.currentTarget.value)} />
+          </label>
+          <Show when={createdPath()}>
+            <p class="meta">{t("projects.willCreate", { path: createdPath() })}</p>
+          </Show>
+          <label class="row check">
+            <input type="checkbox" checked={initRepo()} onChange={(e) => setInitRepo(e.currentTarget.checked)} />
+            <span>{t("projects.initRepo")}</span>
+          </label>
+        </div>
+      </Show>
+      <Show when={!creating()}>
       <div class="folders">
         <span class="field-label">{list(draft.folders).length > 1 ? t("projects.folders") : t("projects.folder")}</span>
         <For each={list(draft.folders)}>
@@ -187,6 +251,7 @@ export function ProjectForm(props: {
           <button class="btn quiet" onClick={addFolder} title={t("projects.addFolderWhy")}>{t("projects.addFolder")}</button>
         </div>
       </div>
+      </Show>
 
       {/* Only a saved repository can be connected: the remotes are read
           from its folder. */}
@@ -210,7 +275,7 @@ export function ProjectForm(props: {
           </Show>
         </Show>
         <button class="btn quiet" onClick={props.onDone}>{t("common.close")}</button>
-        <button class="btn primary" disabled={saving()} onClick={save}>{t("common.save")}</button>
+        <button class="btn primary" disabled={saving()} onClick={save}>{creating() ? t("projects.create") : t("common.save")}</button>
       </div>
     </div>
   );

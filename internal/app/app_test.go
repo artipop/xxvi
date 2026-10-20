@@ -324,6 +324,32 @@ func TestAProjectNeedsAFolderThatExists(t *testing.T) {
 	}
 }
 
+// A project that starts from nothing gets its folder made, a repository if
+// asked for, and nothing is left on disk when the project itself is refused.
+func TestANewProjectMakesItsFolder(t *testing.T) {
+	api := NewAPI(open(t))
+	parent := t.TempDir()
+	saved, err := api.CreateProject(model.Project{Name: "Сайт"}, parent, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(parent, "Сайт"); saved.Path != want || !saved.Repo {
+		t.Fatalf("проект: %+v", saved)
+	}
+	if _, err := api.CreateProject(model.Project{Name: "Сайт 2"}, parent, "Сайт", false); err == nil {
+		t.Fatal("существующую папку не забирают под новый проект")
+	}
+	if _, err := api.CreateProject(model.Project{Name: "Сайт"}, parent, "другая", false); err == nil {
+		t.Fatal("проект с занятым названием должен быть отвергнут")
+	}
+	if _, err := os.Stat(filepath.Join(parent, "другая")); !os.IsNotExist(err) {
+		t.Fatal("после отказа папка не должна остаться")
+	}
+	if _, err := api.CreateProject(model.Project{Name: "x"}, parent, "a/b", false); err == nil {
+		t.Fatal("имя папки с разделителем должно быть отвергнуто")
+	}
+}
+
 // Deleting a project a card still names is refused: the card would start its
 // next step somewhere else entirely.
 func TestAProjectInUseIsNotDeleted(t *testing.T) {

@@ -351,6 +351,12 @@ label.field.refused > span { color: var(--bad); }
 .grow-2 { flex: 2; min-width: 0; }
 .folders { display: grid; gap: 6px; margin-bottom: 10px; }
 .folders > .field-label { margin-bottom: -3px; }
+.project-origin { margin-bottom: 10px; }
+/* The same 10px step as the fields above it; the path it will make is read
+   with the name it comes from. */
+.project-create { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.project-create > .field { margin: 0; }
+.project-create > .meta { margin: -6px 0 0; overflow-wrap: anywhere; }
 input.folder-name { width: 9em; flex: none; }
 .clickable { cursor: pointer; }
 .row h3 { margin: 0; }
@@ -652,7 +658,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 }
 .ribbon-project h3 { margin: 0 0 12px; }
 .ribbon-project .panel { margin: 0; }
-.ribbon-project .grid2 { grid-template-columns: minmax(0, 1fr); }
+.ribbon-project .grid2 { grid-template-columns: minmax(0, 1fr); row-gap: 0; }
 
 .popup-menu {
   position: fixed; z-index: 1000; min-width: 200px; max-width: calc(100vw - 8px);

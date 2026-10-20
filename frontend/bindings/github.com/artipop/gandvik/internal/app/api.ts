@@ -170,6 +170,15 @@ export function ContinueStage(cardID: string, text: string): $CancellablePromise
 }
 
 /**
+ * CreateProject makes a new project's folder on disk and registers it: work that
+ * starts from nothing rather than in a folder that already exists. One call,
+ * so that a project refused on save leaves no empty folder behind.
+ */
+export function CreateProject(p: model$0.Project, parent: string, folder: string, initRepo: boolean): $CancellablePromise<model$0.Project> {
+    return $Call.ByID(2297707123, p, parent, folder, initRepo);
+}
+
+/**
  * DeleteAgent removes an entry.
  */
 export function DeleteAgent(name: string): $CancellablePromise<void> {
@@ -295,6 +304,13 @@ export function GiveBackWindow(screenID: string): $CancellablePromise<void> {
  */
 export function HideNativeTerminal(id: string): $CancellablePromise<void> {
     return $Call.ByID(1436168965, id);
+}
+
+/**
+ * HomeDir is where a new project's folder is suggested, before one was chosen.
+ */
+export function HomeDir(): $CancellablePromise<string> {
+    return $Call.ByID(1079030760);
 }
 
 /**
