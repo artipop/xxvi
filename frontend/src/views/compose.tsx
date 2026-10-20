@@ -23,13 +23,18 @@ import { SessionPreview } from "./session-preview";
 const KEY = "gandvik.compose";
 type SessionChoice = PastSession & { folderID: string };
 
-function remembered(): { workMode?: string; agent?: string; flow?: string; folders?: Record<string, string> } {
+function remembered(): { copy?: string; agent?: string; flow?: string; folders?: Record<string, string> } {
   try { return JSON.parse(localStorage.getItem(KEY) ?? "{}"); } catch { return {}; }
 }
 
 export function Compose(props: { onStarted?: () => void; onCancel?: () => void }): JSX.Element {
   const was = remembered();
-  const [workMode, setWorkMode] = createSignal(was.workMode ?? "");
+  // A separate working tree unless somebody chose otherwise: the person's own
+  // checkout stays as they left it, and tasks can run side by side. Only a
+  // choice made is remembered — the field once saved whatever it showed, so an
+  // untouched one is not read back.
+  const [workMode, setWorkMode] = createSignal(was.copy ?? "worktree");
+  let chosenMode = was.copy !== undefined;
   const [agent, setAgent] = createSignal(was.agent ?? "");
   const [flow, setFlow] = createSignal(was.flow ?? "");
   // The folder is remembered per project: a front and a back are chosen
@@ -156,7 +161,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
     setBusy(false);
     if (!view) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ workMode: workMode(), agent: agentName(), flow: flowID(), folders: folders() }));
+      localStorage.setItem(KEY, JSON.stringify({ ...(chosenMode ? { copy: workMode() } : {}), agent: agentName(), flow: flowID(), folders: folders() }));
     } catch { /* a convenience, not a record */ }
     setStep(null);
     applyCard(view);
@@ -242,7 +247,7 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
                 <div class="compose-settings row wrap">
                   <label class="field">
                     <span>{t("compose.workMode")}</span>
-                    <select aria-label={t("compose.workMode")} value={mode()} disabled={busy()} onChange={(e) => setWorkMode(e.currentTarget.value)}
+                    <select aria-label={t("compose.workMode")} value={mode()} disabled={busy()} onChange={(e) => { setWorkMode(e.currentTarget.value); chosenMode = true; }}
                             title={workModes().find((m) => m.value === mode())?.why}>
                       <For each={workModes()}>{(m) => <option value={m.value}>{m.label}</option>}</For>
                     </select>
