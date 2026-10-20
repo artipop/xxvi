@@ -121,6 +121,10 @@ func (r finishedRecorder) FinishedVisit(_ engine.Job, outcome string, _ msg.Msg,
 }
 func (r finishedRecorder) Described(string, string, string) {}
 
+func (r finishedRecorder) Current(string, int64) bool { return true }
+
+func (r finishedRecorder) Rejoin(engine.Job, engine.Again) error { return nil }
+
 type reviveCase struct {
 	m     *Manager
 	st    *store.Store

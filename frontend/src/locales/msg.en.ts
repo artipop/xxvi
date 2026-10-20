@@ -280,6 +280,8 @@ export const msgEn: Dict = {
   // ---- why a task moved ----
   "msg.move.taken": "taken into work",
   "msg.move.byHand": "moved by hand",
+  "msg.move.byAgent": "moved from the «{stage}» terminal at the person's request ({agent})",
+  "msg.move.again": "the «{stage}» step reported again at the person's request",
   "msg.move.returned": "returned from the inbox",
   "msg.move.cardChanged": (a) =>
     `«${propName(String(a.property))}» set to «${propValue(String(a.property), String(a.value ?? ""))}» on the task`,

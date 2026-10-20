@@ -279,6 +279,8 @@ export const msgRu: Dict = {
   // ---- why a card moved ----
   "msg.move.taken": "взята в работу",
   "msg.move.byHand": "переведена вручную",
+  "msg.move.byAgent": "переведена из терминала «{stage}» по просьбе человека ({agent})",
+  "msg.move.again": "шаг «{stage}» отчитался ещё раз по просьбе человека",
   "msg.move.returned": "возвращена из входящих",
   "msg.move.cardChanged": (a) =>
     `на задаче выбрано «${propName(String(a.property))}» = «${propValue(String(a.property), String(a.value ?? ""))}»`,

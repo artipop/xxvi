@@ -71,6 +71,11 @@ func (o Options) withDefaults() Options {
 // records the calls.
 type Reporter interface {
 	FinishedVisit(job engine.Job, outcome string, detail msg.Msg, agentText string)
+	// Current reports whether a visit is still the card's current one.
+	Current(cardID string, visit int64) bool
+	// Rejoin moves the card on a terminal's word when that is not a first
+	// report of the current visit (engine.Rejoin). Its error goes to the agent.
+	Rejoin(job engine.Job, again engine.Again) error
 	// Described is the task as the agent of a card leaving its flow put it
 	// (Manager.Leave). Both empty: the run ended and nothing came.
 	Described(cardID, title, text string)
@@ -187,8 +192,12 @@ func (m *Manager) Start(job engine.Job) error {
 	m.mu.Lock()
 	// A card put back in work while its last conversation is still writing
 	// its description: two CLIs in one conversation would write over each
-	// other.
+	// other. A run that is merely still working is left alone — the card went
+	// on without it, and the person may still be talking to it.
 	old := m.byCard[s.card.ID]
+	if old != nil && !old.isLeaving() && !old.wasCancelled() {
+		old = nil
+	}
 	if old != nil {
 		old.cancel()
 	}
@@ -247,14 +256,34 @@ func (m *Manager) RunningOnStage(stageID string) int {
 // Cancel stops whatever is running for a card. A cancelled session produces no
 // outcome: somebody intervened, so the flow waits for them.
 func (m *Manager) Cancel(cardID string, reason msg.Msg) {
-	m.mu.Lock()
-	s := m.byCard[cardID]
-	m.mu.Unlock()
-	if s == nil {
-		return
+	for _, s := range m.cardRuns(cardID, nil) {
+		m.log.Info("cancelling session", "session", s.id, "card", cardID, "reason", reason.String())
+		s.cancel()
 	}
-	m.log.Info("cancelling session", "session", s.id, "card", cardID, "reason", reason.String())
-	s.cancel()
+}
+
+// cardRuns is every live run of a card but one. A card has more than one when
+// it was moved on from a terminal while another step was still working.
+func (m *Manager) cardRuns(cardID string, except *session) []*session {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []*session
+	for _, s := range m.active {
+		if s.card.ID == cardID && s != except {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// Live reports whether a run's terminal is still open.
+func (m *Manager) Live(sessionID string) bool {
+	terms, _ := m.terminals()
+	if terms == nil {
+		return false
+	}
+	t := terms.Get(sessionID)
+	return t != nil && t.Alive()
 }
 
 // Leave stops what is running for a card going back to the inbox. A
@@ -267,6 +296,9 @@ func (m *Manager) Leave(cardID string, reason msg.Msg) bool {
 	m.mu.Unlock()
 	if s == nil {
 		return false
+	}
+	for _, other := range m.cardRuns(cardID, s) {
+		other.cancel()
 	}
 	if s.work != model.WorkTerminal || s.currentStatus() != store.StatusRunning {
 		m.Cancel(cardID, reason)

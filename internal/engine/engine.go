@@ -68,6 +68,9 @@ type Runner interface {
 	// runner that did always answers with Described, if only to say nothing
 	// came.
 	Leave(cardID string, reason msg.Msg) (asked bool)
+	// Live reports whether a run's terminal is still open. A person goes back
+	// to a live one by typing in it; only a closed one is reopened (Revisit).
+	Live(sessionID string) bool
 }
 
 // Emitter pushes events to the UI. Implementations must be safe to call before
@@ -783,19 +786,21 @@ func (e *Engine) harvestWritesLocked(cardID, outcome string, detail msg.Msg, age
 		return outcome, detail
 	}
 	stage, ok := flow.Stage(st.StageID)
-	if !ok || len(stage.Writes) == 0 {
+	if !ok {
 		return outcome, detail
 	}
+	return e.harvestWritesFor(cardID, stage, outcome, detail, agentText)
+}
 
+// harvestWritesFor is harvestWritesLocked for a named stage rather than the one
+// the card stands on: a terminal the card has left reports for its own stage.
+func (e *Engine) harvestWritesFor(cardID string, stage model.Stage, outcome string, detail msg.Msg, agentText string) (string, msg.Msg) {
+	if len(stage.Writes) == 0 {
+		return outcome, detail
+	}
 	delivered := ParseWrites(agentText, stage.Writes)
 	if len(delivered) > 0 {
-		if _, err := e.store.UpdateCard(cardID, store.CardEdit{Props: delivered}); err != nil {
-			e.log.Warn("could not write stage outputs", "card", cardID, "stage", stage.Name, "err", err)
-			e.record(cardID, model.EntryProblem, msg.New("journal.writesFailed", "stage", stage.Name).Because(err))
-		} else {
-			e.record(cardID, model.EntryProps,
-				msg.New("journal.wrote", "stage", stage.Name, "values", describeWrites(stage.Writes, delivered)))
-		}
+		e.writeDelivered(cardID, stage, delivered)
 	}
 
 	// Only a step that reported success can be held to its contract. One that
@@ -811,6 +816,16 @@ func (e *Engine) harvestWritesLocked(cardID, outcome string, detail msg.Msg, age
 	e.record(cardID, model.EntryProblem,
 		msg.New("journal.requiredMissing", "stage", stage.Name, "properties", strings.Join(missing, ", ")))
 	return model.TriggerFailure, msg.New("outcome.requiredMissing", "properties", strings.Join(missing, ", "))
+}
+
+func (e *Engine) writeDelivered(cardID string, stage model.Stage, delivered map[string]string) {
+	if _, err := e.store.UpdateCard(cardID, store.CardEdit{Props: delivered}); err != nil {
+		e.log.Warn("could not write stage outputs", "card", cardID, "stage", stage.Name, "err", err)
+		e.record(cardID, model.EntryProblem, msg.New("journal.writesFailed", "stage", stage.Name).Because(err))
+		return
+	}
+	e.record(cardID, model.EntryProps,
+		msg.New("journal.wrote", "stage", stage.Name, "values", describeWrites(stage.Writes, delivered)))
 }
 
 // writeOutcome puts how a stage ended into the card's own outcome field. Silent

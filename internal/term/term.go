@@ -48,8 +48,11 @@ type Session struct {
 
 	eng engine
 
-	mu       sync.Mutex
-	readOnly bool
+	mu sync.Mutex
+	// entered is when a person last pressed Enter here. A finished step's
+	// terminal may move its card again only after the person spoke in it, and
+	// on Windows, where the CLIs run no hooks, this is the only sign of that.
+	entered time.Time
 	// screen is what a window opened now has to show. Once the process has
 	// ended it is read one last time into final and freed: it is memory
 	// outside Go's reach, and nothing will draw on it again.
@@ -838,11 +841,12 @@ func (s *Session) snapshot() []byte {
 
 // Write is a keystroke on its way to the process.
 func (s *Session) Write(data []byte) error {
-	s.mu.Lock()
-	readOnly := s.readOnly
-	s.mu.Unlock()
-	if readOnly {
-		return nil
+	// Enter alone: a brief or a request typed by this application arrives as
+	// one pasted chunk with its Enter inside.
+	if len(data) == 1 && data[0] == '\r' {
+		s.mu.Lock()
+		s.entered = time.Now()
+		s.mu.Unlock()
 	}
 	// A key on its own, not the start of an escape sequence: an arrow is
 	// ESC [ A, and arrives in one piece.
@@ -1047,10 +1051,9 @@ func (s *Session) waitBrief() {
 	}
 }
 
-// SetReadOnly keeps a finished step visible without letting it edit the shared
-// working directory while the next step is running.
-func (s *Session) SetReadOnly() {
+// Entered is when a person last pressed Enter in the terminal.
+func (s *Session) Entered() time.Time {
 	s.mu.Lock()
-	s.readOnly = true
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	return s.entered
 }

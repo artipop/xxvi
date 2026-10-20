@@ -16,7 +16,7 @@ export const en: Dict = {
   "ribbon.startStage": "Start step",
   "ribbon.awaitingStart": "The node is open. Work waits for you to start it.",
   "ribbon.revisit": "Return to this step",
-  "ribbon.revisitNote": "This step has ended. Returning stops the current work and opens this conversation without sending a message.",
+  "ribbon.revisitNote": "This step’s terminal is closed. Returning stops the current work and opens this conversation without sending a message.",
   "msg.stage.notReady": "This step has already started or the task has moved on.",
   "msg.stage.cannotRevisit": "This conversation cannot be reopened for work. Check that its node and agent are still available.",
   "msg.stage.revisitBusy": "This stage has no free slot right now.",

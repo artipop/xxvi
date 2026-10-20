@@ -264,3 +264,43 @@ func TestNoDescriptionToolWithoutTaker(t *testing.T) {
 		t.Fatal("без Describe инструмента быть не должно")
 	}
 }
+
+// move_to names the flow as it is at the request, and hands the move over
+// without judging it: whether the card may go there is the engine's to say.
+func TestMoveNamesTheFlowAndForwardsTheStage(t *testing.T) {
+	s := serve(t)
+	got := make(chan Move, 1)
+	stages := []StageInfo{{Name: "Работа", What: "an agent works", Here: true}, {Name: "Деплой", What: "the branch is pushed"}}
+	token := s.Grant(Step{
+		Report: func(Report) error { return nil },
+		Stages: func() []StageInfo { return stages },
+		Move: func(m Move) error {
+			if m.Stage == "Нет такой" {
+				return fmt.Errorf("there is no stage «%s»", m.Stage)
+			}
+			got <- m
+			return nil
+		},
+	})
+	text := describeMove(Step{}, stages)
+	if !strings.Contains(text, "«Работа» — an agent works (the task is here now)") || !strings.Contains(text, "«Деплой» — the branch is pushed") {
+		t.Fatalf("описание называет ноды: %q", text)
+	}
+	res, err := callTool(t, s, token, "move_to", map[string]any{"stage": "Деплой", "summary": "готово", "properties": map[string]any{"Ветка": "main"}})
+	if err != nil || res.IsError {
+		t.Fatalf("move_to: %+v, %v", res, err)
+	}
+	if m := <-got; m.Stage != "Деплой" || m.Summary != "готово" || m.Props["Ветка"] != "main" {
+		t.Fatalf("перевод доехал не целиком: %+v", m)
+	}
+	// A stage the CLI remembers from its start but the flow no longer has is
+	// refused in words, not by the schema.
+	res, err = callTool(t, s, token, "move_to", map[string]any{"stage": "Нет такой", "summary": "x"})
+	if err != nil || !res.IsError || !strings.Contains(fmt.Sprint(res.Content[0]), "Нет такой") {
+		t.Fatalf("отказ: %+v, %v", res, err)
+	}
+	plain := s.Grant(Step{Report: func(Report) error { return nil }})
+	if res, err := callTool(t, s, plain, "move_to", map[string]any{"stage": "Деплой"}); err == nil && !res.IsError {
+		t.Fatal("без Move тула нет")
+	}
+}

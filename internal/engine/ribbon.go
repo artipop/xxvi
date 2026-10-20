@@ -247,7 +247,7 @@ func (e *Engine) Ribbon(cardID string) (RibbonView, error) {
 				Paused:    seg.Current && n == len(runs)-1 && s.Status == store.StatusPaused,
 				Revisitable: s.Work == model.WorkTerminal && s.Status.Terminal() && s.ACPSessionID != "" &&
 					s.FlowID == flow.ID && card.State != model.StateDropped && stage.Action == model.ActionAgent && stage.Work != model.WorkSession && !stage.Final &&
-					!(seg.Current && n == len(runs)-1 && s.Status == store.StatusPaused),
+					!(seg.Current && n == len(runs)-1 && s.Status == store.StatusPaused) && !e.live(s.ID),
 			}
 			if n > 0 && resumesTerminal(runs[n-1], s) {
 				// A resumed CLI has a new process, but the person is returning to

@@ -23,10 +23,11 @@ type fakeRunner struct {
 	fail    error // when set, Start refuses
 	engine  *Engine
 	asks    bool // Leave asks the agent for a description
+	live    map[string]bool
 }
 
 func newRunner() *fakeRunner {
-	return &fakeRunner{running: map[string]string{}, busy: map[string]bool{}}
+	return &fakeRunner{running: map[string]string{}, busy: map[string]bool{}, live: map[string]bool{}}
 }
 
 func (r *fakeRunner) Start(job Job) error {
@@ -67,6 +68,12 @@ func (r *fakeRunner) Cancel(cardID string, reason msg.Msg) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.running, cardID)
+}
+
+func (r *fakeRunner) Live(sessionID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.live[sessionID]
 }
 
 func (r *fakeRunner) Leave(cardID string, reason msg.Msg) bool {

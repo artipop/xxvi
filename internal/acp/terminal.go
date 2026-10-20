@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/artipop/gandvik/internal/engine"
 	"github.com/artipop/gandvik/internal/model"
 	"github.com/artipop/gandvik/internal/msg"
 	"github.com/artipop/gandvik/internal/stagemcp"
@@ -135,10 +136,47 @@ func (m *Manager) runTerminal(s *session) {
 		return
 	}
 
-	// The report and the door it arrives through. Both die with the step: a
-	// grant outliving its run is a door onto a card nobody is working.
-	reported := make(chan stagemcp.Report, 1)
+	// The report and the door it arrives through. The door stays open as long
+	// as the CLI does: a person may come back to a finished step and ask for
+	// more, and its agent then reports again or sends the card on (move_to).
+	reported := make(chan finishing, 1)
 	var accepted atomic.Bool
+	var reportedAt atomic.Int64
+	var asked atomic.Int64
+	var attached atomic.Pointer[term.Session]
+	lastAsked := func() time.Time {
+		at := time.Unix(0, asked.Load())
+		if sess := attached.Load(); sess != nil {
+			if entered := sess.Entered(); entered.After(at) {
+				at = entered
+			}
+		}
+		if at.UnixNano() <= 0 {
+			return time.Time{}
+		}
+		return at
+	}
+	// again is the card moved by this terminal when that is not the first
+	// report of the visit the card stands in.
+	again := func(a engine.Again, r stagemcp.Report) error {
+		if accepted.Load() {
+			a.Reported = time.Unix(0, reportedAt.Load())
+		}
+		a.Asked = lastAsked()
+		if m.to == nil {
+			return errors.New("the application is not taking reports")
+		}
+		if err := m.to.Rejoin(s.job, a); err != nil {
+			return err
+		}
+		if accepted.CompareAndSwap(false, true) {
+			reportedAt.Store(time.Now().UnixNano())
+			reported <- finishing{report: r, routed: true}
+		} else {
+			m.record(s, model.EntryReport, terminalReport(r))
+		}
+		return nil
+	}
 	// Buffered generously and never blocked on: a hook holds the CLI's turn
 	// until it is answered, and the watcher is the only reader.
 	hooked := make(chan stagemcp.HookEvent, 64)
@@ -153,11 +191,24 @@ func (m *Manager) runTerminal(s *session) {
 			if missing := missingWrites(s.stage.Writes, r); missing != "" {
 				return fmt.Errorf("the step is not finished: %s missing. Add the value and call again", missing)
 			}
-			if !accepted.CompareAndSwap(false, true) {
-				return errors.New("this step is already finished")
+			if !accepted.Load() && (m.to == nil || m.to.Current(s.card.ID, s.job.Visit)) {
+				if !accepted.CompareAndSwap(false, true) {
+					return errors.New("this step is already finished")
+				}
+				reportedAt.Store(time.Now().UnixNano())
+				reported <- finishing{report: r}
+				return nil
 			}
-			reported <- r
-			return nil
+			outcome := model.TriggerSuccess
+			if !r.OK {
+				outcome = model.TriggerFailure
+			}
+			return again(engine.Again{Outcome: outcome, Text: reportText(s.stage.Writes, r)}, r)
+		},
+		Stages: func() []stagemcp.StageInfo { return m.stagesFor(s) },
+		Move: func(mv stagemcp.Move) error {
+			r := stagemcp.Report{OK: true, Summary: mv.Summary, Props: mv.Props}
+			return again(engine.Again{Target: mv.Stage, Text: reportText(s.stage.Writes, r)}, r)
 		},
 		Describe: func(d stagemcp.Description) error {
 			if !s.isLeaving() {
@@ -171,6 +222,9 @@ func (m *Manager) runTerminal(s *session) {
 			}
 		},
 		Hook: func(ev stagemcp.HookEvent) {
+			if ev.Event == "UserPromptSubmit" && ev.AgentID == "" {
+				asked.Store(time.Now().UnixNano())
+			}
 			select {
 			case hooked <- ev:
 			default:
@@ -224,6 +278,7 @@ func (m *Manager) runTerminal(s *session) {
 		m.failTerminal(s, msg.Of(clipped(s.agent, err)))
 		return
 	}
+	attached.Store(sess)
 	opened := time.Now()
 
 	ctx, cancel := context.WithCancel(m.rootCtx)
@@ -279,26 +334,23 @@ func (m *Manager) runTerminal(s *session) {
 		// The report is handed to the engine in the shape a session's closing
 		// words would have had: the summary, then one «Property: value» line
 		// per value. One currency for both modes means one place that reads it
-		// (engine.ParseWrites) rather than two that must agree.
-		s.setFinal(reportText(s.stage.Writes, report))
+		// (engine.ParseWrites) rather than two that must agree. A report the
+		// engine already routed (Rejoin) leaves nothing for it to decide.
+		if !report.routed {
+			s.setFinal(reportText(s.stage.Writes, report.report))
+		}
 		status := store.StatusDone
-		if !report.OK {
+		if !report.report.OK {
 			status = store.StatusFailed
 		}
 		m.finish(s, status, msg.Msg{})
-		m.record(s, model.EntryReport, terminalReport(report))
+		m.record(s, model.EntryReport, terminalReport(report.report))
 
-		// A completed visit loses input and reporting rights before the next
-		// one starts. Its CLI stays on screen until return or application exit.
-		sess.SetReadOnly()
-		tools.Revoke(token)
+		// The step no longer holds its stage, but its CLI stays as it was: the
+		// person can come back to it until it exits or the application does.
 		released = true
 		m.release(s)
-		select {
-		case <-m.rootCtx.Done():
-		case <-sess.Done():
-		}
-		sess.Close()
+		m.lingerTerminal(s, sess, hooked)
 	}
 }
 
@@ -307,8 +359,8 @@ func (m *Manager) runTerminal(s *session) {
 // is waiting for a person — as its hooks say.
 func (m *Manager) watchTerminal(
 	ctx context.Context, s *session, sess *term.Session,
-	reported <-chan stagemcp.Report, hooked <-chan stagemcp.HookEvent, described <-chan stagemcp.Description,
-) (stagemcp.Report, error) {
+	reported <-chan finishing, hooked <-chan stagemcp.HookEvent, described <-chan stagemcp.Description,
+) (finishing, error) {
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
 	state := cliUnknown
@@ -360,10 +412,10 @@ func (m *Manager) watchTerminal(
 				return report, nil // it reported and then exited; the race is real
 			default:
 			}
-			return stagemcp.Report{}, errClosedWithoutReport
+			return finishing{}, errClosedWithoutReport
 
 		case <-ctx.Done():
-			return stagemcp.Report{}, ctx.Err()
+			return finishing{}, ctx.Err()
 
 		case ev := <-hooked:
 			if id := conversationOf(ev); id != "" {
@@ -409,6 +461,81 @@ func (m *Manager) watchTerminal(
 			}
 		}
 	}
+}
+
+// finishing is a report on its way to ending a run. Routed is one the engine
+// already moved the card for (Rejoin), so the run only has to end.
+type finishing struct {
+	report stagemcp.Report
+	routed bool
+}
+
+// lingerTerminal keeps a reported step's CLI until it exits or the application
+// does. Its hooks are still read: a conversation cleared or compacted moves to
+// another id, and a later return has to open the one it ended on.
+func (m *Manager) lingerTerminal(s *session, sess *term.Session, hooked <-chan stagemcp.HookEvent) {
+	for {
+		select {
+		case <-m.rootCtx.Done():
+			sess.Close()
+			return
+		case <-sess.Done():
+			sess.Close()
+			return
+		case ev := <-hooked:
+			if id := conversationOf(ev); id != "" {
+				m.noteConversation(s, id)
+			}
+		}
+	}
+}
+
+// stagesFor is the card's flow as move_to names it, read fresh: the flow may
+// have been edited and the card moved since the CLI started.
+func (m *Manager) stagesFor(s *session) []stagemcp.StageInfo {
+	flow, err := m.store.Flow(s.flow.ID)
+	if err != nil {
+		flow = s.flow
+	}
+	here := ""
+	if st, ok, err := m.store.FlowState(s.card.ID); err == nil && ok {
+		here = st.StageID
+	}
+	out := make([]stagemcp.StageInfo, 0, len(flow.Stages))
+	for _, st := range flow.Stages {
+		out = append(out, stagemcp.StageInfo{Name: st.Name, What: stageWhat(st), Here: st.ID == here})
+	}
+	return out
+}
+
+// stageWhat is what a stage does with a card, in the agent's terms. The first
+// line of an agent stage's prompt is its purpose, which is what lets «deploy
+// it» find the stage that deploys.
+func stageWhat(st model.Stage) string {
+	var what string
+	switch {
+	case st.Final:
+		return "the task is finished there"
+	case st.Action == model.ActionAgent && workOf(st) == model.WorkSession:
+		what = "an agent works on the task in the background"
+	case st.Action == model.ActionAgent:
+		what = "an agent works on the task in a terminal"
+	case st.Action == model.ActionPublish:
+		what = "the branch is pushed and its merge request opened or updated"
+	case st.Action == model.ActionVerdict:
+		what = "the review verdict is sent to the merge request"
+	default:
+		return "the task waits there for a person"
+	}
+	if st.ManualStart {
+		what += ", once the person starts it"
+	}
+	if st.Action == model.ActionAgent {
+		if first, _, _ := strings.Cut(strings.TrimSpace(st.Prompt), "\n"); first != "" {
+			what += ": " + truncate(strings.TrimSpace(first), 160)
+		}
+	}
+	return what
 }
 
 // failTerminal ends a step that could not be opened at all. It fails rather
