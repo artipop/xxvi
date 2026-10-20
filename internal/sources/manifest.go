@@ -139,7 +139,7 @@ type AuthSpec struct {
 	Type string `json:"type"` // token
 
 	// Optional says the plugin runs without one and takes it when given: the
-	// XCIII bridge on the same machine finds its own secret, and only a
+	// Pourquoi Pas? bridge on the same machine finds its own secret, and only a
 	// server needs a token a person issued.
 	Optional bool `json:"optional,omitempty"`
 }

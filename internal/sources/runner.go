@@ -378,7 +378,7 @@ func (r *Runner) loop(ctx context.Context, src model.Source, kick <-chan struct{
 	handler := &pluginHandler{runner: r, source: src.Name}
 	// A plugin that did not start, or died, is started again after a pause
 	// rather than given up on: the likeliest reason is another application
-	// that is not open yet — XCIII, for one — and a source that stays broken
+	// that is not open yet — Pourquoi Pas?, for one — and a source that stays broken
 	// after it opens is one somebody has to notice and restart by hand.
 	wait := time.Duration(0)
 	for {

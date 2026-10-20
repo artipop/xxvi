@@ -1,13 +1,13 @@
 {
-  "name": "xciii",
-  "title": "XCIII: колонка доски",
+  "name": "pourquoipas",
+  "title": "Pourquoi Pas?: колонка доски",
   "kind": "mcp",
   "command": "{{.Config.binary}}",
   "args": ["mcp", "feed"],
   "env": {
-    "XCIII_URL": "{{if eq .Config.where \"server\"}}{{.Config.url}}{{end}}"
+    "POURQUOIPAS_URL": "{{if eq .Config.where \"server\"}}{{.Config.url}}{{end}}"
   },
-  "tokenEnv": "XCIII_FEED_TOKEN",
+  "tokenEnv": "POURQUOIPAS_FEED_TOKEN",
   "auth": {"type": "token", "optional": true},
   "fields": [
     {
@@ -21,10 +21,10 @@
         "at": "columns", "value": "{{.name}}", "dependsOn": ["board"]
       }
     },
-    {"key": "where", "title": "Где работает XCIII", "type": "select", "values": ["local", "server"], "default": "local"},
-    {"key": "binary", "title": "Где лежит XCIII", "default": "/Applications/XCIII.app/Contents/MacOS/XCIII"},
+    {"key": "where", "title": "Где работает Pourquoi Pas?", "type": "select", "values": ["local", "server"], "default": "local"},
+    {"key": "binary", "title": "Где лежит Pourquoi Pas?", "default": "/Applications/pourquoipas.app/Contents/MacOS/pourquoipas"},
     {
-      "key": "url", "title": "Адрес сервера XCIII",
+      "key": "url", "title": "Адрес сервера Pourquoi Pas?",
       "showWhen": {"key": "where", "value": "server"}
     }
   ],

@@ -408,5 +408,12 @@ ALTER TABLE agent ADD COLUMN proxy_id TEXT NOT NULL DEFAULT '';`,
 ALTER TABLE stage ADD COLUMN keep_focus INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE flow_event ADD COLUMN started INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE agent_session ADD COLUMN visit_id INTEGER NOT NULL DEFAULT 0;`,
+
+		// XCIII was renamed Pourquoi Pas?: a source of the old plugin would
+		// otherwise name a plugin that no longer exists, and one that kept the
+		// default path would start a binary that is gone.
+		`UPDATE source SET plugin = 'pourquoipas',
+	config = replace(config, '/Applications/XCIII.app/Contents/MacOS/XCIII', '/Applications/pourquoipas.app/Contents/MacOS/pourquoipas')
+WHERE plugin = 'xciii';`,
 	}
 }
