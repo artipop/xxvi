@@ -712,46 +712,34 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
    the work is watched, in the strip, and the text is the only thing in it. */
 .screen.draft { flex-basis: 100%; }
 .compose { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.compose-entry { flex: 1; min-height: 0; display: grid; place-items: center; overflow: auto; padding: 24px; }
-.compose-entry-content { width: min(620px, 100%); text-align: center; }
-.compose-entry h2 { margin: 8px 0 20px; }
-.compose-project { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.compose-entry .compose-project { margin: 0; color: var(--accent); }
-.compose-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 24px; }
+.compose-body { flex: 1; min-height: 0; overflow: auto; padding: 28px 24px; }
+.compose-column { width: min(760px, 100%); margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.compose-column h2 { margin: 0; }
+.compose-column > .meta { margin: 0; }
+.compose-project { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); }
+.compose-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .compose-choice {
-  display: flex; flex-direction: column; gap: 10px; padding: 24px;
+  display: flex; flex-direction: column; gap: 10px; padding: 20px 24px;
   text-align: left; background: var(--panel-2); border: 1px solid var(--line-strong);
   border-radius: var(--radius-surface); cursor: pointer;
 }
-.compose-choice:hover, .compose-choice:focus-visible { border-color: var(--accent); background: var(--accent-wash); }
+.compose-choice:hover, .compose-choice:focus-visible { border-color: var(--accent); }
+.compose-choice.on { border-color: var(--accent); background: var(--accent-wash); }
 .compose-choice strong { font-size: 16px; }
 .compose-choice span { font-size: 13px; color: var(--dim); }
-.compose-heading { flex: none; padding: 10px 16px; border-bottom: 1px solid var(--line); }
-.compose-heading h3 { margin: 0; white-space: nowrap; }
-.compose-heading .compose-project { margin-left: auto; }
-.compose > .compose-settings { flex: none; align-items: end; padding: 12px 18px; border-top: 0; border-bottom: 1px solid var(--line); }
-.compose-settings .field { min-width: 140px; max-width: 260px; margin: 0; }
+.compose-settings { align-items: end; gap: 12px; }
+.compose-settings .field { min-width: 160px; max-width: 280px; margin: 0; }
 .compose-settings select { width: 100%; }
 .compose-actions { flex: none; padding: 10px 18px; border-top: 1px solid var(--line); }
-/* The end of the list rather than a row of its own: it says where the list came from. */
-.compose-sessions-source { flex: none; margin: 0; padding: 8px 18px 10px; background: var(--bg); }
 .compose-selected { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.compose-text {
-  flex: 1; min-height: 0; resize: none;
-  border: 0; border-radius: 0; background: var(--bg);
-  font-size: 15px; line-height: 1.6; padding: 16px 18px;
-  overscroll-behavior-y: contain;
-}
-.compose-text:focus { outline: none; }
-/* The conversations to continue take the text's place: a continued task has
-   nothing to type. */
+/* The conversations to continue are the choice's own part of the screen. */
 .compose-sessions {
-  flex: 1; min-height: 0; overflow-y: auto;
-  background: var(--bg); padding: 8px 0;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-surface);
+  padding: 6px 0; overflow: hidden;
 }
 .compose-sessions .empty { padding: 8px 18px; margin: 0; }
 .compose-sessions .loading { display: flex; align-items: center; gap: 10px; }
-.compose-sessions > .screen-error { margin-top: -8px; }
+.compose-sessions > .screen-error { margin: 0 8px; }
 .compose-session {
   display: flex; gap: 12px; align-items: baseline; width: 100%;
   padding-right: 18px;
@@ -771,7 +759,6 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .compose-session-rename input { flex: 1; min-width: 0; }
 .compose-session-rename .btn { flex: none; }
 .compose-session-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.compose-sessions:has(.session-preview) { display: flex; overflow: hidden; padding: 0; }
 .session-preview { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .session-preview > header { padding: 12px 18px; border-bottom: 1px solid var(--line); }
 .session-preview-heading { flex: 1; min-width: 0; }

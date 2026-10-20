@@ -353,14 +353,14 @@ export const ru: Dict = {
   "updates.skipped": "Версия {version} пропущена и больше не предлагается. Отменить это можно в {path}.",
 
   // ---- a task typed into the ribbon ----
-  "compose.placeholder": "Что сделать? Первая строка — заголовок. Можно оставить пустым и сказать всё агенту в терминале.",
   "compose.untitled": "Задача без описания",
   "compose.who": "Агент",
   "compose.flow": "По какому флоу",
   "compose.folder": "В какой папке",
   "compose.draftFolder": "Сессия откроется в общей папке черновиков default_project.",
   "compose.startDraft": "Открыть черновик",
-  "compose.start": "Начать ↵",
+  "compose.start": "Начать",
+  "compose.newTerminal": "Терминал откроется сразу: задачу скажете агенту в нём.",
   "compose.modeNew": "Новая сессия",
   "compose.fromSession": "Существующая сессия",
   "compose.fromSessionWhy": "Продолжить разговор Claude Code или Codex, начатый в другом терминале в папке проекта",
@@ -376,7 +376,6 @@ export const ru: Dict = {
 
   "compose.chooseStart": "С чего начнём?",
   "compose.newHint": "Начать разговор с агентом и настроить рабочую папку.",
-  "compose.back": "← Назад",
   "compose.workMode": "Рабочая копия",
   "compose.openSession": "Открыть сессию",
   "compose.noAgents": "Добавьте агента в разделе «Агенты», чтобы открыть его сессии.",

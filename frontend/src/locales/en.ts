@@ -341,14 +341,14 @@ export const en: Dict = {
   "updates.skipped": "Version {version} is skipped and no longer offered. This can be undone in {path}.",
 
   // ---- a task typed into the ribbon ----
-  "compose.placeholder": "What should be done? The first line is the title. Leave it empty to tell the agent in the terminal.",
   "compose.untitled": "Untitled task",
   "compose.who": "Agent",
   "compose.flow": "Which flow",
   "compose.folder": "Which folder",
   "compose.draftFolder": "The session will open in the shared drafts folder, default_project.",
   "compose.startDraft": "Open draft",
-  "compose.start": "Start ↵",
+  "compose.start": "Start",
+  "compose.newTerminal": "The terminal opens right away: tell the agent the task there.",
   "compose.modeNew": "New session",
   "compose.fromSession": "Existing session",
   "compose.fromSessionWhy": "Continue a Claude Code or Codex conversation started in another terminal in the project folder",
@@ -364,7 +364,6 @@ export const en: Dict = {
 
   "compose.chooseStart": "How would you like to start?",
   "compose.newHint": "Start a conversation and choose how to work in the folder.",
-  "compose.back": "← Back",
   "compose.workMode": "Working copy",
   "compose.openSession": "Open session",
   "compose.noAgents": "Add an agent in Agents to open its sessions.",
