@@ -253,6 +253,8 @@ export const ru: Dict = {
   "projects.pickParentTitle": "Где создать папку проекта",
   "projects.originExisting": "Существующая папка",
   "projects.originCreate": "Новая папка",
+  "projects.originExistingHint": "Открыть проект в папке, где уже лежит код или документы.",
+  "projects.originCreateHint": "Создать пустую папку и начать работу с нуля.",
   "projects.parent": "Где создать",
   "projects.folderToCreate": "Имя новой папки",
   "projects.folderToCreatePlaceholder": "по названию проекта",

@@ -351,6 +351,8 @@ label.field.refused > span { color: var(--bad); }
 .grow-2 { flex: 2; min-width: 0; }
 .folders { display: grid; gap: 6px; margin-bottom: 10px; }
 .folders > .field-label { margin-bottom: -3px; }
+/* In the list it stands where its card was, at the cards' own spacing. */
+.project-form { margin-bottom: 8px; }
 .project-origin { margin-bottom: 10px; }
 /* The same 10px step as the fields above it; the path it will make is read
    with the name it comes from. */
@@ -723,16 +725,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .compose-column h2 { margin: 0; }
 .compose-column > .meta { margin: 0; }
 .compose-project { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); }
-.compose-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.compose-choice {
-  display: flex; flex-direction: column; gap: 10px; padding: 20px 24px;
-  text-align: left; background: var(--panel-2); border: 1px solid var(--line-strong);
-  border-radius: var(--radius-surface); cursor: pointer;
-}
-.compose-choice:hover, .compose-choice:focus-visible { border-color: var(--accent); }
-.compose-choice.on { border-color: var(--accent); background: var(--accent-wash); }
-.compose-choice strong { font-size: 16px; }
-.compose-choice span { font-size: 13px; color: var(--dim); }
+
 .compose-settings { align-items: end; gap: 12px; }
 .compose-settings .field { min-width: 160px; max-width: 280px; margin: 0; }
 .compose-settings select { width: 100%; }
@@ -774,10 +767,6 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   flex: 1; min-height: 0; margin: 0; padding: 16px 18px; overflow: auto;
   font-family: var(--mono); font-size: 12px; line-height: 1.6;
   white-space: pre-wrap; overflow-wrap: anywhere; overscroll-behavior: contain;
-}
-@container (width < 520px) {
-  .compose-choices { grid-template-columns: minmax(0, 1fr); }
-  .compose-choice { padding: 16px; }
 }
 
 /* The stack does not scroll under the hand: a plain wheel belongs to whatever
@@ -1227,6 +1216,20 @@ input[type="text"].inspector__name:focus { background: var(--bg); }
   background: color-mix(in srgb, var(--kind) 16%, transparent);
   border-color: color-mix(in srgb, var(--kind) 40%, transparent);
 }
+
+/* Two ways to begin, as cards with what each one means: the answer decides
+ * what is asked next, so it is read rather than skimmed. They stack where a
+ * card would be too narrow for its sentence. */
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.choice {
+  display: flex; flex-direction: column; gap: 8px; padding: 18px 20px;
+  text-align: left; background: var(--panel-2); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-surface); cursor: pointer;
+}
+.choice:hover, .choice:focus-visible { border-color: var(--accent); }
+.choice.on { border-color: var(--accent); background: var(--accent-wash); }
+.choice strong { font-size: 15px; }
+.choice span { font-size: 13px; color: var(--dim); }
 
 /* A choice of two or three, as one control rather than a select: every answer
  * is in sight. */

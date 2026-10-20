@@ -23,6 +23,13 @@ function editable(p: Project): Project {
 
 export default function ProjectsView() {
   const [editing, setEditing] = createSignal<Project | null>(null);
+  const form = () => (
+    <ProjectForm
+      project={editing()!}
+      onDone={() => { setEditing(null); void loadProjects(); }}
+      onChanged={(p) => { setEditing(editable(p)); void loadProjects(); }}
+    />
+  );
 
   return (
     <>
@@ -32,19 +39,18 @@ export default function ProjectsView() {
         <button class="btn" onClick={() => setEditing(blankProject())}>{t("projects.new")}</button>
       </div>
 
-      <Show when={editing()}>
-        <ProjectForm
-          project={editing()!}
-          onDone={() => { setEditing(null); void loadProjects(); }}
-          onChanged={(p) => { setEditing(editable(p)); void loadProjects(); }}
-        />
+      {/* One project, one place: the one being edited is its form, where its
+          card was, and only a new one has a form of its own above the list. */}
+      <Show when={editing() && !editing()!.id}>
+        {form()}
       </Show>
 
       <Show when={projects().length > 0} fallback={
-        <div class="empty">{t("projects.empty")}</div>
+        <Show when={!editing()}><div class="empty">{t("projects.empty")}</div></Show>
       }>
         <For each={projects()}>
           {(p) => (
+            <Show when={editing()?.id === p.id} fallback={
             <div class="card clickable" onClick={() => setEditing(editable(p))}>
               <div class="row">
                 <span class="title">{p.name}</span>
@@ -70,6 +76,9 @@ export default function ProjectsView() {
                 )}
               </For>
             </div>
+            }>
+              {form()}
+            </Show>
           )}
         </For>
       </Show>
@@ -103,7 +112,7 @@ export function ProjectForm(props: {
   // A new project either opens a folder somebody already works in, or starts
   // from nothing in a folder made for it.
   const isNew = () => !draft.id;
-  const [origin, setOrigin] = createSignal<"existing" | "create">("existing");
+  const [origin, setOrigin] = createSignal<"existing" | "create" | null>(null);
   const [parent, setParent] = createSignal(rememberedParent());
   const [folder, setFolder] = createSignal("");
   const [initRepo, setInitRepo] = createSignal(true);
@@ -111,6 +120,8 @@ export function ProjectForm(props: {
   const folderNamed = () => folder().trim() || draft.name.trim();
   const createdPath = () => parent() && folderNamed() ? `${parent().replace(/[\\/]+$/, "")}/${folderNamed()}` : "";
   const creating = () => isNew() && origin() === "create";
+  const choosing = () => isNew() && !origin();
+  const choose = (next: "existing" | "create") => { setOrigin(next); setError(null); };
 
   const pickParent = async () => {
     const chosen = await guard(() => API.PickFolder(t("projects.pickParentTitle"), parent()));
@@ -118,7 +129,7 @@ export function ProjectForm(props: {
   };
 
   const save = async () => {
-    if (saving()) return;
+    if (saving() || choosing()) return;
     setSaving(true);
     setError(null);
     try {
@@ -168,7 +179,7 @@ export function ProjectForm(props: {
   };
 
   return (
-    <div class="panel" onKeyDown={formKeys({ submit: save, busy: saving, cancel: () => {
+    <div class="panel project-form" onKeyDown={formKeys({ submit: save, busy: saving, cancel: () => {
       if (confirming()) setConfirming(false);
       else props.onDone();
     } })}>
@@ -188,15 +199,17 @@ export function ProjectForm(props: {
         </label>
       </div>
       <Show when={isNew()}>
-        <div class="project-origin">
-          <div class="segmented">
-            <button class={origin() === "existing" ? "on" : ""} onClick={() => { setOrigin("existing"); setError(null); }}>
-              {t("projects.originExisting")}
-            </button>
-            <button class={origin() === "create" ? "on" : ""} onClick={() => { setOrigin("create"); setError(null); }}>
-              {t("projects.originCreate")}
-            </button>
-          </div>
+        <div class="choices project-origin">
+          <button class={`choice ${origin() === "existing" ? "on" : ""}`} aria-pressed={origin() === "existing" ? "true" : "false"}
+                  onClick={() => choose("existing")}>
+            <strong>{t("projects.originExisting")}</strong>
+            <span>{t("projects.originExistingHint")}</span>
+          </button>
+          <button class={`choice ${origin() === "create" ? "on" : ""}`} aria-pressed={origin() === "create" ? "true" : "false"}
+                  onClick={() => choose("create")}>
+            <strong>{t("projects.originCreate")}</strong>
+            <span>{t("projects.originCreateHint")}</span>
+          </button>
         </div>
       </Show>
       <Show when={creating()}>
@@ -223,7 +236,7 @@ export function ProjectForm(props: {
           </label>
         </div>
       </Show>
-      <Show when={!creating()}>
+      <Show when={!creating() && !choosing()}>
       <div class="folders">
         <span class="field-label">{list(draft.folders).length > 1 ? t("projects.folders") : t("projects.folder")}</span>
         <For each={list(draft.folders)}>
@@ -275,7 +288,7 @@ export function ProjectForm(props: {
           </Show>
         </Show>
         <button class="btn quiet" onClick={props.onDone}>{t("common.close")}</button>
-        <button class="btn primary" disabled={saving()} onClick={save}>{creating() ? t("projects.create") : t("common.save")}</button>
+        <button class="btn primary" disabled={saving() || choosing()} onClick={save}>{creating() ? t("projects.create") : t("common.save")}</button>
       </div>
     </div>
   );

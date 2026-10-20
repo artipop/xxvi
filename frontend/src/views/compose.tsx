@@ -219,13 +219,13 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
                 </select>
               </label>
             </div>
-            <div class="compose-choices">
-              <button class={`compose-choice ${step() === "new" ? "on" : ""}`} aria-pressed={step() === "new" ? "true" : "false"}
+            <div class="choices">
+              <button class={`choice ${step() === "new" ? "on" : ""}`} aria-pressed={step() === "new" ? "true" : "false"}
                       disabled={sessionBusy()} ref={focusOnce} onClick={() => setStep("new")}>
                 <strong>{t("compose.modeNew")}</strong>
                 <span>{t("compose.newHint")}</span>
               </button>
-              <button class={`compose-choice ${fromSession() ? "on" : ""}`} aria-pressed={fromSession() ? "true" : "false"}
+              <button class={`choice ${fromSession() ? "on" : ""}`} aria-pressed={fromSession() ? "true" : "false"}
                       disabled={sessionBusy()} onClick={() => setStep("existing")}>
                 <strong>{t("compose.fromSession")}</strong>
                 <span>{t("compose.fromSessionWhy")}</span>

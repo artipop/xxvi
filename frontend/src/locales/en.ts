@@ -243,6 +243,8 @@ export const en: Dict = {
   "projects.pickParentTitle": "Where to create the project folder",
   "projects.originExisting": "Existing folder",
   "projects.originCreate": "New folder",
+  "projects.originExistingHint": "Open the project in a folder that already holds code or documents.",
+  "projects.originCreateHint": "Create an empty folder and start from scratch.",
   "projects.parent": "Create in",
   "projects.folderToCreate": "New folder name",
   "projects.folderToCreatePlaceholder": "after the project name",
