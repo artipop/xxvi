@@ -218,6 +218,12 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
                   <For each={list(agents().agents)}>{(a) => <option value={a.name}>{a.name}</option>}</For>
                 </select>
               </label>
+              <label class="field">
+                <span>{t("compose.flow")}</span>
+                <select aria-label={t("compose.flow")} value={flowID()} disabled={sessionBusy()} onChange={(e) => setFlow(e.currentTarget.value)}>
+                  <For each={flows()}>{(f) => <option value={f.id}>{f.name}</option>}</For>
+                </select>
+              </label>
             </div>
             <div class="choices">
               <button class={`choice ${step() === "new" ? "on" : ""}`} aria-pressed={step() === "new" ? "true" : "false"}
@@ -232,8 +238,8 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
               </button>
             </div>
             <Show when={step() === "new"}>
-              <div class="compose-settings row wrap">
-                <Show when={isRepo()}>
+              <Show when={isRepo()}>
+                <div class="compose-settings row wrap">
                   <label class="field">
                     <span>{t("compose.workMode")}</span>
                     <select aria-label={t("compose.workMode")} value={mode()} disabled={busy()} onChange={(e) => setWorkMode(e.currentTarget.value)}
@@ -241,14 +247,8 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
                       <For each={workModes()}>{(m) => <option value={m.value}>{m.label}</option>}</For>
                     </select>
                   </label>
-                </Show>
-                <label class="field">
-                  <span>{t("compose.flow")}</span>
-                  <select aria-label={t("compose.flow")} value={flowID()} disabled={busy()} onChange={(e) => setFlow(e.currentTarget.value)}>
-                    <For each={flows()}>{(f) => <option value={f.id}>{f.name}</option>}</For>
-                  </select>
-                </label>
-              </div>
+                </div>
+              </Show>
               <p class="meta">{t("compose.newTerminal")}</p>
             </Show>
             <Show when={fromSession()}>
