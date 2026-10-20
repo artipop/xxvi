@@ -185,12 +185,19 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
         // The ribbon listens on the window, and a key meant for this form stays here.
         if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
         if (e.key === "Escape") {
+          // With nothing of its own to close, the form lets Escape reach the
+          // ribbon: a project panel or the journal opened beside it closes.
+          if (!sessionBusy() && !preview() && !confirming() && !step() && !props.onCancel) return;
           e.preventDefault(); e.stopPropagation();
           if (e.repeat || sessionBusy()) return;
           if (preview()) setPreview(undefined);
           else if (confirming()) setConfirming("");
           else if (step()) setStep(null);
           else props.onCancel?.();
+        } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.altKey && step() && !editing()) {
+          // A chosen session is many Tabs away from the start button.
+          e.preventDefault(); e.stopPropagation();
+          if (!e.repeat) void start();
         }
       }}
     >
@@ -203,7 +210,8 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
               <p class="meta">{t("compose.draftFolder")}</p>
             </Show>
             <div class="compose-choices">
-              <button class="compose-choice" onClick={() => setStep("new")}>
+              <button class="compose-choice" ref={(el) => { queueMicrotask(() => { if (el.isConnected) el.focus({ preventScroll: true }); }); }}
+                      onClick={() => setStep("new")}>
                 <strong>{t("compose.modeNew")}</strong>
                 <span>{t("compose.newHint")}</span>
               </button>
@@ -243,7 +251,8 @@ export function Compose(props: { onStarted?: () => void; onCancel?: () => void }
             </Show>
             <label class="field">
               <span>{t("compose.who")}</span>
-              <select aria-label={t("compose.who")} value={agentName()} disabled={sessionBusy()} onChange={(e) => setAgent(e.currentTarget.value)}>
+              <select aria-label={t("compose.who")} value={agentName()} disabled={sessionBusy()} onChange={(e) => setAgent(e.currentTarget.value)}
+                      ref={(el) => { queueMicrotask(() => { if (fromSession() && el.isConnected) el.focus({ preventScroll: true }); }); }}>
                 <For each={list(agents().agents)}>{(a) => <option value={a.name}>{a.name}</option>}</For>
               </select>
             </label>
