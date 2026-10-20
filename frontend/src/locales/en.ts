@@ -250,7 +250,7 @@ export const en: Dict = {
   "projects.parent": "Create in",
   "projects.folderToCreate": "New folder name",
   "projects.willCreate": "The folder {path} will be created",
-  "projects.initRepo": "Create a git repository in it (git init)",
+  "projects.initRepo": "Initialize a git repository",
   "projects.create": "Create project",
   "projects.name": "Name",
   "projects.pathPlaceholder": "project folder",

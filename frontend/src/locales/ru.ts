@@ -260,7 +260,7 @@ export const ru: Dict = {
   "projects.parent": "Где создать",
   "projects.folderToCreate": "Имя новой папки",
   "projects.willCreate": "Будет создана папка {path}",
-  "projects.initRepo": "Создать в ней git-репозиторий (git init)",
+  "projects.initRepo": "Инициализировать git-репозиторий",
   "projects.create": "Создать проект",
   "projects.name": "Название",
   "projects.pathPlaceholder": "папка проекта",
