@@ -649,13 +649,16 @@ function Folded(props: { label: JSX.Element; title?: string; class?: string; ite
 function Workspaces(props: { onSelect: (id: string) => void; onCreate: () => void; onOpen: () => void }): JSX.Element {
   const count = (id: string) => workRibbons().filter((r) => (r.project ?? "") === id).length;
   const name = (id: string) => projects().find((p) => p.id === id)?.name ?? t("ribbon.noProject");
+  const item = (id: string) => ({
+    label: name(id) + (count(id) > 0 ? ` (${count(id)})` : ""),
+    checked: id === workspace(), action: () => props.onSelect(id),
+  });
   return (
     <Folded class="workspaces" label={<><span>{name(workspace())}</span><Icon name="chevron" /></>} title={t("ribbon.workspace")}
       items={() => [
-        ...["", ...projects().map((p) => p.id)].map((id) => ({
-          label: name(id) + (count(id) > 0 ? ` (${count(id)})` : ""),
-          checked: id === workspace(), action: () => props.onSelect(id),
-        })),
+        ...projects().map((p) => item(p.id)),
+        ...(projects().length > 0 ? [{ label: "", separator: true }] : []),
+        item(""),
         { label: "", separator: true },
         { label: t("projects.newProject"), action: props.onCreate },
         { label: t("projects.openFolder"), action: props.onOpen },
