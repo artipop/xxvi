@@ -335,7 +335,7 @@ func TestTheShippedPourquoiPasManifestMapsTheFeed(t *testing.T) {
 		t.Fatalf("argv: %v, %v", argv, err)
 	}
 	env, _ := m.RenderEnv(src)
-	if env["POURQUOIPAS_URL"] != "https://board.example" {
+	if env["PP_URL"] != "https://board.example" {
 		t.Fatalf("env: %v", env)
 	}
 	args, _ := m.MCP.renderArguments(src)
@@ -361,7 +361,7 @@ func TestTheShippedPourquoiPasManifestMapsTheFeed(t *testing.T) {
 	// On this machine, with no server address, nothing tells the bridge where
 	// to go but the file the running app leaves.
 	local := m.WithDefaults(model.Source{Config: map[string]string{"board": "Работа"}})
-	if env, _ := m.RenderEnv(local); env["POURQUOIPAS_URL"] != "" {
+	if env, _ := m.RenderEnv(local); env["PP_URL"] != "" {
 		t.Fatalf("an empty address reached the bridge: %v", env)
 	}
 }

@@ -5,9 +5,9 @@
   "command": "{{.Config.binary}}",
   "args": ["mcp", "feed"],
   "env": {
-    "POURQUOIPAS_URL": "{{if eq .Config.where \"server\"}}{{.Config.url}}{{end}}"
+    "PP_URL": "{{if eq .Config.where \"server\"}}{{.Config.url}}{{end}}"
   },
-  "tokenEnv": "POURQUOIPAS_FEED_TOKEN",
+  "tokenEnv": "PP_FEED_TOKEN",
   "auth": {"type": "token", "optional": true},
   "fields": [
     {
