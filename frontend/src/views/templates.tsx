@@ -12,7 +12,7 @@ import { label, propName, t } from "../i18n";
 // NODE_ICONS is every icon in public/node-icons, in the order the template
 // editor offers them. The standard templates' own come first.
 export const NODE_ICONS = [
-  "agent", "terminal", "docker", "web", "diff", "notes", "wait", "publish", "verdict", "final",
+  "agent", "terminal", "docker", "dokku", "web", "diff", "notes", "wait", "publish", "verdict", "final",
   "bot", "flask", "rocket", "database", "server", "bug", "package", "cloud", "mobile", "shield",
   "search", "mail", "branch", "book",
 ];
@@ -73,7 +73,12 @@ export function builtinOf(stage: Stage): string {
   if (sc.kind === "diff") return "diff";
   if (sc.kind === "browser" || sc.kind === "run") return "web";
   if (sc.kind === "notes") return "notes";
-  if (sc.kind === "terminal") return (sc.ref ?? "").trim().startsWith("docker") ? "docker" : "terminal";
+  if (sc.kind === "terminal") {
+    const ref = (sc.ref ?? "").trim();
+    if (ref.startsWith("docker")) return "docker";
+    if (ref.startsWith("git push dokku")) return "dokku";
+    return "terminal";
+  }
   return "wait";
 }
 
