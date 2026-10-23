@@ -9,10 +9,10 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
-	github.com/wailsapp/wails/v3 v3.0.0-beta.27
+	github.com/wailsapp/wails/v3 v3.0.0-beta.34
 	github.com/zalando/go-keyring v0.2.8
 	go.mitchellh.com/libghostty v0.0.0-20261007030428-8812ad0e0f79
-	golang.org/x/sys v0.46.0
+	golang.org/x/sys v0.48.0
 	modernc.org/sqlite v1.44.3
 )
 
@@ -33,9 +33,9 @@ require (
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/u-root/u-root v0.16.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
-	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
