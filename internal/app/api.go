@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -218,6 +219,20 @@ func (s *API) ContinueStage(cardID, text string) (CardView, error) {
 // in, telling the agent nothing: the person looks, then decides.
 func (s *API) ReopenStage(cardID string) (CardView, error) {
 	if err := s.app.Engine.Reopen(cardID); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(cardID)
+}
+
+func (s *API) StartStage(cardID string, visit int64) (CardView, error) {
+	if err := s.app.Engine.StartStage(cardID, visit); err != nil {
+		return CardView{}, err
+	}
+	return s.Card(cardID)
+}
+
+func (s *API) RevisitStage(cardID, sessionID string) (CardView, error) {
+	if err := s.app.Engine.Revisit(cardID, sessionID); err != nil {
 		return CardView{}, err
 	}
 	return s.Card(cardID)
@@ -867,6 +882,110 @@ func (s *API) SaveProject(p model.Project) (model.Project, error) {
 	return saved, nil
 }
 
+// OpenProjectFolder makes a project of a folder somebody already works in, the
+// way an IDE opens one: named after the folder, nothing else asked. A folder a
+// project already has opens that project rather than a second one.
+func (s *API) OpenProjectFolder(path string) (model.Project, error) {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if info, err := os.Stat(path); err != nil || !info.IsDir() || !filepath.IsAbs(path) {
+		return model.Project{}, msg.Err("project.folderNotFound", "path", path)
+	}
+	all, err := s.Projects()
+	if err != nil {
+		return model.Project{}, err
+	}
+	taken := map[string]bool{}
+	for _, p := range all {
+		taken[strings.ToLower(p.Name)] = true
+		for _, f := range p.Folders {
+			if filepath.Clean(f.Path) == path {
+				return p, nil
+			}
+		}
+	}
+	name := filepath.Base(path)
+	for n := 2; taken[strings.ToLower(name)]; n++ {
+		name = fmt.Sprintf("%s %d", filepath.Base(path), n)
+	}
+	return s.SaveProject(model.Project{Name: name, Folders: []model.Folder{{Path: path}}})
+}
+
+// CreateProject makes a new project's folder on disk and registers it: work that
+// starts from nothing rather than in a folder that already exists. One call,
+// so that a project refused on save leaves no empty folder behind.
+func (s *API) CreateProject(p model.Project, parent, folder string, initRepo bool) (model.Project, error) {
+	if strings.TrimSpace(folder) == "" {
+		folder = p.Name
+	}
+	path, err := newFolderPath(parent, folder)
+	if err != nil {
+		return model.Project{}, err
+	}
+	p.ID, p.Path = "", path
+	p.Folders = []model.Folder{{Path: path}}
+	if _, err := model.ValidateProject(p); err != nil {
+		return model.Project{}, err
+	}
+	if err := makeFolder(path, initRepo); err != nil {
+		return model.Project{}, err
+	}
+	saved, err := s.SaveProject(p)
+	if err != nil {
+		_ = os.RemoveAll(path)
+		return model.Project{}, err
+	}
+	return saved, nil
+}
+
+// CreateFolder makes a folder for a project being edited, which then adds it
+// like any other: the folder exists from the moment it is asked for.
+func (s *API) CreateFolder(parent, name string, initRepo bool) (string, error) {
+	path, err := newFolderPath(parent, name)
+	if err != nil {
+		return "", err
+	}
+	if err := makeFolder(path, initRepo); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// newFolderPath is where a new folder goes. An existing folder is somebody's
+// work: it is opened, never taken over.
+func newFolderPath(parent, name string) (string, error) {
+	parent, name = strings.TrimSpace(parent), strings.TrimSpace(name)
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\:`) {
+		return "", msg.Err("project.badFolderName", "name", name)
+	}
+	if info, err := os.Stat(parent); err != nil || !info.IsDir() || !filepath.IsAbs(parent) {
+		return "", msg.Err("project.folderNotFound", "path", parent)
+	}
+	path := filepath.Join(parent, name)
+	if _, err := os.Lstat(path); err == nil {
+		return "", msg.Err("project.folderExists", "path", path)
+	}
+	return path, nil
+}
+
+func makeFolder(path string, initRepo bool) error {
+	if err := os.Mkdir(path, 0o755); err != nil {
+		return msg.Wrap(err, "project.folderNotCreated", "path", path)
+	}
+	if initRepo {
+		if err := acp.InitRepo(path); err != nil {
+			_ = os.RemoveAll(path)
+			return msg.Wrap(err, "project.repoNotCreated", "path", path)
+		}
+	}
+	return nil
+}
+
+// HomeDir is where a new project's folder is suggested, before one was chosen.
+func (s *API) HomeDir() string {
+	home, _ := os.UserHomeDir()
+	return home
+}
+
 // HostingRemotes is what connecting a project offers: its repository's
 // remotes, each with the server and repository its address suggests.
 func (s *API) HostingRemotes(projectID string) ([]hosting.RemoteOption, error) {
@@ -1061,28 +1180,39 @@ func (s *API) checkWorkMode(projectID, folderID, mode string) error {
 // pastSessionsTimeout bounds asking an agent for its conversations.
 const pastSessionsTimeout = 90 * time.Second
 
+func (s *API) pastSessionDir(projectID, folderID string) (string, error) {
+	if projectID == "" {
+		dir := filepath.Join(s.app.DataDir, "default_project")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "", err
+		}
+		return dir, nil
+	}
+	whole, err := s.app.Store.Project(projectID)
+	if err != nil {
+		return "", err
+	}
+	project, err := whole.In(folderID)
+	if err != nil {
+		return "", err
+	}
+	return project.Path, nil
+}
+
 // PastSessions lists the conversations an agent already had in a project's
-// folder, for a card to continue one of them. A project is required: a card
-// with no project works in a fresh folder, where nobody has talked to anyone.
+// folder, or in the shared draft folder, for a card to continue one of them.
 func (s *API) PastSessions(agentName, projectID, folderID string) ([]acp.PastSession, error) {
 	agent, err := s.app.Store.Agent(agentName)
 	if err != nil {
 		return nil, err
 	}
-	if projectID == "" {
-		return nil, msg.Err("sessions.needProject")
-	}
-	whole, err := s.app.Store.Project(projectID)
-	if err != nil {
-		return nil, err
-	}
-	project, err := whole.In(folderID)
+	dir, err := s.pastSessionDir(projectID, folderID)
 	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), pastSessionsTimeout)
 	defer cancel()
-	return acp.PastSessions(ctx, agent, project.Path)
+	return acp.PastSessions(ctx, agent, dir)
 }
 
 func (s *API) PastSessionPreview(agentName, sessionID string) (string, error) {
@@ -1104,20 +1234,13 @@ func (s *API) RenamePastSession(agentName, projectID, folderID, sessionID, title
 	if err != nil {
 		return "", err
 	}
-	if projectID == "" {
-		return "", msg.Err("sessions.needProject")
-	}
-	whole, err := s.app.Store.Project(projectID)
-	if err != nil {
-		return "", err
-	}
-	project, err := whole.In(folderID)
+	dir, err := s.pastSessionDir(projectID, folderID)
 	if err != nil {
 		return "", err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), pastSessionsTimeout)
 	defer cancel()
-	return acp.RenamePastSession(ctx, agent, project.Path, sessionID, title)
+	return acp.RenamePastSession(ctx, agent, dir, sessionID, title)
 }
 
 func (s *API) DeletePastSession(agentName, projectID, folderID, sessionID string) error {
@@ -1125,20 +1248,13 @@ func (s *API) DeletePastSession(agentName, projectID, folderID, sessionID string
 	if err != nil {
 		return err
 	}
-	if projectID == "" {
-		return msg.Err("sessions.needProject")
-	}
-	whole, err := s.app.Store.Project(projectID)
-	if err != nil {
-		return err
-	}
-	project, err := whole.In(folderID)
+	dir, err := s.pastSessionDir(projectID, folderID)
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), pastSessionsTimeout)
 	defer cancel()
-	return acp.DeletePastSession(ctx, agent, project.Path, sessionID)
+	return acp.DeletePastSession(ctx, agent, dir, sessionID)
 }
 
 // CheckAgent asks a registered agent what it is and what it can do.

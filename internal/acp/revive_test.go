@@ -113,9 +113,17 @@ type finishedRecorder struct {
 	done chan string
 }
 
-func (r finishedRecorder) Finished(_, outcome string, _ msg.Msg, _ string) { r.done <- outcome }
-func (r finishedRecorder) Abandoned(string)                                {}
-func (r finishedRecorder) Described(string, string, string)                {}
+func (r finishedRecorder) FinishedVisit(_ engine.Job, outcome string, _ msg.Msg, _ string) {
+	if outcome == "" {
+		return
+	}
+	r.done <- outcome
+}
+func (r finishedRecorder) Described(string, string, string) {}
+
+func (r finishedRecorder) Current(string, int64) bool { return true }
+
+func (r finishedRecorder) Rejoin(engine.Job, engine.Again) error { return nil }
 
 type reviveCase struct {
 	m     *Manager

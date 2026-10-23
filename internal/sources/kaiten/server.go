@@ -4,7 +4,7 @@
 // It is this app's own binary re-invoked (`gandvik mcp kaiten`) rather than a
 // server to install: a source somebody adds from the dialog must not need a
 // runtime, a checkout on disk and a path typed into a form. The same server
-// lives in XCIII; it is copied rather than shared because the two applications
+// lives in Pourquoi Pas? (formerly XCIII); it is copied rather than shared because the two applications
 // are released separately.
 //
 // Everything it may touch — which site, whose token — arrives in the

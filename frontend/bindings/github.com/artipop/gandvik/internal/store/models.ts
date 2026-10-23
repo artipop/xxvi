@@ -9,6 +9,7 @@ import * as msg$0 from "../msg/models.js";
  * Session is one recorded run of an agent against one card on one stage.
  */
 export interface Session {
+    "visitId"?: number;
     "id": string;
     "cardId": string;
     "flowId"?: string;

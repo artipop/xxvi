@@ -269,6 +269,12 @@ func (m *Manager) note(cardID string, what msg.Msg) {
 // matters rather than stored on the project: a folder can become one later.
 func IsRepo(folder string) bool { return isRepo(folder) }
 
+// InitRepo makes a folder a git repository.
+func InitRepo(folder string) error {
+	_, err := git(folder, "init")
+	return err
+}
+
 func isRepo(folder string) bool {
 	if strings.TrimSpace(folder) == "" {
 		return false

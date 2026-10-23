@@ -39,9 +39,10 @@ const (
 
 // Options are the machine's own settings for running agents.
 type Options struct {
-	// WorkDir is where agents work. One directory per card, created under it,
-	// so two cards never share a working copy.
+	// WorkDir holds worktrees and working folders created by older versions.
 	WorkDir string
+	// DefaultProjectDir is shared by new cards without a project.
+	DefaultProjectDir string
 	// MaxConcurrent bounds how many turns run at once on this machine. The
 	// stage's own limit is checked by the engine; this is the machine's.
 	MaxConcurrent int
@@ -69,10 +70,12 @@ func (o Options) withDefaults() Options {
 // Reporter is who a finished session tells. The engine implements it; a test
 // records the calls.
 type Reporter interface {
-	Finished(cardID, outcome string, detail msg.Msg, agentText string)
-	// Abandoned is a step a person walked out of: the terminal was closed
-	// before it reported. Nothing on the stage can pick it up again.
-	Abandoned(cardID string)
+	FinishedVisit(job engine.Job, outcome string, detail msg.Msg, agentText string)
+	// Current reports whether a visit is still the card's current one.
+	Current(cardID string, visit int64) bool
+	// Rejoin moves the card on a terminal's word when that is not a first
+	// report of the current visit (engine.Rejoin). Its error goes to the agent.
+	Rejoin(job engine.Job, again engine.Again) error
 	// Described is the task as the agent of a card leaving its flow put it
 	// (Manager.Leave). Both empty: the run ended and nothing came.
 	Described(cardID, title, text string)
@@ -170,7 +173,7 @@ func (m *Manager) Start(job engine.Job) error {
 	}
 
 	s := &session{
-		id: uuid.NewString(), card: job.Card, flow: job.Flow, stage: job.Stage,
+		job: job, done: make(chan struct{}), id: uuid.NewString(), card: job.Card, flow: job.Flow, stage: job.Stage,
 		agent: job.Agent, prompt: job.Prompt, brief: job.Brief, cwd: cwd, launch: launch,
 		policy: policyFor(job.Agent, m.opts.Policy), status: store.StatusQueued,
 		work: workOf(job.Stage),
@@ -179,7 +182,7 @@ func (m *Manager) Start(job engine.Job) error {
 		s.revive = m.pausedConversation(s)
 	}
 	if err := m.store.InsertSession(store.Session{
-		ID: s.id, CardID: s.card.ID, FlowID: s.flow.ID, StageID: s.stage.ID,
+		VisitID: job.Visit, ID: s.id, CardID: s.card.ID, FlowID: s.flow.ID, StageID: s.stage.ID,
 		AgentName: s.agent.Name, AgentKind: s.agent.Kind, Work: s.work,
 		Status: store.StatusQueued, Cwd: cwd, StartedAt: time.Now().UTC(),
 	}); err != nil {
@@ -189,8 +192,13 @@ func (m *Manager) Start(job engine.Job) error {
 	m.mu.Lock()
 	// A card put back in work while its last conversation is still writing
 	// its description: two CLIs in one conversation would write over each
-	// other.
-	if old := m.byCard[s.card.ID]; old != nil {
+	// other. A run that is merely still working is left alone — the card went
+	// on without it, and the person may still be talking to it.
+	old := m.byCard[s.card.ID]
+	if old != nil && !old.isLeaving() && !old.wasCancelled() {
+		old = nil
+	}
+	if old != nil {
 		old.cancel()
 	}
 	m.active[s.id] = s
@@ -199,11 +207,16 @@ func (m *Manager) Start(job engine.Job) error {
 	m.emitSession(s)
 
 	m.wg.Add(1)
-	if s.work == model.WorkTerminal {
-		go m.runTerminal(s)
-	} else {
-		go m.run(s)
-	}
+	go func() {
+		if old != nil {
+			<-old.done
+		}
+		if s.work == model.WorkTerminal {
+			m.runTerminal(s)
+		} else {
+			m.run(s)
+		}
+	}()
 	return nil
 }
 
@@ -243,14 +256,34 @@ func (m *Manager) RunningOnStage(stageID string) int {
 // Cancel stops whatever is running for a card. A cancelled session produces no
 // outcome: somebody intervened, so the flow waits for them.
 func (m *Manager) Cancel(cardID string, reason msg.Msg) {
-	m.mu.Lock()
-	s := m.byCard[cardID]
-	m.mu.Unlock()
-	if s == nil {
-		return
+	for _, s := range m.cardRuns(cardID, nil) {
+		m.log.Info("cancelling session", "session", s.id, "card", cardID, "reason", reason.String())
+		s.cancel()
 	}
-	m.log.Info("cancelling session", "session", s.id, "card", cardID, "reason", reason.String())
-	s.cancel()
+}
+
+// cardRuns is every live run of a card but one. A card has more than one when
+// it was moved on from a terminal while another step was still working.
+func (m *Manager) cardRuns(cardID string, except *session) []*session {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []*session
+	for _, s := range m.active {
+		if s.card.ID == cardID && s != except {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// Live reports whether a run's terminal is still open.
+func (m *Manager) Live(sessionID string) bool {
+	terms, _ := m.terminals()
+	if terms == nil {
+		return false
+	}
+	t := terms.Get(sessionID)
+	return t != nil && t.Alive()
 }
 
 // Leave stops what is running for a card going back to the inbox. A
@@ -263,6 +296,9 @@ func (m *Manager) Leave(cardID string, reason msg.Msg) bool {
 	m.mu.Unlock()
 	if s == nil {
 		return false
+	}
+	for _, other := range m.cardRuns(cardID, s) {
+		other.cancel()
 	}
 	if s.work != model.WorkTerminal || s.currentStatus() != store.StatusRunning {
 		m.Cancel(cardID, reason)
@@ -281,6 +317,10 @@ func (m *Manager) run(s *session) {
 
 	if m.rootCtx.Err() != nil {
 		m.finish(s, store.StatusCancelled, msg.New("session.appQuitting"))
+		return
+	}
+	if s.wasCancelled() {
+		m.finish(s, store.StatusCancelled, msg.New("session.cancelled"))
 		return
 	}
 	m.record(s, model.EntryMove, msg.New("journal.sessionStarted", "agent", s.agent.Name, "dir", s.cwd))
@@ -327,6 +367,9 @@ func (m *Manager) release(s *session) {
 	}
 	m.mu.Unlock()
 	m.emitSession(s)
+	if s.done != nil {
+		close(s.done)
+	}
 
 	if m.to == nil {
 		return
@@ -337,15 +380,11 @@ func (m *Manager) release(s *session) {
 	if s.isLeaving() {
 		m.to.Described(s.card.ID, "", "")
 	}
-	if s.wasAbandoned() {
-		m.to.Abandoned(s.card.ID)
+	outcome, detail := s.outcome()
+	if outcome == "" && m.rootCtx.Err() != nil {
 		return
 	}
-	outcome, detail := s.outcome()
-	if outcome == "" {
-		return // cancelled: a person is deciding what happens next
-	}
-	m.to.Finished(s.card.ID, outcome, detail, s.finalText())
+	m.to.FinishedVisit(s.job, outcome, detail, s.finalText())
 }
 
 // connect builds the ACP stack for a session and negotiates the agent session.
@@ -734,13 +773,14 @@ func (m *Manager) WorkDir(cardID string) (string, error) { return m.workDir(card
 // A card that asked for a branch of its own gets it here, in a separate
 // working tree or in the folder itself (workspace.go).
 //
-// Otherwise a directory of the card's own, so two cards never share a working
-// copy and the agent's file jail means something. That is the right answer for
-// work that starts from a blank page, which is why an empty project is a real
-// answer rather than an unfinished one.
+// New drafts share a default project. Existing drafts keep their original
+// folder because the agent's saved conversation can be tied to its cwd.
 func (m *Manager) workDir(cardID string) (string, error) {
 	card, err := m.store.Card(cardID)
-	if err == nil && card.Project != "" {
+	if err != nil {
+		return "", err
+	}
+	if card.Project != "" {
 		project, err := m.store.CardProject(card)
 		if err != nil {
 			return "", err
@@ -759,7 +799,30 @@ func (m *Manager) workDir(cardID string) (string, error) {
 	if base == "" {
 		base = filepath.Join(os.TempDir(), "gandvik-work")
 	}
-	dir := filepath.Join(base, cardID)
+	dir := m.opts.DefaultProjectDir
+	if dir == "" {
+		dir = filepath.Join(base, "default_project")
+	}
+	legacy := filepath.Join(base, cardID)
+	if info, err := os.Stat(legacy); err == nil {
+		if !info.IsDir() {
+			return "", fmt.Errorf("working folder is not a directory: %s", legacy)
+		}
+		dir = legacy
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("read working folder: %w", err)
+	} else {
+		sessions, err := m.store.SessionsForCard(cardID)
+		if err != nil {
+			return "", err
+		}
+		for _, session := range sessions {
+			if session.Cwd == legacy {
+				dir = legacy
+				break
+			}
+		}
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create working folder: %w", err)
 	}
@@ -798,6 +861,8 @@ func truncate(s string, n int) string {
 
 // session is one run of an agent against one card on one stage.
 type session struct {
+	done   chan struct{}
+	job    engine.Job
 	id     string
 	card   model.Card
 	flow   model.Flow
@@ -828,7 +893,6 @@ type session struct {
 	// cancelPending records a cancel that arrived before a turn existed.
 	cancelPending bool
 	cancelled     bool
-	abandoned     bool
 	allowTools    map[string]bool
 	final         strings.Builder
 	// conversation is the vendor's id of the conversation a terminal run is
@@ -892,20 +956,6 @@ func (s *session) markCancelSent() bool {
 	already := s.cancelSent
 	s.cancelSent = true
 	return !already
-}
-
-// markAbandoned is a cancel nobody will follow up on: see Reporter.Abandoned.
-func (s *session) markAbandoned() {
-	s.mu.Lock()
-	s.cancelled = true
-	s.abandoned = true
-	s.mu.Unlock()
-}
-
-func (s *session) wasAbandoned() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.abandoned
 }
 
 func (s *session) leaveSignal() <-chan struct{} {

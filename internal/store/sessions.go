@@ -39,6 +39,7 @@ func (s SessionStatus) Terminal() bool {
 
 // Session is one recorded run of an agent against one card on one stage.
 type Session struct {
+	VisitID   int64  `json:"visitId,omitempty"`
 	ID        string `json:"id"`
 	CardID    string `json:"cardId"`
 	FlowID    string `json:"flowId,omitempty"`
@@ -63,6 +64,7 @@ type Session struct {
 }
 
 type sessionRow struct {
+	VisitID      int64         `db:"visit_id"`
 	ID           string        `db:"id"`
 	CardID       string        `db:"card_id"`
 	FlowID       string        `db:"flow_id"`
@@ -81,7 +83,7 @@ type sessionRow struct {
 
 func (r sessionRow) session() Session {
 	return Session{
-		ID: r.ID, CardID: r.CardID, FlowID: r.FlowID, StageID: r.StageID,
+		VisitID: r.VisitID, ID: r.ID, CardID: r.CardID, FlowID: r.FlowID, StageID: r.StageID,
 		AgentName: r.AgentName, AgentKind: r.AgentKind, Work: r.Work, ACPSessionID: r.ACPSessionID,
 		Revivable: r.Revivable, Status: SessionStatus(r.Status), Cwd: r.Cwd,
 		StartedAt: fromMillis(r.StartedAt), FinishedAt: fromNullMillis(r.FinishedAt),
@@ -92,10 +94,10 @@ func (r sessionRow) session() Session {
 // InsertSession records a session as it starts.
 func (s *Store) InsertSession(sess Session) error {
 	_, err := s.db.Exec(`
-		INSERT INTO agent_session (id, card_id, flow_id, stage_id, agent_name, agent_kind, work, status, cwd, started_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO agent_session (id, card_id, flow_id, stage_id, agent_name, agent_kind, work, status, cwd, started_at, visit_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sess.ID, sess.CardID, sess.FlowID, sess.StageID, sess.AgentName, sess.AgentKind,
-		sess.Work, string(sess.Status), sess.Cwd, millis(sess.StartedAt))
+		sess.Work, string(sess.Status), sess.Cwd, millis(sess.StartedAt), sess.VisitID)
 	return err
 }
 

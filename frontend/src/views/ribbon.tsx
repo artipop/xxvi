@@ -14,6 +14,8 @@ import { QuestionForm } from "./attention";
 import { JournalOf } from "./journal";
 import { Notes } from "./notes";
 import { Compose } from "./compose";
+import { NewProjectForm, openFolder } from "./projects";
+import { alignRibbon, centerInBand, followRibbonSize } from "./ribbon-layout";
 import Markdown from "./markdown";
 import { entryText, label, propName, questionText, say, t } from "../i18n";
 import { MarkButtons, RemarksForm, sendMark } from "./marks";
@@ -21,6 +23,7 @@ import { Icon } from "../icons";
 import { popup, type PopupItem } from "./popup";
 import type { Msg } from "../../bindings/github.com/artipop/gandvik/internal/msg/models";
 import type { Mark } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
+import { formKeys } from "./formKeys";
 
 // The emulator is a large chunk and most screens are not terminals, so it
 // arrives only when one is opened.
@@ -65,14 +68,6 @@ const RunPane = lazy(() => import("./run"));
 const WIDTHS = [0.34, 0.5, 0.67, 0.94, 1];
 const DEFAULT_WIDTH = 3; // almost the whole band: a strip of the neighbouring screen stays visible, so the ribbon reads as scrollable
 
-function centerInBand(el: HTMLElement | undefined) {
-  const band = el?.closest<HTMLElement>(".band");
-  if (!el || !band) return;
-  const by = el.getBoundingClientRect().left + el.offsetWidth / 2
-    - (band.getBoundingClientRect().left + band.clientWidth / 2);
-  band.scrollTo({ left: band.scrollLeft + by, behavior: "instant" });
-}
-
 /** motion is one behaviour, asked once: the strip is the only thing that moves. */
 function motion(): ScrollBehavior {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
@@ -110,6 +105,8 @@ export default function Ribbon(): JSX.Element {
   onCleanup(leaveRibbons);
 
   const [journal, setJournal] = createSignal(false);
+  const [creatingProject, setCreatingProject] = createSignal(false);
+  const workspaceFocus = new Map<string, string>();
   // A new task is a ribbon of its own, not a dialog over somebody else's: it
   // sits at the end of the stack with one empty window to write it in, and
   // becomes the card's real strip the moment it is started. With nothing in
@@ -152,22 +149,31 @@ export default function Ribbon(): JSX.Element {
     if (!id) return;
     const el = paneEl(id);
     if (!el) return;
-    el.scrollIntoView({ behavior: motion(), inline: "center", block: "nearest" });
+    centerInBand(el, motion());
     setFocus(id);
   };
 
-  // The stack is moved by index rather than by asking an element to bring
-  // itself into view: every ribbon is exactly the stack's own height, so the
-  // n-th one starts at n heights, and arithmetic cannot land between two of
-  // them the way a scroll can.
   const flyToRibbon = (cardID: string) => {
-    const at = stackIDs().indexOf(cardID);
-    if (at >= 0 && stack) {
-      stack.scrollTo({ top: at * stack.clientHeight, behavior: motion() });
-    }
+    if (stack) alignRibbon(stack, cardID, motion());
     setOpenRibbon(cardID);
     setMoved((m) => ({ ...m, [cardID]: false }));
   };
+
+  const switchWorkspace = (id: string) => {
+    if (workspace() === id) return;
+    workspaceFocus.set(workspace(), openRibbon());
+    const remembered = workspaceFocus.get(id);
+    const cards = ribbons.filter((r) => (r.project ?? "") === id);
+    const target = remembered === DRAFT || cards.some((r) => r.id === remembered)
+      ? remembered! : cards[0]?.id ?? DRAFT;
+    setDrafting(target === DRAFT);
+    setWorkspace(id);
+    setOpenRibbon(target);
+  };
+
+  onSettled(() => stack && followRibbonSize(stack, () => ({
+    ribbon: openRibbon(), pane: paneEl(focus()),
+  })));
 
   // A card moved, so its strip has a new current segment. Flying there is the
   // one movement in this application, and it carries meaning: a screen that
@@ -191,6 +197,7 @@ export default function Ribbon(): JSX.Element {
         // band is scrolled — scrollIntoView would move the stack to this strip
         // too.
         if (first) {
+          setFocusAt((f) => ({ ...f, [id]: target }));
           queueMicrotask(() => centerInBand(paneEl(target)));
           continue;
         }
@@ -198,7 +205,7 @@ export default function Ribbon(): JSX.Element {
           setMoved((m) => ({ ...m, [id]: true }));
           continue;
         }
-        if (pinned()) continue;
+        if (pinned() || ribbons.find((r) => r.id === id)?.keepFocus) continue;
         queueMicrotask(() => flyTo(target));
       }
     },
@@ -226,7 +233,7 @@ export default function Ribbon(): JSX.Element {
     (at) => {
       if (at < 0 || !stack || stack.clientHeight === 0) return;
       if (Math.round(stack.scrollTop / stack.clientHeight) !== at) {
-        queueMicrotask(() => stack?.scrollTo({ top: at * stack.clientHeight }));
+        queueMicrotask(() => { if (stack) alignRibbon(stack, openRibbon()); });
       }
     },
   );
@@ -235,6 +242,7 @@ export default function Ribbon(): JSX.Element {
   // decisions along: whatever was pinned was pinned about a different strip.
   createEffect(openRibbon, () => {
     setPinned(false);
+    queueMicrotask(() => centerInBand(paneEl(focus())));
   });
 
   // Who has the keyboard. Focus moving into a preview blurs the window itself,
@@ -355,7 +363,7 @@ export default function Ribbon(): JSX.Element {
     const id = focus();
     if (!id) return;
     setWidths((w) => ({ ...w, [id]: to(widthOf(id)) }));
-    queueMicrotask(() => paneEl(id)?.scrollIntoView({ behavior: motion(), inline: "center", block: "nearest" }));
+    queueMicrotask(() => centerInBand(paneEl(id), motion()));
   };
 
   // Keys are listened for on the window rather than on the strip: the ribbon is
@@ -367,6 +375,7 @@ export default function Ribbon(): JSX.Element {
   // outside it can take one back. That is why the pane says when it has the
   // keyboard: the button in the application title bar hands it back.
   const onKeyDown = (e: KeyboardEvent) => {
+    if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
     const target = e.target as HTMLElement | null;
     const typing = target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
     const mod = e.metaKey || e.ctrlKey;
@@ -416,7 +425,8 @@ export default function Ribbon(): JSX.Element {
         e.preventDefault(); setJournal(!journal()); break;
       case "Escape":
         e.preventDefault();
-        if (journal()) setJournal(false);
+        if (creatingProject()) setCreatingProject(false);
+        else if (journal()) setJournal(false);
         else setTab("inbox");
         break;
     }
@@ -434,7 +444,7 @@ export default function Ribbon(): JSX.Element {
   // asked to stay. Offered, not taken.
   const behind = () => {
     const view = current();
-    return pinned() && !!view?.focusId && focus() !== view.focusId;
+    return !!view?.focusId && focus() !== view.focusId;
   };
 
   return (
@@ -442,6 +452,11 @@ export default function Ribbon(): JSX.Element {
       {/* The only chrome: room for the window's own buttons, the name of the
           job in front of you, and the one offer the ribbon ever makes. */}
       <header class="ribbon-bar">
+        <Workspaces onSelect={switchWorkspace} onCreate={() => setCreatingProject(true)}
+          onOpen={async () => { const p = await openFolder(); if (p) switchWorkspace(p.id); }} />
+        <Show when={current() ? !current()!.project : !projects().some((p) => p.id === workspace())}>
+          <span class="draft-label" title={t("ribbon.draftHint")}>{t("ribbon.draft")}</span>
+        </Show>
         <span class="ribbon-where" title={current()
           ? (selected()?.segment.detail ? say(selected()!.segment.detail) : undefined)
           : t("ribbon.draftKeys")}>
@@ -502,12 +517,22 @@ export default function Ribbon(): JSX.Element {
             {t("ribbon.next")}
           </button>
         </Show>
-        <Workspaces />
       </header>
 
       <div class="ribbon-notes"><Notes /></div>
 
       <div class="ribbon-body">
+        <Show when={creatingProject()}>
+          <aside class="ribbon-project" aria-label={t("projects.newTitle")}>
+            <h3>{t("projects.newTitle")}</h3>
+            <NewProjectForm
+              onDone={() => setCreatingProject(false)}
+              onCreated={(project) => {
+                switchWorkspace(project.id);
+                setCreatingProject(false);
+              }} />
+          </aside>
+        </Show>
         <div class="stack" ref={stack}>
           <For each={inWorkspace()}>
             {(view) => (
@@ -530,6 +555,7 @@ export default function Ribbon(): JSX.Element {
                             focused={focus() === emptyID(segment)}
                             captured={false}
                             onFocus={() => { setPinned(true); setFocus(emptyID(segment)); }}
+                            onFollow={() => { setPinned(false); queueMicrotask(() => flyTo(current()?.focusId ?? "")); }}
                             back={backFor(emptyID(segment))}
                             onCancelBack={() => setBack(null)}
                           />
@@ -546,6 +572,7 @@ export default function Ribbon(): JSX.Element {
                               focused={focus() === screen.id}
                               captured={captured() === screen.id}
                               onFocus={() => { setPinned(true); setFocus(screen.id); }}
+                              onFollow={() => { setPinned(false); queueMicrotask(() => flyTo(current()?.focusId ?? "")); }}
                               back={backFor(screen.id)}
                               onCancelBack={() => setBack(null)}
                             />
@@ -619,25 +646,23 @@ function Folded(props: { label: JSX.Element; title?: string; class?: string; ite
   );
 }
 
-// Which project's ribbons are shown. With no projects there is one workspace
-// and nothing to switch to.
-function Workspaces(): JSX.Element {
+function Workspaces(props: { onSelect: (id: string) => void; onCreate: () => void; onOpen: () => void }): JSX.Element {
   const count = (id: string) => workRibbons().filter((r) => (r.project ?? "") === id).length;
   const name = (id: string) => projects().find((p) => p.id === id)?.name ?? t("ribbon.noProject");
-  // Cards without a project are a workspace only while there are some, or
-  // while standing in it: otherwise it is an empty entry in every list.
-  const ids = () => [
-    ...projects().map((p) => p.id),
-    ...(count("") > 0 || workspace() === "" ? [""] : []),
-  ];
+  const item = (id: string) => ({
+    label: name(id) + (count(id) > 0 ? ` (${count(id)})` : ""),
+    checked: id === workspace(), action: () => props.onSelect(id),
+  });
   return (
-    <Show when={projects().length > 0}>
-      <Folded class="workspaces" label={<>{name(workspace())}<Icon name="chevron" /></>} title={t("ribbon.workspace")}
-        items={() => ids().map((id) => ({
-          label: name(id) + (count(id) > 0 ? ` (${count(id)})` : ""),
-          checked: id === workspace(), action: () => setWorkspace(id),
-        }))} />
-    </Show>
+    <Folded class="workspaces" label={<><span>{name(workspace())}</span><Icon name="chevron" /></>} title={t("ribbon.workspace")}
+      items={() => [
+        ...projects().map((p) => item(p.id)),
+        ...(projects().length > 0 ? [{ label: "", separator: true }] : []),
+        item(""),
+        { label: "", separator: true },
+        { label: t("projects.newProject"), action: props.onCreate },
+        { label: t("projects.openFolder"), action: props.onOpen },
+      ]} />
   );
 }
 
@@ -694,6 +719,7 @@ function Pane(props: {
   focused: boolean;
   captured: boolean;
   onFocus: () => void;
+  onFollow: () => void;
   back: Mark | null;
   onCancelBack: () => void;
 }): JSX.Element {
@@ -770,6 +796,15 @@ function Pane(props: {
         </Switch>
       </div>
 
+      <Show when={props.first && props.segment.startable}>
+        <StageAction label={t("ribbon.startStage")} note={t("ribbon.awaitingStart")}
+          after={props.onFollow} run={() => API.StartStage(props.cardId ?? "", props.segment.eventId)} />
+      </Show>
+      <Show when={props.screen?.revisitable}>
+        <StageAction label={t("ribbon.revisit")} note={t("ribbon.revisitNote")}
+          after={props.onFollow} run={() => API.RevisitStage(props.cardId ?? "", props.screen!.sessionId!)} />
+      </Show>
+
       <Show when={props.screen?.report}>
         <Report report={props.screen!.report!} />
       </Show>
@@ -778,6 +813,19 @@ function Pane(props: {
       </Show>
     </section>
   );
+}
+
+function StageAction(props: { label: string; note: string; run: () => Promise<unknown>; after: () => void }): JSX.Element {
+  const [busy, setBusy] = createSignal(false);
+  const run = async () => {
+    if (busy()) return;
+    setBusy(true);
+    try { const done = await guard(props.run); await loadRibbons(); if (done) props.after(); } finally { setBusy(false); }
+  };
+  return <div class="screen-continue">
+    <span class="meta">{props.note}</span>
+    <button class="btn tiny" disabled={busy()} onClick={() => void run()}>{props.label}</button>
+  </div>;
 }
 
 // A stage the application closed on waits here for a person: it goes on only
@@ -789,6 +837,7 @@ function ContinueBar(props: { cardId: string; canReopen: boolean }): JSX.Element
   const [text, setText] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const go = async () => {
+    if (busy()) return;
     setBusy(true);
     const done = await guard(() => API.ContinueStage(props.cardId, text()));
     setBusy(false);
@@ -798,6 +847,7 @@ function ContinueBar(props: { cardId: string; canReopen: boolean }): JSX.Element
     }
   };
   const reopen = async () => {
+    if (busy()) return;
     setBusy(true);
     const done = await guard(() => API.ReopenStage(props.cardId));
     setBusy(false);
@@ -812,7 +862,7 @@ function ContinueBar(props: { cardId: string; canReopen: boolean }): JSX.Element
           placeholder={t("ribbon.continuePlaceholder")}
           value={text()}
           onInput={(e) => setText(e.currentTarget.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void go(); }}
+          onKeyDown={formKeys({ submit: go, busy })}
         />
         <Show when={props.canReopen}>
           <button class="btn tiny" disabled={busy()} onClick={() => void reopen()} title={t("ribbon.reopenTitle")}>

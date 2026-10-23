@@ -38,7 +38,8 @@ type Job struct {
 	// Visit is the transition that put the card on this stage. A step that
 	// ends after the card was moved elsewhere by hand reports into a visit
 	// that is over, and is not allowed to move the card from where it now is.
-	Visit int64
+	Visit    int64
+	ResumeID string
 }
 
 // Publisher does what a hosting stage says: push and open the MR, or send a
@@ -67,6 +68,9 @@ type Runner interface {
 	// runner that did always answers with Described, if only to say nothing
 	// came.
 	Leave(cardID string, reason msg.Msg) (asked bool)
+	// Live reports whether a run's terminal is still open. A person goes back
+	// to a live one by typing in it; only a closed one is reopened (Revisit).
+	Live(sessionID string) bool
 }
 
 // Emitter pushes events to the UI. Implementations must be safe to call before
@@ -221,6 +225,9 @@ func (e *Engine) resume(cardID, text string, quiet bool) error {
 	if !ok {
 		return msg.Err("stage.notInFlow", "stage", st.StageID, "flow", flow.Name)
 	}
+	if stage.MaxRunning > 0 && e.runner != nil && e.runner.RunningOnStage(stage.ID) >= stage.MaxRunning {
+		return msg.Err("stage.revisitBusy")
+	}
 	text = strings.TrimSpace(text)
 	switch {
 	case quiet:
@@ -231,7 +238,7 @@ func (e *Engine) resume(cardID, text string, quiet bool) error {
 	default:
 		e.record(cardID, model.EntryMove, msg.New("journal.continuedSaying", "text", text))
 	}
-	e.runStageSaying(card, flow, stage, text, quiet)
+	e.runStageSaying(card, flow, stage, text, quiet, "")
 	e.emitCard(cardID)
 	return nil
 }
@@ -244,7 +251,17 @@ func (e *Engine) pausedOn(cardID, stageID string) (store.Session, bool) {
 	if err != nil {
 		return store.Session{}, false
 	}
+	visit, ok, err := e.store.LastFlowEvent(cardID)
+	if err != nil || !ok {
+		return store.Session{}, false
+	}
 	for _, s := range sessions {
+		if s.VisitID != 0 && s.VisitID != visit.ID {
+			continue
+		}
+		if s.VisitID == 0 && s.StartedAt.Before(visit.CreatedAt) {
+			continue
+		}
 		if s.StageID == stageID {
 			return s, s.Status == store.StatusPaused
 		}
@@ -400,14 +417,6 @@ func (e *Engine) Drop(cardID string) error {
 	return nil
 }
 
-// Abandoned is what a runner calls when a person closed a step's terminal
-// before it reported: the card is dropped (acp.Reporter).
-func (e *Engine) Abandoned(cardID string) {
-	if err := e.Drop(cardID); err != nil {
-		e.log.Warn("could not drop an abandoned card", "card", cardID, "err", err)
-	}
-}
-
 // Finished is what a runner calls when a session ends: its outcome is the event
 // the stage moves on. A cancelled session reports no outcome at all — somebody
 // intervened, and the flow waits for them.
@@ -415,10 +424,30 @@ func (e *Engine) Abandoned(cardID string) {
 // Detail is why, as the card's history will word it: the session ended, the
 // step reported over MCP.
 func (e *Engine) Finished(cardID, outcome string, detail msg.Msg, agentText string) {
+	if stage := e.finished(cardID, 0, outcome, detail, agentText); stage != "" {
+		e.DrainStage(stage)
+	}
+}
+
+func (e *Engine) FinishedVisit(job Job, outcome string, detail msg.Msg, agentText string) {
+	e.finished(job.Card.ID, job.Visit, outcome, detail, agentText)
+	if job.Stage.ID != "" {
+		e.DrainStage(job.Stage.ID)
+	}
+}
+
+func (e *Engine) finished(cardID string, visit int64, outcome string, detail msg.Msg, agentText string) string {
 	if outcome == "" {
-		return
+		return ""
 	}
 	e.mu.Lock()
+	if visit != 0 {
+		last, ok, err := e.store.LastFlowEvent(cardID)
+		if err != nil || !ok || last.ID != visit {
+			e.mu.Unlock()
+			return ""
+		}
+	}
 	// What the stage owed the card is taken off the agent's closing words and
 	// put on the card before the flow reads anything: an edge may branch on one
 	// of these values, and a missing required one turns a finished step into a
@@ -427,12 +456,7 @@ func (e *Engine) Finished(cardID, outcome string, detail msg.Msg, agentText stri
 	stage := e.advanceLocked(cardID, outcome, detail, agentText)
 	e.mu.Unlock()
 
-	// Draining is deferred until the advance is done and the lock is free, so
-	// the place a session frees is filled by the next card rather than racing
-	// the card that just left.
-	if stage != "" {
-		e.DrainStage(stage)
-	}
+	return stage
 }
 
 // CardChanged advances a parked card when a property set on it is what its
@@ -584,21 +608,29 @@ func (e *Engine) enterStage(card model.Card, flow model.Flow, stage model.Stage,
 	e.log.Info("card entered a stage", "card", card.ID, "flow", flow.Name, "stage", stage.Name, "on", on)
 	e.emitCard(card.ID)
 
-	e.runStage(card, flow, stage)
+	if !stage.ManualStart || stage.Final {
+		e.runStage(card, flow, stage)
+	}
 }
 
 // runStage starts whatever the stage does. A stage that cannot even start
 // counts as a failed one, so the flow can carry the card to its failure branch
 // instead of silently stalling.
 func (e *Engine) runStage(card model.Card, flow model.Flow, stage model.Stage) {
-	e.runStageSaying(card, flow, stage, "", false)
+	e.runStageSaying(card, flow, stage, "", false, "")
 }
 
 // runStageSaying is runStage with what the agent is told given rather than
 // composed: a stage continued (Continue) resumes a conversation that already
 // holds its brief.
 // Quiet is a stage reopened (Reopen): the agent is told nothing at all.
-func (e *Engine) runStageSaying(card model.Card, flow model.Flow, stage model.Stage, said string, quiet bool) {
+func (e *Engine) runStageSaying(card model.Card, flow model.Flow, stage model.Stage, said string, quiet bool, resumeID string) {
+	if last, ok, err := e.store.LastFlowEvent(card.ID); err == nil && ok {
+		if err := e.store.StartVisit(last.ID); err != nil {
+			e.log.Error("could not start visit", "err", err)
+			return
+		}
+	}
 	// A final stage is where the card stops. Nothing runs, nothing waits.
 	if stage.Final {
 		if err := e.store.LeaveFlow(card.ID, model.StateDone); err != nil {
@@ -630,7 +662,7 @@ func (e *Engine) runStageSaying(card model.Card, flow model.Flow, stage model.St
 	// The card is read fresh: the assignee may have been set while it was on
 	// its way here, and it decides who runs this.
 	current, err := e.store.Card(card.ID)
-	if err == nil {
+	if err == nil && resumeID == "" {
 		card = current
 	}
 
@@ -670,7 +702,10 @@ func (e *Engine) runStageSaying(card model.Card, flow model.Flow, stage model.St
 	if said != "" || quiet {
 		prompt = said
 	}
-	job := Job{Card: card, Flow: flow, Stage: stage, Agent: agent, Prompt: prompt, Brief: brief}
+	job := Job{Card: card, Flow: flow, Stage: stage, Agent: agent, Prompt: prompt, Brief: brief, ResumeID: resumeID}
+	if last, ok, err := e.store.LastFlowEvent(card.ID); err == nil && ok {
+		job.Visit = last.ID
+	}
 	if err := e.runner.Start(job); err != nil {
 		e.failStage(card, flow, stage, err)
 		return
@@ -751,19 +786,21 @@ func (e *Engine) harvestWritesLocked(cardID, outcome string, detail msg.Msg, age
 		return outcome, detail
 	}
 	stage, ok := flow.Stage(st.StageID)
-	if !ok || len(stage.Writes) == 0 {
+	if !ok {
 		return outcome, detail
 	}
+	return e.harvestWritesFor(cardID, stage, outcome, detail, agentText)
+}
 
+// harvestWritesFor is harvestWritesLocked for a named stage rather than the one
+// the card stands on: a terminal the card has left reports for its own stage.
+func (e *Engine) harvestWritesFor(cardID string, stage model.Stage, outcome string, detail msg.Msg, agentText string) (string, msg.Msg) {
+	if len(stage.Writes) == 0 {
+		return outcome, detail
+	}
 	delivered := ParseWrites(agentText, stage.Writes)
 	if len(delivered) > 0 {
-		if _, err := e.store.UpdateCard(cardID, store.CardEdit{Props: delivered}); err != nil {
-			e.log.Warn("could not write stage outputs", "card", cardID, "stage", stage.Name, "err", err)
-			e.record(cardID, model.EntryProblem, msg.New("journal.writesFailed", "stage", stage.Name).Because(err))
-		} else {
-			e.record(cardID, model.EntryProps,
-				msg.New("journal.wrote", "stage", stage.Name, "values", describeWrites(stage.Writes, delivered)))
-		}
+		e.writeDelivered(cardID, stage, delivered)
 	}
 
 	// Only a step that reported success can be held to its contract. One that
@@ -779,6 +816,16 @@ func (e *Engine) harvestWritesLocked(cardID, outcome string, detail msg.Msg, age
 	e.record(cardID, model.EntryProblem,
 		msg.New("journal.requiredMissing", "stage", stage.Name, "properties", strings.Join(missing, ", ")))
 	return model.TriggerFailure, msg.New("outcome.requiredMissing", "properties", strings.Join(missing, ", "))
+}
+
+func (e *Engine) writeDelivered(cardID string, stage model.Stage, delivered map[string]string) {
+	if _, err := e.store.UpdateCard(cardID, store.CardEdit{Props: delivered}); err != nil {
+		e.log.Warn("could not write stage outputs", "card", cardID, "stage", stage.Name, "err", err)
+		e.record(cardID, model.EntryProblem, msg.New("journal.writesFailed", "stage", stage.Name).Because(err))
+		return
+	}
+	e.record(cardID, model.EntryProps,
+		msg.New("journal.wrote", "stage", stage.Name, "values", describeWrites(stage.Writes, delivered)))
 }
 
 // writeOutcome puts how a stage ended into the card's own outcome field. Silent

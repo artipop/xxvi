@@ -119,6 +119,7 @@ export interface RibbonView {
      * when no step has run there.
      */
     "focusId"?: string;
+    "keepFocus"?: boolean;
 
     /**
      * Returnable is a card taken off its flow into the inbox, which can go
@@ -178,6 +179,7 @@ export interface ScreenView {
      * application closed on it: the screen offers to continue it (Continue).
      */
     "paused"?: boolean;
+    "revisitable"?: boolean;
 }
 
 /**
@@ -203,6 +205,7 @@ export interface Segment {
     "detail"?: msg$0.Msg | null;
     "enteredAt": string;
     "current": boolean;
+    "startable"?: boolean;
 
     /**
      * Gone says the stage was removed from the flow while the card was on it.

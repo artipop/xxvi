@@ -3,6 +3,7 @@ import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
 import type { Mark } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
 import { markTitle, t } from "../i18n";
+import { formKeys } from "./formKeys";
 
 // A waiting stage's two answers. Forward goes at once; back first asks what is
 // wrong, because «not accepted» with no reason sends the agent — or the MR's
@@ -43,16 +44,13 @@ export function RemarksForm(props: {
   let box: HTMLTextAreaElement | undefined;
   onSettled(() => { box?.focus({ preventScroll: true }); });
   return (
-    <div class="remarks-form" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+    <div class="remarks-form" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}
+         onKeyDown={formKeys({ submit: () => props.onSend(text()), cancel: props.onCancel })}>
       <textarea
         ref={box}
         placeholder={t("remarks.placeholder")}
         value={text()}
         onInput={(e) => setText(e.currentTarget.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") { e.stopPropagation(); props.onCancel(); }
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) props.onSend(text());
-        }}
       />
       <div class="row">
         <span class="meta">{t("remarks.hint")}</span>

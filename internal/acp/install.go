@@ -75,7 +75,7 @@ func Install(ctx context.Context, kind string) (InstallResult, error) {
 	tool, err := lookupBin(def.from.tool)
 	if err != nil {
 		return InstallResult{}, msg.Err("adapter.noTool", "bin", def.bin, "tool", def.from.tool,
-			"needs", def.from.needs, "install", def.from.install(def.pkg))
+			"needs", def.from.needs)
 	}
 	mu, _ := installing.LoadOrStore(kind, &sync.Mutex{})
 	mu.(*sync.Mutex).Lock()

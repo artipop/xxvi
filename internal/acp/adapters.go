@@ -67,10 +67,6 @@ type adapter struct {
 	// «the last one in this folder»: the folder is shared by every stage of
 	// the card, and a person may have opened a CLI in it too.
 	cliResumeID func(id string) []string
-	// cliResumeArgs continue the last conversation in the folder. Only for a
-	// stage whose earlier runs left no id — recorded before ids were, or by a
-	// CLI whose hooks never spoke — where it is the only thread left to pull.
-	cliResumeArgs []string
 	// cliHooks registers our hook command with the CLI (hooks.go): how it
 	// says which conversation it holds and whether it is waiting for a person.
 	// Nil for a CLI without hooks, which is then watched by its silence.
@@ -91,13 +87,12 @@ type adapter struct {
 	// argument, and everything before it on that line is flags.
 	//
 	// A conversation resumed by id takes it the same way — both CLIs accept a
-	// first message after `--resume <id>` / `resume <id>`. Only the folder
-	// fallback still has it typed in.
+	// first message after `--resume <id>` / `resume <id>`.
 	cliPromptArgs func(prompt string) []string
 }
 
 // registry is where an adapter package is published: how we install it into a
-// folder of our own, and how a person installs it themselves.
+// folder of our own.
 type registry struct {
 	// tool is the program that installs from the registry.
 	tool string
@@ -109,8 +104,6 @@ type registry struct {
 	// versionIn reads the installed version of pkg from dir, empty when it
 	// cannot tell.
 	versionIn func(dir, pkg string) string
-	// install is the command a person runs to install it for good.
-	install func(pkg string) string
 	// needs is what provides tool, for a machine that has neither.
 	needs string
 }
@@ -123,7 +116,6 @@ var (
 		},
 		binIn:     func(dir, bin string) string { return filepath.Join(dir, "node_modules", ".bin", bin) },
 		versionIn: npmVersion,
-		install:   func(pkg string) string { return "npm install -g " + pkg },
 		needs:     "Node.js",
 	}
 	pypi = registry{
@@ -136,7 +128,6 @@ var (
 		},
 		binIn:     func(dir, bin string) string { return filepath.Join(dir, "bin", bin) },
 		versionIn: pypiVersion,
-		install:   func(pkg string) string { return "uv tool install " + pkg },
 		needs:     "uv",
 	}
 )
@@ -178,7 +169,6 @@ var adapters = map[string]adapter{
 		cliBin:        "claude",
 		cliNewSession: func(id string) []string { return []string{"--session-id", id} },
 		cliResumeID:   func(id string) []string { return []string{"--resume", id} },
-		cliResumeArgs: []string{"--continue"},
 		cliHooks:      claudeHooks,
 		cliTools:      claudeTools,
 		// `claude -- «…»` opens the TUI with that as the first message, which is
@@ -204,11 +194,10 @@ var adapters = map[string]adapter{
 		// and Enter — the key that sends a message — picks «Update now».
 		// Per-step MCP and hook overrides already require embedded mode;
 		// selecting it explicitly avoids the daemon fallback warning.
-		cliArgs:       []string{"--no-daemon", "-c", "check_for_update_on_startup=false"},
-		cliResumeID:   func(id string) []string { return []string{"resume", id} },
-		cliResumeArgs: []string{"resume", "--last"},
-		cliHooks:      codexHooks,
-		cliTools:      codexTools,
+		cliArgs:     []string{"--no-daemon", "-c", "check_for_update_on_startup=false"},
+		cliResumeID: func(id string) []string { return []string{"resume", id} },
+		cliHooks:    codexHooks,
+		cliTools:    codexTools,
 		// The separator for the same reason as claude's: a brief that starts
 		// with a dash must not be read as a flag.
 		cliPromptArgs: func(prompt string) []string { return []string{"--", prompt} },
@@ -333,7 +322,7 @@ func adapterStatus(kind string) AdapterStatus {
 		// Nothing to offer: installing Node.js or uv is not something to do
 		// behind a person's back.
 		st.Detail = detail("adapter.noTool", "bin", def.bin, "tool", def.from.tool,
-			"needs", def.from.needs, "install", def.from.install(def.pkg))
+			"needs", def.from.needs)
 	}
 	return st
 }
@@ -427,7 +416,11 @@ func adapterArgv(kind, override string) ([]string, error) {
 	if def.pkg == "" {
 		return nil, msg.Err("adapter.missing", "bin", def.bin)
 	}
-	return nil, msg.Err("adapter.install", "bin", def.bin, "install", def.from.install(def.pkg))
+	if _, err := lookupBin(def.from.tool); err != nil {
+		return nil, msg.Err("adapter.noTool", "bin", def.bin, "tool", def.from.tool,
+			"needs", def.from.needs)
+	}
+	return nil, msg.Err("adapter.install", "bin", def.bin)
 }
 
 // lookupBin finds an executable. PATH first, then the usual install locations,

@@ -2,9 +2,11 @@ import { createSignal, For, Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
 import type { Agent, Proxy } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
-import type { AdapterStatus, AgentCheck } from "../../bindings/github.com/artipop/gandvik/internal/acp/models";
+import type { AgentCheck } from "../../bindings/github.com/artipop/gandvik/internal/acp/models";
 import { agents, guard, loadAgents, vocabulary } from "../state";
 import { say, t } from "../i18n";
+import { InstallButton } from "./adapter-install";
+import { formKeys } from "./formKeys";
 
 // The agent registry, with the adapter check beside it — "can this agent
 // actually run here" is the question this screen is opened with, and a missing
@@ -41,7 +43,7 @@ export default function AgentsView() {
               {/* Only our own install is ours to update: one the person put on
                   the machine themselves is updated the way they installed it. */}
               <Show when={a.installable && (a.installed || !a.ready)}>
-                <InstallButton adapter={a} />
+                <InstallButton adapter={a} onInstalled={(said) => setInstalled({ ...installed(), [a.kind]: said })} />
               </Show>
             </div>
             <Show when={a.detail}><div class="body">{say(a.detail)}</div></Show>
@@ -155,13 +157,18 @@ function ProxiesSection(): JSX.Element {
 
 function ProxyForm(props: { proxy: Proxy; onDone: () => void }): JSX.Element {
   const [p, setP] = createSignal<Proxy>(props.proxy);
+  const [saving, setSaving] = createSignal(false);
   const patch = (x: Partial<Proxy>) => setP({ ...p(), ...x });
   const save = async () => {
-    const saved = await guard(() => API.SaveProxy(p()));
-    if (saved) { await loadAgents(); props.onDone(); }
+    if (saving()) return;
+    setSaving(true);
+    try {
+      const saved = await guard(() => API.SaveProxy(p()));
+      if (saved) { await loadAgents(); props.onDone(); }
+    } finally { setSaving(false); }
   };
   return (
-    <div class="card">
+    <div class="card" onKeyDown={formKeys({ submit: save, cancel: props.onDone, busy: saving })}>
       <h3>{t("proxies.proxy")}</h3>
       <div class="grid2">
         <label class="field">
@@ -198,8 +205,8 @@ function ProxyForm(props: { proxy: Proxy; onDone: () => void }): JSX.Element {
       </label>
       <div class="row actions">
         <div class="spacer" />
-        <button class="btn quiet" onClick={props.onDone}>{t("common.cancel")}</button>
-        <button class="btn primary" onClick={save}>{t("common.save")}</button>
+        <button class="btn quiet" disabled={saving()} onClick={props.onDone}>{t("common.cancel")}</button>
+        <button class="btn primary" disabled={saving()} onClick={save}>{t("common.save")}</button>
       </div>
     </div>
   );
@@ -220,28 +227,6 @@ const forgetCheck = (name: string) => {
 // What the last install of each kind changed, said under its row until the
 // screen is left.
 const [installed, setInstalled] = createSignal<Record<string, string>>({});
-
-function InstallButton(props: { adapter: AdapterStatus }): JSX.Element {
-  const [busy, setBusy] = createSignal(false);
-  const install = async () => {
-    setBusy(true);
-    const got = await guard(() => API.InstallAdapter(props.adapter.kind));
-    setBusy(false);
-    if (!got) return;
-    const now = got.status.version ?? "";
-    const said = !got.was ? t("agents.installedNow", { version: now })
-      : got.was === now ? t("agents.upToDate", { version: now })
-      : t("agents.updated", { was: got.was, version: now });
-    setInstalled({ ...installed(), [props.adapter.kind]: said });
-    await loadAgents();
-  };
-  return (
-    <button class="btn quiet" disabled={busy()} onClick={() => void install()}
-            title={t("agents.installTitle", { pkg: props.adapter.package ?? "" })}>
-      {busy() ? t("agents.installing") : props.adapter.installed ? t("agents.update") : t("agents.install")}
-    </button>
-  );
-}
 
 function CheckButton(props: { name: string }): JSX.Element {
   const [busy, setBusy] = createSignal(false);
@@ -279,16 +264,20 @@ function CheckResult(props: { check: AgentCheck }): JSX.Element {
 
 function AgentForm(props: { agent: Agent; onDone: () => void }) {
   const [a, setA] = createSignal<Agent>(props.agent);
+  const [saving, setSaving] = createSignal(false);
   const patch = (p: Partial<Agent>) => setA({ ...a(), ...p });
 
   const save = async () => {
-    const saved = await guard(() => API.SaveAgent(a()));
-    if (saved) {
-      forgetCheck(a().name); await loadAgents(); props.onDone(); }
+    if (saving()) return;
+    setSaving(true);
+    try {
+      const saved = await guard(() => API.SaveAgent(a()));
+      if (saved) { forgetCheck(a().name); await loadAgents(); props.onDone(); }
+    } finally { setSaving(false); }
   };
 
   return (
-    <div class="card">
+    <div class="card" onKeyDown={formKeys({ submit: save, cancel: props.onDone, busy: saving })}>
       <h3>{t("agents.agent")}</h3>
       <div class="grid2">
         <label class="field">
@@ -337,8 +326,8 @@ function AgentForm(props: { agent: Agent; onDone: () => void }) {
 
       <div class="row actions">
         <div class="spacer" />
-        <button class="btn quiet" onClick={props.onDone}>{t("common.cancel")}</button>
-        <button class="btn primary" onClick={save}>{t("common.save")}</button>
+        <button class="btn quiet" disabled={saving()} onClick={props.onDone}>{t("common.cancel")}</button>
+        <button class="btn primary" disabled={saving()} onClick={save}>{t("common.save")}</button>
       </div>
     </div>
   );

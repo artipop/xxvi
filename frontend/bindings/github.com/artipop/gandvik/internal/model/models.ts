@@ -285,6 +285,7 @@ export interface Flow {
  * FlowEvent is one recorded transition — the answer to "why is this card here".
  */
 export interface FlowEvent {
+    "started": boolean;
     "id": number;
     "cardId": string;
     "flowId": string;
@@ -639,6 +640,8 @@ export interface Stage {
      */
     "template"?: string;
     "action": string;
+    "manualStart"?: boolean;
+    "keepFocus"?: boolean;
 
     /**
      * Work says where an agent stage runs: in the card's terminal, where a
@@ -720,7 +723,7 @@ export interface Stage {
 
 /**
  * A stage template is a kind of node the flow editor offers: «AI in the
- * terminal», «Terminal», «Docker», «Web», «Diff». It is a registry like agents
+ * terminal», «Terminal», «Docker», «Dokku», «Web», «Diff». It is a registry like agents
  * and projects — rows a person adds and edits — and the standard ones are rows
  * too, put there by the migration that made the table, so there is one place to
  * look for what the palette holds rather than a list in the code and a list in

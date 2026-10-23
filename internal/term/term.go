@@ -6,8 +6,8 @@
 // machinery. A screen's terminal belongs to the pane somebody is looking at,
 // runs a shell, and outlives every turn an agent takes. A stage's terminal
 // belongs to the run inside it: it is the agent's own CLI (docs/system.md
-// §4.1.1), it is opened by internal/acp with an argv of its own, and it dies
-// when the step does.
+// §4.1.1), opened by internal/acp with an argv of its own. After its report
+// it stays visible with input disabled until return or application exit.
 //
 // The pty, the scrollback, the socket and the resize are the same for both,
 // which is why one package holds them. What differs is who starts it and who
@@ -49,6 +49,10 @@ type Session struct {
 	eng engine
 
 	mu sync.Mutex
+	// entered is when a person last pressed Enter here. A finished step's
+	// terminal may move its card again only after the person spoke in it, and
+	// on Windows, where the CLIs run no hooks, this is the only sign of that.
+	entered time.Time
 	// screen is what a window opened now has to show. Once the process has
 	// ended it is read one last time into final and freed: it is memory
 	// outside Go's reach, and nothing will draw on it again.
@@ -837,6 +841,13 @@ func (s *Session) snapshot() []byte {
 
 // Write is a keystroke on its way to the process.
 func (s *Session) Write(data []byte) error {
+	// Enter alone: a brief or a request typed by this application arrives as
+	// one pasted chunk with its Enter inside.
+	if len(data) == 1 && data[0] == '\r' {
+		s.mu.Lock()
+		s.entered = time.Now()
+		s.mu.Unlock()
+	}
 	// A key on its own, not the start of an escape sequence: an arrow is
 	// ESC [ A, and arrives in one piece.
 	if len(data) == 1 && (data[0] == 0x1b || data[0] == 0x03) {
@@ -1038,4 +1049,11 @@ func (s *Session) waitBrief() {
 	case <-s.forgotten:
 	case <-time.After(2 * time.Second):
 	}
+}
+
+// Entered is when a person last pressed Enter in the terminal.
+func (s *Session) Entered() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.entered
 }

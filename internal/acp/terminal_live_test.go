@@ -38,11 +38,13 @@ func (u liveUI) Emit(event string, payload any) {
 
 type liveReporter struct{ done chan string }
 
-func (r liveReporter) Finished(_ string, outcome string, _ msg.Msg, text string) {
+func (r liveReporter) FinishedVisit(_ engine.Job, outcome string, _ msg.Msg, text string) {
+	if outcome == "" {
+		return
+	}
 	r.done <- outcome + "|" + text
 }
 
-func (r liveReporter) Abandoned(string)                 { r.done <- "abandoned|" }
 func (r liveReporter) Described(string, string, string) {}
 
 type liveStage struct {

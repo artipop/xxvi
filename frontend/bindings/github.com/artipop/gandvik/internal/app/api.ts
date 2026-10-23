@@ -170,6 +170,23 @@ export function ContinueStage(cardID: string, text: string): $CancellablePromise
 }
 
 /**
+ * CreateFolder makes a folder for a project being edited, which then adds it
+ * like any other: the folder exists from the moment it is asked for.
+ */
+export function CreateFolder(parent: string, name: string, initRepo: boolean): $CancellablePromise<string> {
+    return $Call.ByID(397910042, parent, name, initRepo);
+}
+
+/**
+ * CreateProject makes a new project's folder on disk and registers it: work that
+ * starts from nothing rather than in a folder that already exists. One call,
+ * so that a project refused on save leaves no empty folder behind.
+ */
+export function CreateProject(p: model$0.Project, parent: string, folder: string, initRepo: boolean): $CancellablePromise<model$0.Project> {
+    return $Call.ByID(2297707123, p, parent, folder, initRepo);
+}
+
+/**
  * DeleteAgent removes an entry.
  */
 export function DeleteAgent(name: string): $CancellablePromise<void> {
@@ -295,6 +312,13 @@ export function GiveBackWindow(screenID: string): $CancellablePromise<void> {
  */
 export function HideNativeTerminal(id: string): $CancellablePromise<void> {
     return $Call.ByID(1436168965, id);
+}
+
+/**
+ * HomeDir is where a new project's folder is suggested, before one was chosen.
+ */
+export function HomeDir(): $CancellablePromise<string> {
+    return $Call.ByID(1079030760);
 }
 
 /**
@@ -424,6 +448,15 @@ export function OpenClient(name: string): $CancellablePromise<void> {
 }
 
 /**
+ * OpenProjectFolder makes a project of a folder somebody already works in, the
+ * way an IDE opens one: named after the folder, nothing else asked. A folder a
+ * project already has opens that project rather than a second one.
+ */
+export function OpenProjectFolder(path: string): $CancellablePromise<model$0.Project> {
+    return $Call.ByID(4132484019, path);
+}
+
+/**
  * OpenTerminal starts the shell behind one terminal screen, or hands back the
  * one already running there.
  * 
@@ -441,8 +474,7 @@ export function PastSessionPreview(agentName: string, sessionID: string): $Cance
 
 /**
  * PastSessions lists the conversations an agent already had in a project's
- * folder, for a card to continue one of them. A project is required: a card
- * with no project works in a fresh folder, where nobody has talked to anyone.
+ * folder, or in the shared draft folder, for a card to continue one of them.
  */
 export function PastSessions(agentName: string, projectID: string, folderID: string): $CancellablePromise<acp$0.PastSession[] | null> {
     return $Call.ByID(1804879299, agentName, projectID, folderID);
@@ -551,6 +583,10 @@ export function RestartToUpdate(): $CancellablePromise<void> {
  */
 export function ReturnToFlow(cardID: string): $CancellablePromise<$models.CardView> {
     return $Call.ByID(1271918505, cardID);
+}
+
+export function RevisitStage(cardID: string, sessionID: string): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(314705568, cardID, sessionID);
 }
 
 /**
@@ -815,6 +851,10 @@ export function StageTemplates(): $CancellablePromise<model$0.StageTemplate[] | 
  */
 export function StartLaunch(cardID: string, screenID: string, p: launch$0.Profile): $CancellablePromise<$models.LaunchRun> {
     return $Call.ByID(4131348001, cardID, screenID, p);
+}
+
+export function StartStage(cardID: string, visit: number): $CancellablePromise<$models.CardView> {
+    return $Call.ByID(3412296176, cardID, visit);
 }
 
 /**

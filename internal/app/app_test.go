@@ -273,8 +273,6 @@ func TestACardWorksInItsProjectFolder(t *testing.T) {
 		t.Fatalf("заметки должны лечь в папку проекта: %v", err)
 	}
 
-	// And without a project the card keeps a folder of its own, which is the
-	// right answer for work that starts from a blank page.
 	other, _ := api.AddCard("", "С чистого листа", "")
 	if err := api.WriteDoc(other.ID, "plan.md", "# план"); err != nil {
 		t.Fatalf("записать заметки: %v", err)
@@ -282,8 +280,8 @@ func TestACardWorksInItsProjectFolder(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(folder, "plan.md")); err != nil {
 		t.Fatal("папка проекта не должна была измениться")
 	}
-	if _, err := os.Stat(filepath.Join(a.DataDir, "work", other.ID, "plan.md")); err != nil {
-		t.Fatalf("карточка без проекта работает в своей папке: %v", err)
+	if _, err := os.Stat(filepath.Join(a.DataDir, "default_project", "plan.md")); err != nil {
+		t.Fatalf("карточка без проекта работает в общей папке черновиков: %v", err)
 	}
 }
 
@@ -323,6 +321,65 @@ func TestAProjectNeedsAFolderThatExists(t *testing.T) {
 	}
 	if _, err := api.SaveProject(model.Project{Name: "Сайт", Path: "относительный/путь"}); err == nil {
 		t.Fatal("относительный путь должен быть отвергнут")
+	}
+}
+
+// A project that starts from nothing gets its folder made, a repository if
+// asked for, and nothing is left on disk when the project itself is refused.
+func TestANewProjectMakesItsFolder(t *testing.T) {
+	api := NewAPI(open(t))
+	parent := t.TempDir()
+	saved, err := api.CreateProject(model.Project{Name: "Сайт"}, parent, "", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(parent, "Сайт"); saved.Path != want || !saved.Repo {
+		t.Fatalf("проект: %+v", saved)
+	}
+	if _, err := api.CreateProject(model.Project{Name: "Сайт 2"}, parent, "Сайт", false); err == nil {
+		t.Fatal("существующую папку не забирают под новый проект")
+	}
+	if _, err := api.CreateProject(model.Project{Name: "Сайт"}, parent, "другая", false); err == nil {
+		t.Fatal("проект с занятым названием должен быть отвергнут")
+	}
+	if _, err := os.Stat(filepath.Join(parent, "другая")); !os.IsNotExist(err) {
+		t.Fatal("после отказа папка не должна остаться")
+	}
+	if _, err := api.CreateProject(model.Project{Name: "x"}, parent, "a/b", false); err == nil {
+		t.Fatal("имя папки с разделителем должно быть отвергнуто")
+	}
+}
+
+// Opening a folder is the whole of adding it: named after the folder, a
+// second name when that one is taken, and the same project when the folder is
+// already one.
+func TestOpeningAFolderMakesItAProject(t *testing.T) {
+	api := NewAPI(open(t))
+	dir := filepath.Join(t.TempDir(), "blog")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	first, err := api.OpenProjectFolder(dir)
+	if err != nil || first.Name != "blog" || first.Path != dir {
+		t.Fatalf("проект: %+v, %v", first, err)
+	}
+	again, err := api.OpenProjectFolder(dir + "/")
+	if err != nil || again.ID != first.ID {
+		t.Fatalf("та же папка — тот же проект: %+v, %v", again, err)
+	}
+	other := filepath.Join(t.TempDir(), "blog")
+	if err := os.Mkdir(other, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if second, err := api.OpenProjectFolder(other); err != nil || second.Name != "blog 2" {
+		t.Fatalf("второе имя: %+v, %v", second, err)
+	}
+	made, err := api.CreateFolder(filepath.Dir(dir), "api", true)
+	if err != nil || made != filepath.Join(filepath.Dir(dir), "api") {
+		t.Fatalf("новая папка: %q, %v", made, err)
+	}
+	if _, err := api.CreateFolder(filepath.Dir(dir), "api", false); err == nil {
+		t.Fatal("существующую папку не создают заново")
 	}
 }
 
@@ -634,5 +691,42 @@ func TestWorkModeIsARepositoryQuestionAnsweredOnce(t *testing.T) {
 
 	if _, err := api.StartTask("Ещё", "", plain.ID, "", model.WorkModeWorktree, "Claude", mustFlow(t, a, "Development").ID); err == nil {
 		t.Fatal("задача с деревом в папке без git — отказ до создания")
+	}
+}
+
+func TestPastSessionFoldersMatchWhereConversationsResume(t *testing.T) {
+	a := open(t)
+	api := NewAPI(a)
+	dev := mustFlow(t, a, "Development")
+	project, err := api.SaveProject(model.Project{Name: "Two folders", Folders: []model.Folder{
+		{Name: "front", Path: t.TempDir()}, {Name: "back", Path: t.TempDir()},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, project, folder, want string }{
+		{"drafts", "", "", filepath.Join(a.DataDir, "default_project")},
+		{"second folder", project.ID, project.Folders[1].ID, project.Folders[1].Path},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, err := api.pastSessionDir(tc.project, tc.folder)
+			if err != nil || dir != tc.want {
+				t.Fatalf("session lookup folder: %q, %v", dir, err)
+			}
+			view, err := api.ContinueSession("saved-conversation", "Continue", "", tc.project, tc.folder, "", "Claude", dev.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cwd, err := a.Agents.WorkDir(view.Card.ID)
+			if err != nil || cwd != dir {
+				t.Fatalf("conversation resumed in a different folder: %q, %v", cwd, err)
+			}
+		})
+	}
+	if _, err := api.pastSessionDir("missing", ""); err == nil {
+		t.Fatal("unknown project must not become drafts")
+	}
+	if _, err := api.pastSessionDir(project.ID, "missing"); err == nil {
+		t.Fatal("unknown folder must not become the first folder")
 	}
 }

@@ -81,6 +81,10 @@ func TestDatabaseAtTheBaselineTakesTheStepsAfterIt(t *testing.T) {
 	}
 	for _, stmt := range []string{
 		`ALTER TABLE card DROP COLUMN typed`,
+		`ALTER TABLE stage DROP COLUMN manual_start`,
+		`ALTER TABLE stage DROP COLUMN keep_focus`,
+		`ALTER TABLE flow_event DROP COLUMN started`,
+		`ALTER TABLE agent_session DROP COLUMN visit_id`,
 		`ALTER TABLE stage DROP COLUMN template`,
 		`DROP TABLE stage_template`,
 		`DROP TABLE project_folder`,

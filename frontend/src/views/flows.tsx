@@ -8,6 +8,7 @@ import {
   templateOf,
 } from "./templates";
 import { errorText, label, propName, t } from "../i18n";
+import { formKeys } from "./formKeys";
 
 // The flow editor. The canvas is the flow itself and takes the whole window: a
 // box is a stage — a place a card stands and the work done there — an arrow is
@@ -80,6 +81,7 @@ function Editor(props: {
   const [selected, setSelected] = createSignal<Selection>(null);
   const [saveError, setSaveError] = createSignal("");
   const [dirty, setDirty] = createSignal(false);
+  const [saving, setSaving] = createSignal(false);
 
   // Whether the flow has been asked about. Dropped whenever the panel stops
   // being about it, so a confirmation never follows the eye onto another flow.
@@ -117,6 +119,8 @@ function Editor(props: {
   const edges = () => list(draft.edges);
 
   const save = async () => {
+    if (saving()) return;
+    setSaving(true);
     setSaveError("");
     try {
       const saved = await API.SaveFlow(JSON.parse(JSON.stringify(draft)) as Flow);
@@ -128,7 +132,7 @@ function Editor(props: {
       // full, because replacing it with "could not save" throws away the only
       // part that helps.
       setSaveError(errorText(e));
-    }
+    } finally { setSaving(false); }
   };
 
   // Deleting a flow is asked about first, and then written through at once.
@@ -216,7 +220,11 @@ function Editor(props: {
   const selectedEdge = () => (selected()?.kind === "edge" ? edgeIndexOf(selected()!.id) : -1);
 
   return (
-    <div class="flowpage">
+    <div class="flowpage" onKeyDown={formKeys({ submit: save, busy: saving, cancel: () => {
+      if (confirming()) setConfirming(false);
+      else if (selected()) setSelected(null);
+      else (document.activeElement as HTMLElement | null)?.blur();
+    } })}>
       <header class="flowpage__head">
         <div class="flowpage__flows" role="tablist">
           <For each={flows()}>
@@ -249,7 +257,7 @@ function Editor(props: {
               <button class="btn danger" onClick={remove}>{t("common.delete")}</button>
             </Show>
           </Show>
-          <button class="btn primary" onClick={save}>{t("common.save")}</button>
+          <button class="btn primary" disabled={saving()} onClick={save}>{t("common.save")}</button>
         </div>
       </header>
 
@@ -621,6 +629,27 @@ function StagePanel(props: {
           </label>
         </Show>
 
+        <Show when={!stage().final}>
+          <label class="field">
+            <span>{t("flows.focusOnEntry")}</span>
+            <select value={stage().keepFocus ? "stay" : "follow"}
+                    onChange={(e) => set({ keepFocus: e.currentTarget.value === "stay" })}>
+              <option value="follow">{t("flows.focusFollow")}</option>
+              <option value="stay">{t("flows.focusStay")}</option>
+            </select>
+          </label>
+          <Show when={stage().action !== "none"}>
+            <label class="field">
+              <span>{t("flows.startOnEntry")}</span>
+              <select value={stage().manualStart ? "manual" : "auto"}
+                      onChange={(e) => set({ manualStart: e.currentTarget.value === "manual" })}>
+                <option value="auto">{t("flows.startAuto")}</option>
+                <option value="manual">{t("flows.startManual")}</option>
+              </select>
+            </label>
+          </Show>
+        </Show>
+
         <Show when={shape() === "agent"}>
           {/* Where the work happens: a terminal is where a person sits beside the
               agent and answers it in its own interface, a session is a step
@@ -790,6 +819,7 @@ function TemplatePanel(props: {
   const [draft, setDraft] = createStore<StageTemplate>(JSON.parse(JSON.stringify(props.tpl)) as StageTemplate);
   const [error, setError] = createSignal("");
   const [confirming, setConfirming] = createSignal(false);
+  const [saving, setSaving] = createSignal(false);
 
   const set = (patch: Partial<StageTemplate>) => setDraft((d) => { Object.assign(d, patch); });
 
@@ -803,6 +833,8 @@ function TemplatePanel(props: {
     set({ screens: screens().map((sc, at) => (at === i ? { ...sc, ...patch } : sc)) });
 
   const save = async () => {
+    if (saving()) return;
+    setSaving(true);
     setError("");
     try {
       const saved = await API.SaveStageTemplate(JSON.parse(JSON.stringify(draft)) as StageTemplate);
@@ -810,7 +842,7 @@ function TemplatePanel(props: {
       props.onSaved(saved);
     } catch (e) {
       setError(errorText(e));
-    }
+    } finally { setSaving(false); }
   };
 
   const remove = async () => {
@@ -821,7 +853,10 @@ function TemplatePanel(props: {
   };
 
   return (
-    <div class="inspector">
+    <div class="inspector" onKeyDown={formKeys({ submit: save, busy: saving, cancel: () => {
+      if (confirming()) setConfirming(false);
+      else props.onClose();
+    } })}>
       <div class="inspector__head">
         <Tile tpl={draft} big />
         <div class="inspector__title">
@@ -948,7 +983,7 @@ function TemplatePanel(props: {
           </Show>
         </Show>
         <div class="spacer" />
-        <button class="btn primary" onClick={save}>{t("common.save")}</button>
+        <button class="btn primary" disabled={saving()} onClick={save}>{t("common.save")}</button>
       </div>
       <p class="meta note">{t("flows.templateNote")}</p>
     </div>

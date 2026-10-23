@@ -114,6 +114,7 @@ export function syncNotificationWords() {
     remindAnswer: t("notify.remindAnswer"),
     remindStopped: t("notify.remindStopped"),
     remindPaused: t("notify.remindPaused"),
+    remindReady: t("notify.remindReady"),
     remindAgent: t("notify.remindAgent"),
     remindMany: t("notify.remindMany"),
   }).catch((e) => console.error(e));

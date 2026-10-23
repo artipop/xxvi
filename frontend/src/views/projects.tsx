@@ -2,17 +2,18 @@ import { createEffect, createSignal, createStore, onSettled, For, Show } from "s
 import * as API from "../../bindings/github.com/artipop/gandvik/internal/app/api";
 import type { Project } from "../../bindings/github.com/artipop/gandvik/internal/model/models";
 import type { RemoteOption } from "../../bindings/github.com/artipop/gandvik/internal/hosting/models";
-import { folderName, guard, list, loadProjects, projects, vocabulary, openOutside } from "../state";
+import { folderName, guard, list, loadProjects, projects, openOutside } from "../state";
 import { errorText, label, t } from "../i18n";
+import { formKeys } from "./formKeys";
 
 // Where work happens. The task says what, the flow says how it travels, this
 // says in which folder it all takes place — and a task names one by id, so a
 // project can be renamed without dragging anything behind it. A project can
 // live in several folders, a front and a back, and a task picks one of them.
-
-function blank(): Project {
-  return { id: "", name: "", kind: "folder", path: "", folders: [{ id: "", name: "", path: "" }] };
-}
+//
+// Begun the way an IDE begins one: a folder that exists is opened, a new one
+// is created where it is asked for. More folders are the project's own
+// business afterwards, in its form.
 
 // The form edits a copy of the folders, never the list the registry holds.
 function editable(p: Project): Project {
@@ -20,55 +21,75 @@ function editable(p: Project): Project {
   return { ...p, folders: folders.map((f) => ({ ...f })) };
 }
 
+/** openFolder is «Open folder…»: the system's dialog, and the folder is the project. */
+export async function openFolder(): Promise<Project | undefined> {
+  const chosen = await guard(() => API.PickFolder(t("projects.openTitle"), ""));
+  if (!chosen) return undefined;
+  const project = await guard(() => API.OpenProjectFolder(chosen));
+  if (project) await loadProjects();
+  return project ?? undefined;
+}
+
 export default function ProjectsView() {
   const [editing, setEditing] = createSignal<Project | null>(null);
+  const [creating, setCreating] = createSignal(false);
+  const form = () => (
+    <ProjectForm
+      project={editing()!}
+      onDone={() => { setEditing(null); void loadProjects(); }}
+      onChanged={(p) => { setEditing(editable(p)); void loadProjects(); }}
+    />
+  );
 
   return (
     <>
       <div class="row">
         <h1>{t("projects.title")}</h1>
         <div class="spacer" />
-        <button class="btn" onClick={() => setEditing(blank())}>{t("projects.new")}</button>
+        <button class="btn" onClick={() => { setEditing(null); setCreating(true); }}>{t("projects.newProject")}</button>
+        <button class="btn" onClick={() => void openFolder()}>{t("projects.openFolder")}</button>
       </div>
 
-      <Show when={editing()}>
-        <ProjectForm
-          project={editing()!}
-          onDone={() => { setEditing(null); void loadProjects(); }}
-          onChanged={(p) => { setEditing(editable(p)); void loadProjects(); }}
-        />
+      <Show when={creating()}>
+        <NewProjectForm onDone={() => setCreating(false)}
+          onCreated={(p) => { setCreating(false); setEditing(editable(p)); }} />
       </Show>
 
+      {/* One project, one place: the one being edited is its form, where its
+          card was. */}
       <Show when={projects().length > 0} fallback={
-        <div class="empty">{t("projects.empty")}</div>
+        <Show when={!creating()}><div class="empty">{t("projects.empty")}</div></Show>
       }>
         <For each={projects()}>
           {(p) => (
-            <div class="card clickable" onClick={() => setEditing(editable(p))}>
-              <div class="row">
-                <span class="title">{p.name}</span>
-                <span class="tag">{label("projectKind", p.kind)}</span>
-                <Show when={p.provider}>
-                  <span class="tag">{label("provider", p.provider!)} · {p.repository}</span>
-                </Show>
-                <Show when={p.provider}>
-                  <Show when={p.account} fallback={<span class="tag warn">{t("projects.notConnected")}</span>}>
-                    <span class="tag ok"><span class="dot" />@{p.account}</span>
+            <Show when={editing()?.id === p.id} fallback={
+              <div class="card clickable" onClick={() => { setCreating(false); setEditing(editable(p)); }}>
+                <div class="row">
+                  <span class="title">{p.name}</span>
+                  <Show when={p.provider}>
+                    <span class="tag">{label("provider", p.provider!)} · {p.repository}</span>
                   </Show>
-                </Show>
-                <Show when={p.reviewInbox}>
-                  <span class="tag">{t("projects.reviewTag")}</span>
-                </Show>
-                <div class="spacer" />
+                  <Show when={p.provider}>
+                    <Show when={p.account} fallback={<span class="tag warn">{t("projects.notConnected")}</span>}>
+                      <span class="tag ok"><span class="dot" />@{p.account}</span>
+                    </Show>
+                  </Show>
+                  <Show when={p.reviewInbox}>
+                    <span class="tag">{t("projects.reviewTag")}</span>
+                  </Show>
+                  <div class="spacer" />
+                </div>
+                <For each={list(p.folders)}>
+                  {(f) => (
+                    <div class="mono">
+                      <Show when={list(p.folders).length > 1}>{folderName(f)}: </Show>{f.path}
+                    </div>
+                  )}
+                </For>
               </div>
-              <For each={list(p.folders)}>
-                {(f) => (
-                  <div class="mono">
-                    <Show when={list(p.folders).length > 1}>{folderName(f)}: </Show>{f.path}
-                  </div>
-                )}
-              </For>
-            </div>
+            }>
+              {form()}
+            </Show>
           )}
         </For>
       </Show>
@@ -76,49 +97,132 @@ export default function ProjectsView() {
   );
 }
 
-// A project picked and not named yet is named after its folder — which is what
-// it is called anyway, and one field fewer to fill in.
-function basename(path: string): string {
-  const parts = path.replace(/\/+$/, "").split("/");
-  return parts[parts.length - 1] ?? "";
+const PARENT_KEY = "gandvik.projectsParent";
+
+function rememberedParent(): string {
+  try { return localStorage.getItem(PARENT_KEY) ?? ""; } catch { return ""; }
 }
 
-function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (p: Project) => void }) {
+// Where new folders are made: the place used last time, else home.
+function useParent() {
+  const [parent, setParent] = createSignal(rememberedParent());
+  if (!parent()) void API.HomeDir().then((home) => { if (!parent()) setParent(home); });
+  const pick = async () => {
+    const chosen = await guard(() => API.PickFolder(t("projects.pickParentTitle"), parent()));
+    if (chosen) setParent(chosen);
+  };
+  const remember = () => { try { localStorage.setItem(PARENT_KEY, parent()); } catch { /* a convenience */ } };
+  const pathOf = (name: string) => parent() && name.trim() ? `${parent().replace(/[\\/]+$/, "")}/${name.trim()}` : "";
+  return { parent, setParent, pick, remember, pathOf };
+}
+
+function ParentField(props: { where: ReturnType<typeof useParent> }) {
+  return (
+    <div class="field">
+      <span class="field-label">{t("projects.parent")}</span>
+      <div class="row">
+        <input type="text" class="grow" placeholder={t("projects.pathPlaceholder")} value={props.where.parent()}
+               onInput={(e) => props.where.setParent(e.currentTarget.value)} />
+        <button class="btn" onClick={() => void props.where.pick()}>{t("projects.pick")}</button>
+      </div>
+    </div>
+  );
+}
+
+/** NewProjectForm is «New project…»: a name and where its folder goes. */
+export function NewProjectForm(props: { onDone: () => void; onCreated: (p: Project) => void | Promise<void> }) {
+  const [name, setName] = createSignal("");
+  const [initRepo, setInitRepo] = createSignal(true);
+  const [saving, setSaving] = createSignal(false);
+  const [error, setError] = createSignal<unknown>(null);
+  const where = useParent();
+
+  const create = async () => {
+    if (saving() || !name().trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await API.CreateProject({ id: "", name: name(), kind: "", path: "", folders: [] }, where.parent(), "", initRepo());
+      where.remember();
+      await loadProjects();
+      await props.onCreated(saved);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div class="panel project-form" onKeyDown={formKeys({ submit: create, busy: saving, cancel: props.onDone })}>
+      <div class="project-create">
+        <label class="field">
+          <span>{t("projects.name")}</span>
+          <input type="text" value={name()} ref={(el) => queueMicrotask(() => el.focus({ preventScroll: true }))}
+                 onInput={(e) => setName(e.currentTarget.value)} />
+        </label>
+        <ParentField where={where} />
+        <Show when={where.pathOf(name())}>
+          <p class="meta">{t("projects.willCreate", { path: where.pathOf(name()) })}</p>
+        </Show>
+        <label class="row check">
+          <input type="checkbox" checked={initRepo()} onChange={(e) => setInitRepo(e.currentTarget.checked)} />
+          <span>{t("projects.initRepo")}</span>
+        </label>
+      </div>
+      <Show when={error() !== null}>
+        <div class="error"><pre>{errorText(error())}</pre></div>
+      </Show>
+      <div class="row">
+        <div class="spacer" />
+        <button class="btn quiet" onClick={props.onDone}>{t("common.cancel")}</button>
+        <button class="btn primary" disabled={saving() || !name().trim()} onClick={() => void create()}>{t("projects.create")}</button>
+      </div>
+    </div>
+  );
+}
+
+export function ProjectForm(props: {
+  project: Project;
+  onDone: () => void;
+  onChanged: (p: Project) => void;
+}) {
   const [draft, setDraft] = createStore<Project>({ ...props.project });
   const [error, setError] = createSignal<unknown>(null);
   const [confirming, setConfirming] = createSignal(false);
+  const [removing, setRemoving] = createSignal(-1);
+  const [adding, setAdding] = createSignal(false);
+  const [saving, setSaving] = createSignal(false);
 
   const save = async () => {
+    if (saving()) return;
+    setSaving(true);
     setError(null);
     try {
-      const saved = await API.SaveProject({ ...draft });
-      // A new repository stays open: connecting its hosting is the next thing
-      // somebody setting it up does, and it is done here.
-      if (!draft.id && saved.repo) {
-        setDraft((d) => { d.id = saved.id; });
-        props.onChanged(saved);
-        return;
-      }
+      await API.SaveProject({ ...draft });
       props.onDone();
     } catch (e) {
       // Shown here rather than at the top of the screen: a path with a typo in
       // it is refused while the person can still see what they typed.
       setError(e);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const pick = async (i: number) => {
-    const chosen = await guard(() => API.PickFolder(t("projects.pickTitle"), list(draft.folders)[i]?.path ?? ""));
-    // Empty is a person closing the dialog without choosing, and then what
-    // they had stays what they have.
-    if (chosen) {
-      setDraft((d) => { d.folders![i].path = chosen; });
-      if (!draft.name.trim()) setDraft((d) => { d.name = basename(chosen); });
-      setError(null);
-    }
+  const addFolder = (path: string) => {
+    if (list(draft.folders).some((f) => f.path === path)) return;
+    setDraft((d) => { d.folders = [...list(d.folders), { id: "", name: "", path }]; });
+    setError(null);
   };
-  const addFolder = () => setDraft((d) => { d.folders = [...list(d.folders), { id: "", name: "", path: "" }]; });
-  const removeFolder = (i: number) => setDraft((d) => { d.folders = list(d.folders).filter((_, j) => j !== i); });
+  const openExisting = async () => {
+    const chosen = await guard(() => API.PickFolder(t("projects.openTitle"), ""));
+    if (chosen) addFolder(chosen);
+  };
+  const removeFolder = (i: number) => {
+    setDraft((d) => { d.folders = list(d.folders).filter((_, j) => j !== i); });
+    setRemoving(-1);
+  };
 
   const remove = async () => {
     await guard(() => API.DeleteProject(draft.id));
@@ -126,48 +230,50 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
   };
 
   return (
-    <div class="panel">
-      <div class="grid2">
-        <label class="field">
-          <span>{t("projects.name")}</span>
-          <input type="text" value={draft.name}
-                 onInput={(e) => setDraft((d) => { d.name = e.currentTarget.value; })} />
-        </label>
-        <label class="field">
-          <span>{t("projects.kind")}</span>
-          <select value={draft.kind} onChange={(e) => setDraft((d) => { d.kind = e.currentTarget.value; })}>
-            <For each={list(vocabulary().projectKinds)}>
-              {(k) => <option value={k}>{label("projectKind", k)}</option>}
-            </For>
-          </select>
-        </label>
-      </div>
+    <div class="panel project-form" onKeyDown={formKeys({ submit: save, busy: saving, cancel: () => {
+      if (removing() >= 0) setRemoving(-1);
+      else if (adding()) setAdding(false);
+      else if (confirming()) setConfirming(false);
+      else props.onDone();
+    } })}>
+      <label class="field">
+        <span>{t("projects.name")}</span>
+        <input type="text" value={draft.name}
+               onInput={(e) => setDraft((d) => { d.name = e.currentTarget.value; })} />
+      </label>
+
       <div class="folders">
-        <span class="field-label">{list(draft.folders).length > 1 ? t("projects.folders") : t("projects.folder")}</span>
+        <span class="field-label">{t("projects.folders")}</span>
         <For each={list(draft.folders)}>
           {(f, i) => (
-            <div class="row">
+            <div class="row folder-row">
               {/* A name is asked only when there is something to tell apart. */}
               <Show when={list(draft.folders).length > 1}>
-                <input type="text" class="folder-name" placeholder={basename(f.path) || t("projects.folderName")}
+                <input type="text" class="folder-name" placeholder={folderName(f) || t("projects.folderName")}
                        value={f.name} title={t("projects.folderName")}
                        onInput={(e) => { const v = e.currentTarget.value; setDraft((d) => { d.folders![i()].name = v; }); }} />
               </Show>
-              <input type="text" class="grow" placeholder={t("projects.pathPlaceholder")} value={f.path}
-                     onInput={(e) => { const v = e.currentTarget.value; setDraft((d) => { d.folders![i()].path = v; }); }} />
-              {/* Typed only when there is no other way: somebody who knows where
-                  their project is knows it as a place they can point at, not as a
-                  string they can spell. */}
-              <button class="btn" onClick={() => pick(i())}>{t("projects.pick")}</button>
+              <span class="mono grow folder-path" title={f.path}>{f.path}</span>
               <Show when={list(draft.folders).length > 1}>
-                <button class="btn quiet" onClick={() => removeFolder(i())} title={t("projects.removeFolder")}>×</button>
+                <Show when={removing() === i()} fallback={
+                  <button class="btn quiet" onClick={() => setRemoving(i())} title={t("projects.removeFolder")}>×</button>
+                }>
+                  <span class="meta">{t("projects.removeFolderConfirm")}</span>
+                  <button class="btn quiet" onClick={() => setRemoving(-1)}>{t("common.cancel")}</button>
+                  <button class="btn danger" onClick={() => removeFolder(i())}>{t("projects.removeFolderYes")}</button>
+                </Show>
               </Show>
             </div>
           )}
         </For>
-        <div class="row">
-          <button class="btn quiet" onClick={addFolder} title={t("projects.addFolderWhy")}>{t("projects.addFolder")}</button>
-        </div>
+        <Show when={adding()} fallback={
+          <div class="row">
+            <button class="btn quiet" onClick={() => void openExisting()} title={t("projects.addFolderWhy")}>{t("projects.addExisting")}</button>
+            <button class="btn quiet" onClick={() => setAdding(true)}>{t("projects.addNew")}</button>
+          </div>
+        }>
+          <NewFolder onCancel={() => setAdding(false)} onCreated={(path) => { addFolder(path); setAdding(false); }} />
+        </Show>
       </div>
 
       {/* Only a saved repository can be connected: the remotes are read
@@ -182,17 +288,64 @@ function ProjectForm(props: { project: Project; onDone: () => void; onChanged: (
 
       <div class="row">
         <div class="spacer" />
-        <Show when={draft.id}>
-          <Show when={confirming()} fallback={
-            <button class="btn quiet" onClick={() => setConfirming(true)}>{t("common.delete")}</button>
-          }>
-            <span class="meta">{t("projects.confirmDelete", { name: draft.name })}</span>
-            <button class="btn quiet" onClick={() => setConfirming(false)}>{t("common.cancel")}</button>
-            <button class="btn danger" onClick={remove}>{t("common.delete")}</button>
-          </Show>
+        <Show when={confirming()} fallback={
+          <button class="btn quiet" onClick={() => setConfirming(true)}>{t("common.delete")}</button>
+        }>
+          <span class="meta">{t("projects.confirmDelete", { name: draft.name })}</span>
+          <button class="btn quiet" onClick={() => setConfirming(false)}>{t("common.cancel")}</button>
+          <button class="btn danger" onClick={remove}>{t("common.delete")}</button>
         </Show>
         <button class="btn quiet" onClick={props.onDone}>{t("common.close")}</button>
-        <button class="btn primary" onClick={save}>{t("common.save")}</button>
+        <button class="btn primary" disabled={saving()} onClick={save}>{t("common.save")}</button>
+      </div>
+    </div>
+  );
+}
+
+// A folder made for a project already open: on disk at once, in the project
+// once the form is saved.
+function NewFolder(props: { onCancel: () => void; onCreated: (path: string) => void }) {
+  const [name, setName] = createSignal("");
+  const [initRepo, setInitRepo] = createSignal(true);
+  const [busy, setBusy] = createSignal(false);
+  const [error, setError] = createSignal<unknown>(null);
+  const where = useParent();
+  const create = async () => {
+    if (busy() || !name().trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const path = await API.CreateFolder(where.parent(), name(), initRepo());
+      where.remember();
+      props.onCreated(path);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="project-create new-folder" onKeyDown={formKeys({ submit: create, busy, cancel: props.onCancel })}>
+      <label class="field">
+        <span>{t("projects.folderToCreate")}</span>
+        <input type="text" value={name()} ref={(el) => queueMicrotask(() => el.focus({ preventScroll: true }))}
+               onInput={(e) => setName(e.currentTarget.value)} />
+      </label>
+      <ParentField where={where} />
+      <Show when={where.pathOf(name())}>
+        <p class="meta">{t("projects.willCreate", { path: where.pathOf(name()) })}</p>
+      </Show>
+      <label class="row check">
+        <input type="checkbox" checked={initRepo()} onChange={(e) => setInitRepo(e.currentTarget.checked)} />
+        <span>{t("projects.initRepo")}</span>
+      </label>
+      <Show when={error() !== null}>
+        <div class="error"><pre>{errorText(error())}</pre></div>
+      </Show>
+      <div class="row">
+        <div class="spacer" />
+        <button class="btn quiet" onClick={props.onCancel}>{t("common.cancel")}</button>
+        <button class="btn" disabled={busy() || !name().trim()} onClick={() => void create()}>{t("projects.createFolder")}</button>
       </div>
     </div>
   );
@@ -300,9 +453,12 @@ function ConnectForm(props: {
 
   const connected = () => Boolean(props.project.account) && server() === props.project.server;
   const ready = () => remote() && server().trim() && (token().trim() || connected());
+  const connect = () => {
+    if (!props.busy && ready()) props.onConnect(remote(), server(), token());
+  };
 
   return (
-    <div class="hosting">
+    <div class="hosting" onKeyDown={formKeys({ submit: connect, cancel: props.onCancel, busy: () => props.busy })}>
       <Show when={remotes() !== null && remotes()!.length === 0}>
         <span class="meta">{t("projects.noRemotes")}</span>
       </Show>
@@ -325,8 +481,7 @@ function ConnectForm(props: {
         <div class="row">
           <input type="password" class="grow" value={token()}
                  placeholder={connected() ? t("projects.tokenKept") : t("projects.tokenPlaceholder")}
-                 onInput={(e) => setToken(e.currentTarget.value)}
-                 onKeyDown={(e) => { if (e.key === "Enter" && ready()) props.onConnect(remote(), server(), token()); }} />
+                 onInput={(e) => setToken(e.currentTarget.value)} />
           <Show when={tokenURL()}>
             <a class="btn quiet" href={tokenURL()} onClick={(e) => openOutside(e, tokenURL())}>{t("projects.makeToken")}</a>
           </Show>
@@ -335,9 +490,9 @@ function ConnectForm(props: {
       <span class="meta">{t("projects.tokenNote")}</span>
       <div class="row">
         <div class="spacer" />
-        <button class="btn quiet" onClick={props.onCancel}>{t("common.cancel")}</button>
+        <button class="btn quiet" disabled={props.busy} onClick={props.onCancel}>{t("common.cancel")}</button>
         <button class="btn primary" disabled={props.busy || !ready()}
-                onClick={() => props.onConnect(remote(), server(), token())}>
+                onClick={connect}>
           {t("projects.connect")}
         </button>
       </div>

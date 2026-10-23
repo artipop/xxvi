@@ -160,7 +160,7 @@ func TestAListThatCannotBeAskedForIsRefused(t *testing.T) {
 	}
 }
 
-// A token a plugin may take and does not need is not waited for: the XCIII
+// A token a plugin may take and does not need is not waited for: the Pourquoi Pas?
 // bridge on this machine finds its own secret, and a server is given one.
 func TestAnOptionalTokenIsNotWaitedFor(t *testing.T) {
 	m := optionsManifest()

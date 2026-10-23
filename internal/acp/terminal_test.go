@@ -37,24 +37,6 @@ func TestTerminalArgvPutsTheBriefLast(t *testing.T) {
 	}
 }
 
-// «The last conversation in this folder» is only a fallback for runs that left
-// no id, and the brief cannot go on its command line — no vendor documents the
-// combination — so it is typed in afterwards, and the caller has to be told.
-func TestTerminalArgvResumesByFolderWithoutTheBrief(t *testing.T) {
-	cli, _ := cliFor(model.KindClaude)
-	open := opening{args: cli.cliResumeArgs, byFolder: true}
-	argv, taken := terminalArgv(cli, "claude", open, []string{"--mcp-config", "/tmp/mcp.json"}, "продолжай")
-	if taken {
-		t.Fatal("в продолженный разговор бриф на командной строке не уходит")
-	}
-	if !slices.Contains(argv, "--continue") {
-		t.Fatalf("продолжение разговора — флаг вендора: %v", argv)
-	}
-	if slices.Contains(argv, "продолжай") {
-		t.Fatalf("брифа на командной строке быть не должно: %v", argv)
-	}
-}
-
 // An agent whose kind has no interactive CLI cannot be worked in a terminal at
 // all, and the stage says so instead of opening a window onto a process that
 // only speaks JSON-RPC.
@@ -267,9 +249,18 @@ func TestReturnToAStageResumesItsOwnConversation(t *testing.T) {
 		t.Fatalf("первый визит начинает разговор под нашим id: %+v", open)
 	}
 
+	past("failed-start", "plan", model.KindClaude, "")
+	failed, now := store.StatusFailed, time.Now().UTC()
+	if err := st.UpdateSession("failed-start", store.SessionUpdate{Status: &failed, FinishedAt: &now}); err != nil {
+		t.Fatal(err)
+	}
+	if open := m.opening(here, cli); !open.chosen {
+		t.Fatalf("после ошибки запуска можно начать разговор: %+v", open)
+	}
+
 	past("1", "plan", model.KindClaude, "")
-	if open := m.opening(here, cli); !open.byFolder {
-		t.Fatalf("прогон без id оставляет только папку: %+v", open)
+	if open := m.opening(here, cli); !open.missing {
+		t.Fatalf("без id нельзя угадывать разговор по папке: %+v", open)
 	}
 
 	past("2", "plan", model.KindClaude, "first")

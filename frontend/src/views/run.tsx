@@ -7,6 +7,7 @@ import type { Profile, Response } from "../../bindings/github.com/artipop/gandvi
 import { guard, list, openOutside } from "../state";
 import { label, t } from "../i18n";
 import TerminalPane from "./terminal";
+import { formKeys } from "./formKeys";
 
 // The run screen: the project started the way its kind is looked at. What it
 // is comes from the backend's reading of the files, and every part of that
@@ -36,6 +37,7 @@ export default function RunPane(props: {
   const ofKind = createMemo(() => list(plan()?.profiles).filter((p) => p.kind === chosen().kind));
 
   const start = async () => {
+    if (busy() || !plan()) return;
     setBusy(true);
     setAddress("");
     const started = await guard(() => API.StartLaunch(props.cardId, props.screenId, chosen()));
@@ -124,7 +126,7 @@ export default function RunPane(props: {
         <input type="text" class="grow mono" value={chosen().command} disabled={!!run()}
                placeholder={t("run.commandHint")}
                onInput={(e) => setChosen({ ...chosen(), command: e.currentTarget.value })}
-               onKeyDown={(e) => { if (e.key === "Enter" && !run()) void start(); }} />
+               onKeyDown={formKeys({ submit: () => { if (!run()) void start(); } })} />
         <Show when={run()} fallback={
           <button class="btn primary tiny" disabled={busy() || !plan()} onClick={() => void start()}>
             {t("run.start")}
@@ -251,6 +253,7 @@ function Requests(props: { base: string; clients: string[] }): JSX.Element {
   const target = () => path() || props.base;
 
   const send = async () => {
+    if (sending() || !target()) return;
     setSending(true);
     const r = await guard(() => API.SendRequest({ method: method(), url: target(), headers: headers(), body: body() }));
     setSending(false);
@@ -263,14 +266,16 @@ function Requests(props: { base: string; clients: string[] }): JSX.Element {
   };
 
   return (
-    <div class="run-requests">
+    <div class="run-requests" onKeyDown={formKeys({ submit: send, busy: sending, cancel: () => {
+      if (more()) setMore(false);
+      else (document.activeElement as HTMLElement | null)?.blur();
+    } })}>
       <div class="row">
         <select class="fit" value={method()} onChange={(e) => setMethod(e.currentTarget.value)}>
           <For each={METHODS}>{(m) => <option>{m}</option>}</For>
         </select>
         <input type="text" class="grow mono" value={path()} placeholder={props.base || "http://localhost:8080/"}
-               onInput={(e) => setPath(e.currentTarget.value)}
-               onKeyDown={(e) => { if (e.key === "Enter") void send(); }} />
+               onInput={(e) => setPath(e.currentTarget.value)} />
         <button class="btn quiet tiny" onClick={() => setMore(!more())}>{more() ? t("run.less") : t("run.more")}</button>
         <button class="btn primary tiny" disabled={sending() || !target()} onClick={() => void send()}>{t("run.send")}</button>
       </div>

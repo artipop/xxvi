@@ -170,6 +170,7 @@ type FlowState struct {
 
 // FlowEvent is one recorded transition — the answer to "why is this card here".
 type FlowEvent struct {
+	Started   bool      `json:"started"`
 	ID        int64     `json:"id"`
 	CardID    string    `json:"cardId"`
 	FlowID    string    `json:"flowId"`

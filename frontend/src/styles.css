@@ -140,6 +140,9 @@ body {
 }
 
 button, input, select, textarea { font: inherit; color: inherit; }
+button, .btn, summary, [role="button"], .ribbon-bar, .sidebar {
+  -webkit-user-select: none; user-select: none;
+}
 
 /* ---- shell ---- */
 
@@ -348,6 +351,18 @@ label.field.refused > span { color: var(--bad); }
 .grow-2 { flex: 2; min-width: 0; }
 .folders { display: grid; gap: 6px; margin-bottom: 10px; }
 .folders > .field-label { margin-bottom: -3px; }
+.folder-row { align-items: center; min-height: 32px; }
+.folder-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A folder being made is a small form of its own inside the project's. */
+.new-folder { padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-surface); background: var(--bg); margin: 0; }
+/* In the list it stands where its card was, at the cards' own spacing. */
+.project-form { margin-bottom: 8px; }
+.project-origin { margin-bottom: 10px; }
+/* The same 10px step as the fields above it; the path it will make is read
+   with the name it comes from. */
+.project-create { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.project-create > .field { margin: 0; }
+.project-create > .meta { margin: -6px 0 0; overflow-wrap: anywhere; }
 input.folder-name { width: 9em; flex: none; }
 .clickable { cursor: pointer; }
 .row h3 { margin: 0; }
@@ -603,14 +618,14 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 
 /* Isolated, like .main, so nothing inside — xterm's own layers go up to z-index
    7 — can climb over the sidebar. */
-.full { position: relative; isolation: isolate; min-width: 0; height: 100dvh; overflow: hidden; }
+.full { position: relative; isolation: isolate; min-width: 0; min-height: 0; height: 100%; overflow: clip; }
 
 .ribbon {
   --bar: 44px;      /* what the window reserves for its hidden title bar */
   --rail-space: 20px;
-  height: 100dvh;
+  height: 100%; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
-  overflow: hidden;
+  overflow: clip;
 }
 
 /* Room for the window's own buttons, and the name of the job in front of you —
@@ -623,10 +638,17 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   border-bottom: 1px solid var(--line);
   font-size: 12px; color: var(--faint);
   --wails-draggable: drag;
+  cursor: default;
 }
 /* Dragging the window from a button is not what pressing it means. */
 .ribbon-bar button, .ribbon-bar a, .ribbon-bar .card-menu { --wails-draggable: no-drag; }
 .ribbon-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draft-label {
+  flex: none; padding: 3px 7px; border: 1px solid var(--accent);
+  border-radius: var(--radius-control); color: var(--accent);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+  -webkit-user-select: none; user-select: none; cursor: default;
+}
 
 /* Notes take a line under the bar and push the stack down rather than float
    over it: Ghostty draws its terminals over the page, and a note floating
@@ -635,7 +657,14 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .ribbon-notes > * { margin: 8px 8px 0; }
 
 /* The stack and what opens over it, the journal, under the notes. */
-.ribbon-body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.ribbon-body { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; overflow: clip; }
+.ribbon-project {
+  flex: 0 0 min(440px, 45%); min-width: 0; overflow: auto;
+  padding: 12px; border-right: 1px solid var(--line); background: var(--panel);
+}
+.ribbon-project h3 { margin: 0 0 12px; }
+.ribbon-project .panel { margin: 0; }
+.ribbon-project .grid2 { grid-template-columns: minmax(0, 1fr); row-gap: 0; }
 
 .popup-menu {
   position: fixed; z-index: 1000; min-width: 200px; max-width: calc(100vw - 8px);
@@ -655,8 +684,10 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .ribbon-stage { color: var(--faint); opacity: .7; }
 
 .card-menu { position: relative; display: flex; }
-.workspaces > .btn { display: inline-flex; align-items: center; gap: 3px; }
-.workspaces .icon { width: 12px; height: 12px; opacity: .6; }
+.workspaces { flex: 0 1 auto; min-width: 0; max-width: 240px; }
+.workspaces > .btn { display: inline-flex; align-items: center; gap: 5px; min-width: 0; color: var(--text); }
+.workspaces > .btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspaces .icon { flex: none; width: 12px; height: 12px; opacity: .6; }
 
 /* Over the strip rather than beside it: the strip is the whole window, and
    the journal is looked at and put away, not worked next to. */
@@ -693,24 +724,25 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
    the work is watched, in the strip, and the text is the only thing in it. */
 .screen.draft { flex-basis: 100%; }
 .compose { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.compose-text {
-  flex: 1; min-height: 0; resize: none;
-  border: 0; border-radius: 0; background: var(--bg);
-  font-size: 15px; line-height: 1.6; padding: 16px 18px;
-  overscroll-behavior-y: contain;
-}
-.compose-text:focus { outline: none; }
-.compose > .row { padding: 8px 12px; border-top: 1px solid var(--line); }
-.compose select { width: auto; }
-/* The conversations to continue take the text's place: a continued task has
-   nothing to type. */
+.compose-body { flex: 1; min-height: 0; overflow: auto; padding: 28px 24px; }
+.compose-column { width: min(760px, 100%); margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.compose-column h2 { margin: 0; }
+.compose-column > .meta { margin: 0; }
+.compose-project { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); }
+
+.compose-settings { align-items: end; gap: 12px; }
+.compose-settings .field { min-width: 160px; max-width: 280px; margin: 0; }
+.compose-settings select { width: 100%; }
+.compose-actions { flex: none; padding: 10px 18px; border-top: 1px solid var(--line); }
+.compose-selected { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The conversations to continue are the choice's own part of the screen. */
 .compose-sessions {
-  flex: 1; min-height: 0; overflow-y: auto;
-  background: var(--bg); padding: 8px 0;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-surface);
+  padding: 6px 0; overflow: hidden;
 }
 .compose-sessions .empty { padding: 8px 18px; margin: 0; }
 .compose-sessions .loading { display: flex; align-items: center; gap: 10px; }
-.compose-sessions > .screen-error { margin-top: -8px; }
+.compose-sessions > .screen-error { margin: 0 8px; }
 .compose-session {
   display: flex; gap: 12px; align-items: baseline; width: 100%;
   padding-right: 18px;
@@ -730,7 +762,6 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
 .compose-session-rename input { flex: 1; min-width: 0; }
 .compose-session-rename .btn { flex: none; }
 .compose-session-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.compose-sessions:has(.session-preview) { display: flex; overflow: hidden; padding: 0; }
 .session-preview { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .session-preview > header { padding: 12px 18px; border-bottom: 1px solid var(--line); }
 .session-preview-heading { flex: 1; min-width: 0; }
@@ -741,15 +772,6 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   font-family: var(--mono); font-size: 12px; line-height: 1.6;
   white-space: pre-wrap; overflow-wrap: anywhere; overscroll-behavior: contain;
 }
-/* Two ways to begin, one of which is always chosen. */
-.compose-mode { display: flex; border: 1px solid var(--line); border-radius: var(--radius-control); overflow: hidden; }
-.compose-mode button {
-  background: none; border: 0; border-radius: 0; padding: 4px 12px;
-  color: var(--dim); cursor: pointer;
-}
-.compose-mode button + button { border-left: 1px solid var(--line); }
-.compose-mode button:hover { color: var(--text); }
-.compose-mode button.on { background: var(--panel-2); color: var(--accent); }
 
 /* The stack does not scroll under the hand: a plain wheel belongs to whatever
    is under the pointer, and taking it here is how a ribbon starts fighting the
@@ -757,7 +779,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
    or the rail — and `overflow: hidden` still scrolls when asked in code, which
    is the only thing that asks. */
 .stack {
-  flex: 1 1 auto; min-height: 0;
+  flex: 1 1 auto; min-width: 0; min-height: 0;
   container-type: size;
   /* Native terminals sit above the page, so the rail needs room outside
      the stack's clipping bounds; a higher z-index cannot keep it visible. */
@@ -765,6 +787,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   overflow: hidden;
   scroll-behavior: smooth;
   overscroll-behavior: contain;
+  overflow-anchor: none;
 }
 
 /* One ribbon fills the stack exactly, so the n-th starts at n heights and the
@@ -786,6 +809,7 @@ h1 + .list-head, .row:has(> h1) + .list-head { margin-top: 0; }
   scroll-snap-type: x proximity;
   scroll-behavior: smooth;
   scrollbar-width: none;
+  overflow-anchor: none;
 }
 .band::-webkit-scrollbar { display: none; }
 
@@ -1196,6 +1220,20 @@ input[type="text"].inspector__name:focus { background: var(--bg); }
   background: color-mix(in srgb, var(--kind) 16%, transparent);
   border-color: color-mix(in srgb, var(--kind) 40%, transparent);
 }
+
+/* Two ways to begin, as cards with what each one means: the answer decides
+ * what is asked next, so it is read rather than skimmed. They stack where a
+ * card would be too narrow for its sentence. */
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.choice {
+  display: flex; flex-direction: column; gap: 8px; padding: 18px 20px;
+  text-align: left; background: var(--panel-2); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-surface); cursor: pointer;
+}
+.choice:hover, .choice:focus-visible { border-color: var(--accent); }
+.choice.on { border-color: var(--accent); background: var(--accent-wash); }
+.choice strong { font-size: 15px; }
+.choice span { font-size: 13px; color: var(--dim); }
 
 /* A choice of two or three, as one control rather than a select: every answer
  * is in sight. */

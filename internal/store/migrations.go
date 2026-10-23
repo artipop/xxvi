@@ -404,5 +404,24 @@ ALTER TABLE stage_template DROP COLUMN crew_json;`,
 );
 CREATE UNIQUE INDEX idx_proxy_key ON proxy(name_key);
 ALTER TABLE agent ADD COLUMN proxy_id TEXT NOT NULL DEFAULT '';`,
+		`ALTER TABLE stage ADD COLUMN manual_start INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE stage ADD COLUMN keep_focus INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE flow_event ADD COLUMN started INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE agent_session ADD COLUMN visit_id INTEGER NOT NULL DEFAULT 0;`,
+
+		// XCIII was renamed Pourquoi Pas?: a source of the old plugin would
+		// otherwise name a plugin that no longer exists, and one that kept the
+		// default path would start a binary that is gone.
+		`UPDATE source SET plugin = 'pourquoipas',
+	config = replace(config, '/Applications/XCIII.app/Contents/MacOS/XCIII', '/Applications/pourquoipas.app/Contents/MacOS/pourquoipas')
+WHERE plugin = 'xciii';`,
+
+		// Dokku joins the palette after Docker, as an example of a step that
+		// publishes: a terminal running git push to the project's «dokku»
+		// remote (model.BuiltinTemplates). It came from Pourquoi Pas?, where
+		// deploying to Dokku was a button on the card.
+		`UPDATE stage_template SET ord = ord + 1 WHERE builtin = 1 AND ord >= 4;
+INSERT OR IGNORE INTO stage_template (id, ord, icon, color, builtin, action, work, final, screens_json) VALUES
+	('dokku', 4, 'dokku', '#5c9ead', 1, 'none', '', 0, '[{"kind":"terminal","ref":"git push dokku HEAD:main"}]');`,
 	}
 }

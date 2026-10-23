@@ -29,7 +29,7 @@ const pluginModeEnv = "GANDVIK_TEST_SOURCE_PLUGIN"
 
 func servePlugin(mode string) {
 	if mode == "dies" {
-		fmt.Fprintln(os.Stderr, "XCIII не запущен: откройте его")
+		fmt.Fprintln(os.Stderr, "Pourquoi Pas? не запущен: откройте его")
 		os.Exit(1)
 	}
 	sdk.Serve(sdk.Source{
@@ -319,23 +319,23 @@ func TestTheShippedKaitenSourceFillsTheInbox(t *testing.T) {
 	}
 }
 
-// The shipped XCIII manifest: the form's fields reach the bridge's command
+// The shipped Pourquoi Pas? manifest: the form's fields reach the bridge's command
 // line, its environment and the tool's arguments, and a row of the feed
 // becomes an item whose version is the card's last change.
-func TestTheShippedXCIIIManifestMapsTheFeed(t *testing.T) {
-	m, ok := LoadCatalog("").Get("xciii")
+func TestTheShippedPourquoiPasManifestMapsTheFeed(t *testing.T) {
+	m, ok := LoadCatalog("").Get("pourquoipas")
 	if !ok {
-		t.Fatal("the shipped XCIII manifest is missing")
+		t.Fatal("the shipped Pourquoi Pas? manifest is missing")
 	}
 	src := m.WithDefaults(model.Source{Name: "Доска", Config: map[string]string{
 		"board": "Работа", "column": "Сегодня", "where": "server", "url": "https://board.example",
 	}})
 	argv, err := m.Argv(src)
-	if err != nil || argv[0] != "/Applications/XCIII.app/Contents/MacOS/XCIII" || argv[1] != "mcp" || argv[2] != "feed" {
+	if err != nil || argv[0] != "/Applications/pourquoipas.app/Contents/MacOS/pourquoipas" || argv[1] != "mcp" || argv[2] != "feed" {
 		t.Fatalf("argv: %v, %v", argv, err)
 	}
 	env, _ := m.RenderEnv(src)
-	if env["XCIII_URL"] != "https://board.example" {
+	if env["PP_URL"] != "https://board.example" {
 		t.Fatalf("env: %v", env)
 	}
 	args, _ := m.MCP.renderArguments(src)
@@ -361,7 +361,7 @@ func TestTheShippedXCIIIManifestMapsTheFeed(t *testing.T) {
 	// On this machine, with no server address, nothing tells the bridge where
 	// to go but the file the running app leaves.
 	local := m.WithDefaults(model.Source{Config: map[string]string{"board": "Работа"}})
-	if env, _ := m.RenderEnv(local); env["XCIII_URL"] != "" {
+	if env, _ := m.RenderEnv(local); env["PP_URL"] != "" {
 		t.Fatalf("an empty address reached the bridge: %v", env)
 	}
 }
@@ -374,7 +374,7 @@ func TestAPluginThatDiesSaysWhy(t *testing.T) {
 	f.runner.Start()
 
 	eventually(t, "the failure reached the status", func() bool { return f.status("Трекер").State == StateError })
-	if e := f.status("Трекер").Error; e == nil || !strings.Contains(e.Arg("stderr"), "XCIII не запущен") {
+	if e := f.status("Трекер").Error; e == nil || !strings.Contains(e.Arg("stderr"), "Pourquoi Pas? не запущен") {
 		t.Fatalf("status error: %+v", e)
 	}
 }

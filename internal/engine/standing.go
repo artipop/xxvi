@@ -23,6 +23,7 @@ const (
 	// its conversation; it goes on when a person says «Continue», and only
 	// then (store.StatusPaused).
 	StandPaused = "paused"
+	StandReady  = "ready"
 )
 
 // Standing is a card in work whose next move is a person's, and has been since
@@ -75,6 +76,10 @@ func (e *Engine) standing(card model.Card) (Standing, bool) {
 	}
 
 	out := Standing{CardID: card.ID, CardTitle: card.Title, Stage: stage.Name, Why: StandStopped, Since: cf.Since}
+	if visit, ok, err := e.store.LastFlowEvent(card.ID); err == nil && ok && !visit.Started && model.Runs(stage.Action) {
+		out.Why = StandReady
+		return out, true
+	}
 	for _, w := range cf.WaitingFor {
 		if w.On == model.TriggerCardChanged {
 			out.Why = StandAnswer

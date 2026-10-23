@@ -8,7 +8,7 @@ import (
 )
 
 // A stage template is a kind of node the flow editor offers: «AI in the
-// terminal», «Terminal», «Docker», «Web», «Diff». It is a registry like agents
+// terminal», «Terminal», «Docker», «Dokku», «Web», «Diff». It is a registry like agents
 // and projects — rows a person adds and edits — and the standard ones are rows
 // too, put there by the migration that made the table, so there is one place to
 // look for what the palette holds rather than a list in the code and a list in
@@ -53,6 +53,7 @@ const (
 	TemplateAgent    = "agent"
 	TemplateTerminal = "terminal"
 	TemplateDocker   = "docker"
+	TemplateDokku    = "dokku"
 	TemplateWeb      = "web"
 	TemplateDiff     = "diff"
 	TemplateNotes    = "notes"
@@ -61,6 +62,10 @@ const (
 	TemplateVerdict  = "verdict"
 	TemplateFinal    = "final"
 )
+
+// dokkuCommand is the Dokku template's command: the task's branch, pushed to
+// the app's main branch on the remote Dokku's own documentation calls «dokku».
+const dokkuCommand = "git push dokku HEAD:main"
 
 // BuiltinTemplates are the templates a database starts with, in palette order.
 // The migration writes exactly these; a test keeps the two in step.
@@ -76,6 +81,11 @@ func BuiltinTemplates() []StageTemplate {
 		agent,
 		b(TemplateTerminal, "terminal", "#c9cdd6", ActionNone, Screen{Kind: ScreenTerminal}),
 		b(TemplateDocker, "docker", "#2496ed", ActionNone, Screen{Kind: ScreenTerminal, Ref: "docker compose up"}),
+		// Publishing the task's branch to a Dokku host is a command, not a
+		// judgement, so it is a terminal like Docker's: git push to the remote
+		// the project calls «dokku». Another host or app is another command
+		// on the node.
+		b(TemplateDokku, "dokku", "#5c9ead", ActionNone, Screen{Kind: ScreenTerminal, Ref: dokkuCommand}),
 		b(TemplateWeb, "web", "#e0a458", ActionNone, Screen{Kind: ScreenRun, Ref: LaunchWeb}),
 		b(TemplateDiff, "diff", "#c38ee0", ActionNone, Screen{Kind: ScreenDiff}),
 		b(TemplateNotes, "notes", "#d9c36a", ActionNone, Screen{Kind: ScreenNotes, Ref: "plan.md"}),
@@ -112,8 +122,12 @@ func BuiltinTemplateOf(s Stage) string {
 	case ScreenNotes:
 		return TemplateNotes
 	case ScreenTerminal:
-		if strings.HasPrefix(strings.TrimSpace(sc.Ref), "docker") {
+		ref := strings.TrimSpace(sc.Ref)
+		if strings.HasPrefix(ref, "docker") {
 			return TemplateDocker
+		}
+		if strings.HasPrefix(ref, "git push dokku") {
+			return TemplateDokku
 		}
 		return TemplateTerminal
 	}

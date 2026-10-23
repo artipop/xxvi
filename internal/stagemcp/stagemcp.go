@@ -11,11 +11,12 @@
 // moves lives in *this* process, and a helper in between would be a proxy of
 // ours to ourselves with the tool schema written twice. What guards it is what
 // guards the terminal sockets — a port the operating system keeps off the
-// network, and a token minted for one run, which dies when the run does.
+// network, and a token minted for one run, which dies when its terminal closes.
 package stagemcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -71,6 +72,29 @@ type Step struct {
 	// start rather than added when it is needed: a CLI reads the list of tools
 	// once.
 	Describe func(Description) error
+	// Stages is the card's flow as the agent may name it in move_to. Read at
+	// every request rather than at the grant: the flow can be edited and the
+	// card moved while the CLI runs.
+	Stages func() []StageInfo
+	// Move sends the card to a stage by name. Optional: without it, or without
+	// stages, there is no move_to.
+	Move func(Move) error
+}
+
+// StageInfo is one stage of the flow, as move_to describes it.
+type StageInfo struct {
+	Name string
+	// What the stage does with the card when it arrives, in a few words.
+	What string
+	// Here marks the stage the card stands on now.
+	Here bool
+}
+
+// Move is a move_to call: where, and what this step leaves behind.
+type Move struct {
+	Stage   string
+	Summary string
+	Props   map[string]string
 }
 
 // Description is the task as its conversation left it.
@@ -239,8 +263,31 @@ func newServer(step Step) *mcp.Server {
 		}); err != nil {
 			return errorResult("%v", err), nil, nil
 		}
-		return textResult("Step recorded. The task has moved on — there will be no further instructions for it."), nil, nil
+		return textResult(stepRecorded), nil, nil
 	})
+	if step.Move != nil && step.Stages != nil {
+		if stages := step.Stages(); len(stages) > 0 {
+			srv.AddTool(&mcp.Tool{
+				Name:        "move_to",
+				Description: describeMove(step, stages),
+				InputSchema: moveSchema(stages),
+			}, func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				var in moveInput
+				if raw := req.Params.Arguments; len(raw) > 0 {
+					if err := json.Unmarshal(raw, &in); err != nil {
+						return errorResult("Could not read the arguments: %v", err), nil
+					}
+				}
+				if strings.TrimSpace(in.Stage) == "" {
+					return errorResult("Name the stage to move the task to."), nil
+				}
+				if err := step.Move(Move{Stage: in.Stage, Summary: strings.TrimSpace(in.Summary), Props: in.Properties}); err != nil {
+					return errorResult("%v", err), nil
+				}
+				return textResult(stepRecorded), nil
+			})
+		}
+	}
 	if step.Describe != nil {
 		mcp.AddTool(srv, &mcp.Tool{
 			Name:        "describe_task",
@@ -299,12 +346,65 @@ func whenToFinish(step Step) string {
 		"Failed is the same: say why and ask before reporting it. ", next)
 }
 
-// lastCall is said in both the instructions and the tool, because the call is
-// taken at its word: seconds after it the terminal is closed, so a commit
-// running alongside it is cut off, and a commit that failed alongside it has
-// already been reported as done.
+// The next stage may start immediately, sharing this working directory. The
+// terminal is not closed after it: the person may come back and ask for more.
 const lastCall = "Make it your last call, on its own: not alongside other tool calls, and only once the results of every earlier call are in — " +
-	"right after it the session is closed, and anything still running is stopped."
+	"after it, stop working and wait. The flow may start the next step immediately, in the same folder. " +
+	"This terminal stays open: if the person comes back and asks for more, do it, and call finish_step again when it is done — " +
+	"the task then goes on from this stage once more. Never do that on your own."
+
+const stepRecorded = "Step recorded. Stop here and do not modify files: the flow may start its next step now, in the same folder. " +
+	"The terminal stays open; do more only if the person asks."
+
+// moveInput is read by hand rather than through a schema the SDK enforces: a
+// CLI keeps the list of stages it was given at the start, and a stage renamed
+// since should come back as a refusal that names the stages as they are now,
+// not as a schema error.
+type moveInput struct {
+	Stage      string            `json:"stage"`
+	Summary    string            `json:"summary"`
+	Properties map[string]string `json:"properties,omitempty"`
+}
+
+func moveSchema(stages []StageInfo) map[string]any {
+	names := make([]string, 0, len(stages))
+	for _, st := range stages {
+		names = append(names, st.Name)
+	}
+	return map[string]any{
+		"type":     "object",
+		"required": []string{"stage", "summary"},
+		"properties": map[string]any{
+			"stage": map[string]any{"type": "string", "enum": names,
+				"description": "the stage to move the task to, by the name the board shows"},
+			"summary": map[string]any{"type": "string",
+				"description": "what was done and why the task goes there, in a few sentences — it lands in the task's comments"},
+			"properties": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"},
+				"description": "values this stage leaves on the task, by property name, if you have them"},
+		},
+	}
+}
+
+// describeMove names every stage with what it does, so a person's «deploy it»
+// or «send it to review» finds its stage without the agent guessing.
+func describeMove(step Step, stages []StageInfo) string {
+	var b strings.Builder
+	b.WriteString("Move the task to a stage of its flow by name. Only when the person asks for it in this conversation — «send it to review», «deploy it» — and never on your own: " +
+		"when your work here is done and nobody named a stage, finish_step is the way on. ")
+	b.WriteString("Leave the work in a state the next stage can take: committed, if you are on a branch. ")
+	b.WriteString(lastCall)
+	b.WriteString("\n\nThe stages:")
+	for _, st := range stages {
+		fmt.Fprintf(&b, "\n- «%s»", st.Name)
+		if st.What != "" {
+			b.WriteString(" — " + st.What)
+		}
+		if st.Here {
+			b.WriteString(" (the task is here now)")
+		}
+	}
+	return b.String()
+}
 
 func instructions(step Step) string {
 	var b strings.Builder
@@ -319,6 +419,9 @@ func instructions(step Step) string {
 	b.WriteString("Leaving the terminal does not count as finishing the step. ")
 	b.WriteString(whenToFinish(step))
 	b.WriteString(lastCall)
+	if step.Move != nil {
+		b.WriteString(" When the person asks to send the task to a particular stage — by its name or by what it does — use move_to instead.")
+	}
 	if brief := strings.TrimSpace(step.Brief); brief != "" {
 		b.WriteString("\n\n")
 		b.WriteString(brief)

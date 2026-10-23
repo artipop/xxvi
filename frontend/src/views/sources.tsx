@@ -5,6 +5,7 @@ import type { Rule, Source } from "../../bindings/github.com/artipop/gandvik/int
 import type { Field, Option } from "../../bindings/github.com/artipop/gandvik/internal/sources/models";
 import { flows, guard, loadSources, sourcePlugins, sourceStatus, sources, vocabulary } from "../state";
 import { errorText, has, label, plural, say, t, when } from "../i18n";
+import { formKeys } from "./formKeys";
 
 // The source registry and its rules. Rules are tried in order and the first
 // match wins, so the order is the whole of what somebody meant — and the
@@ -62,6 +63,7 @@ export default function SourcesView() {
 
 function SourceForm(props: { source: Source; onDone: () => void }) {
   const [draft, setDraft] = createStore<Source>(props.source);
+  const [saving, setSaving] = createSignal(false);
   const isNew = props.source.name === "";
   const [token, setToken] = createSignal("");
   // The token as it stood when its box was left, not as it is typed: a list
@@ -94,16 +96,20 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
     });
 
   const save = async () => {
-    const saved = await guard(() => API.SaveSource(JSON.parse(JSON.stringify(draft)) as Source));
-    if (!saved) return;
-    // The token goes to the keychain on its own, after the source exists: it
-    // is never part of the source, which is a row anybody can read.
-    if (token().trim() !== "") {
-      const ok = await guard(async () => { await API.SetSourceToken(saved.name, token()); return true; });
-      if (!ok) return;
-    }
-    await loadSources();
-    props.onDone();
+    if (saving()) return;
+    setSaving(true);
+    try {
+      const saved = await guard(() => API.SaveSource(JSON.parse(JSON.stringify(draft)) as Source));
+      if (!saved) return;
+      // The token goes to the keychain on its own, after the source exists: it
+      // is never part of the source, which is a row anybody can read.
+      if (token().trim() !== "") {
+        const ok = await guard(async () => { await API.SetSourceToken(saved.name, token()); return true; });
+        if (!ok) return;
+      }
+      await loadSources();
+      props.onDone();
+    } finally { setSaving(false); }
   };
 
   const addRule = () => {
@@ -126,7 +132,7 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
   };
 
   return (
-    <div class="panel">
+    <div class="panel" onKeyDown={formKeys({ submit: save, cancel: props.onDone, busy: saving })}>
       <h3>{t("sources.source")}</h3>
       <div class="grid2">
         <label class="field">
@@ -262,8 +268,8 @@ function SourceForm(props: { source: Source; onDone: () => void }) {
 
       <div class="row actions">
         <div class="spacer" />
-        <button class="btn quiet" onClick={props.onDone}>{t("common.cancel")}</button>
-        <button class="btn primary" onClick={save}>{t("common.save")}</button>
+        <button class="btn quiet" disabled={saving()} onClick={props.onDone}>{t("common.cancel")}</button>
+        <button class="btn primary" disabled={saving()} onClick={save}>{t("common.save")}</button>
       </div>
     </div>
   );
