@@ -47,6 +47,11 @@ tasks:
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
+  install:msix:tools:
+    summary: Installs tools required for Windows MSIX packaging
+    cmds:
+      - task: windows:install:msix:tools
+
   version:set:
     summary: Writes one version number into every file that states one (VERSION=x.y.z)
     # The first half of cutting a release: bump here, commit, tag `v{{.VERSION}}`,
